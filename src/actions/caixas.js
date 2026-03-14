@@ -1,0 +1,207 @@
+/**
+ * src/actions/caixas.js
+ * Server Actions para Caixas de Emenda / CDO.
+ *
+ * Mapeamento de endpoints:
+ *   GET    /api/caixas_emenda_cdo          → getCaixas(projetoId)
+ *   POST   /api/caixas_emenda_cdo (upsert) → upsertCaixa(data)
+ *   DELETE /api/caixas_emenda_cdo          → deleteCaixa(caixaId, projetoId)
+ *   GET    /api/diagrama?id=               → getDiagramaCaixa(caixaId, projetoId)
+ *   POST   /api/diagrama (CE/CDO)          → saveDiagramaCaixa(data)
+ */
+
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { connectDB } from '@/lib/db'
+import { WRITE_ROLES, ALL_ROLES } from '@/lib/auth'
+import { requireActiveEmpresa } from '@/lib/tenant-guard'
+import { CaixaEmendaCDO } from '@/models/CaixaEmendaCDO'
+
+// ---------------------------------------------------------------------------
+// GET /api/caixas_emenda_cdo → getCaixas
+// ---------------------------------------------------------------------------
+
+/**
+ * Lista todas as CE/CDOs do projeto.
+ * Requer: qualquer usuário autenticado com empresa ativa.
+ *
+ * @param {string} projetoId
+ * @returns {Promise<Array>}
+ */
+export async function getCaixas(projetoId) {
+  const session = await requireActiveEmpresa(ALL_ROLES)
+  const { role, projeto_id: userProjeto } = session.user
+  const targetProjeto = role === 'superadmin' ? projetoId : userProjeto
+
+  await connectDB()
+
+  const caixas = await CaixaEmendaCDO.find({ projeto_id: targetProjeto }).lean()
+  return caixas.map((c) => ({ ...c, _id: c._id.toString() }))
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/caixas_emenda_cdo → upsertCaixa
+// ---------------------------------------------------------------------------
+
+/**
+ * Cria ou atualiza uma CE/CDO.
+ * Requer: admin ou superior com empresa ativa.
+ *
+ * @param {Object} data
+ * @param {string} data.ce_id        — identificador único (obrigatório, armazenado no campo 'id' do modelo)
+ * @param {string} data.projeto_id
+ * @param {number} data.lat          — obrigatório
+ * @param {number} data.lng          — obrigatório
+ * @param {string} [data.nome]
+ * @param {string} [data.tipo]       — "CE" | "CDO"
+ * @param {number} [data.capacidade]
+ * @param {string} [data.olt_id]
+ * @param {number} [data.porta_olt]
+ * @param {string} [data.splitter_cdo] — configuração do splitter (ex: "1:8", "1:16")
+ * @param {string} [data.rua]
+ * @param {string} [data.bairro]
+ * @param {string} [data.obs]
+ * @returns {Promise<Object>}
+ */
+export async function upsertCaixa(data) {
+  const session = await requireActiveEmpresa(WRITE_ROLES)
+  const { role, projeto_id: userProjeto } = session.user
+
+  const {
+    ce_id, projeto_id, lat, lng,
+    nome, tipo, olt_id, porta_olt,
+    splitter_cdo, rua, bairro, obs,
+  } = data ?? {}
+
+  if (!ce_id?.trim()) throw new Error('ce_id é obrigatório')
+  if (lat == null)    throw new Error('lat é obrigatório')
+  if (lng == null)    throw new Error('lng é obrigatório')
+
+  const targetProjeto = role === 'superadmin' ? projeto_id : userProjeto
+  if (!targetProjeto) throw new Error('projeto_id é obrigatório')
+
+  await connectDB()
+
+  const update = {
+    lat:          Number(lat),
+    lng:          Number(lng),
+    nome:         nome?.trim()         ?? null,
+    tipo:         tipo?.trim()         ?? 'CDO',
+    olt_id:       olt_id               ?? null,
+    porta_olt:    porta_olt != null ? Number(porta_olt) : null,
+    splitter_cdo: splitter_cdo?.trim() ?? null,
+    rua:          rua?.trim()          ?? null,
+    bairro:       bairro?.trim()       ?? null,
+    obs:          obs?.trim()          ?? null,
+  }
+
+  // O modelo CaixaEmendaCDO usa 'id' como campo identificador (não 'ce_id')
+  const caixa = await CaixaEmendaCDO.findOneAndUpdate(
+    { projeto_id: targetProjeto, id: ce_id.trim() },
+    { $set: { ...update, id: ce_id.trim() } },
+    { upsert: true, new: true, runValidators: true }
+  ).lean()
+
+  revalidatePath('/')
+  revalidatePath('/admin/caixas')
+
+  return { ...caixa, _id: caixa._id.toString() }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/caixas_emenda_cdo → deleteCaixa
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove uma CE/CDO pelo ce_id.
+ * Requer: admin ou superior com empresa ativa.
+ *
+ * @param {string} caixaId
+ * @param {string} projetoId
+ * @returns {Promise<{ deleted: boolean }>}
+ */
+export async function deleteCaixa(caixaId, projetoId) {
+  const session = await requireActiveEmpresa(WRITE_ROLES)
+  const { role, projeto_id: userProjeto } = session.user
+
+  if (!caixaId) throw new Error('ce_id é obrigatório')
+
+  const targetProjeto = role === 'superadmin' ? projetoId : userProjeto
+  if (!targetProjeto) throw new Error('projeto_id é obrigatório')
+
+  await connectDB()
+
+  const result = await CaixaEmendaCDO.deleteOne({ projeto_id: targetProjeto, id: caixaId })
+
+  revalidatePath('/')
+  revalidatePath('/admin/caixas')
+
+  return { deleted: result.deletedCount > 0 }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/diagrama?id= (CE/CDO) → getDiagramaCaixa
+// ---------------------------------------------------------------------------
+
+/**
+ * Retorna o JSON do diagrama interno de uma CE/CDO.
+ * Requer: qualquer usuário autenticado com empresa ativa.
+ *
+ * @param {string} caixaId
+ * @param {string} projetoId
+ * @returns {Promise<Object | null>}
+ */
+export async function getDiagramaCaixa(caixaId, projetoId) {
+  const session = await requireActiveEmpresa(ALL_ROLES)
+  const { role, projeto_id: userProjeto } = session.user
+  const targetProjeto = role === 'superadmin' ? projetoId : userProjeto
+
+  await connectDB()
+
+  const caixa = await CaixaEmendaCDO.findOne(
+    { projeto_id: targetProjeto, id: caixaId },
+    'id nome tipo diagrama'
+  ).lean()
+
+  if (!caixa) return null
+  return { ...caixa, _id: caixa._id.toString() }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/diagrama (CE/CDO) → saveDiagramaCaixa
+// ---------------------------------------------------------------------------
+
+/**
+ * Salva (substitui) o JSON do diagrama de uma CE/CDO.
+ * Requer: admin, tecnico ou superior com empresa ativa.
+ *
+ * @param {Object} data
+ * @param {string} data.ce_id
+ * @param {string} data.projeto_id
+ * @param {Object} data.diagrama
+ * @returns {Promise<{ saved: boolean }>}
+ */
+export async function saveDiagramaCaixa(data) {
+  const session = await requireActiveEmpresa(['superadmin', 'admin', 'tecnico'])
+  const { role, projeto_id: userProjeto } = session.user
+
+  const { ce_id, projeto_id, diagrama } = data ?? {}
+
+  if (!ce_id)    throw new Error('ce_id é obrigatório')
+  if (!diagrama) throw new Error('diagrama é obrigatório')
+
+  const targetProjeto = role === 'superadmin' ? projeto_id : userProjeto
+  if (!targetProjeto) throw new Error('projeto_id é obrigatório')
+
+  await connectDB()
+
+  const result = await CaixaEmendaCDO.updateOne(
+    { projeto_id: targetProjeto, id: ce_id },
+    { $set: { diagrama } }
+  )
+
+  revalidatePath('/')
+
+  return { saved: result.modifiedCount > 0 }
+}

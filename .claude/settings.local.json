@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "WebFetch",
+      "WebSearch",
+      "Skill",
+      "NotebookEdit",
+      "ExitPlanMode",
+      "Task",
+      "TaskCreate",
+      "TaskUpdate",
+      "TaskGet",
+      "TaskList",
+      "MCP"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
