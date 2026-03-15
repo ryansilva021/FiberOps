@@ -15,6 +15,7 @@ import LayerToggles       from '@/components/map/LayerToggles'
 import ModalMovimentacao  from '@/components/map/ModalMovimentacao'
 import ModalDiagrama      from '@/components/map/ModalDiagrama'
 import ModalDiagramaCDO   from '@/components/map/ModalDiagramaCDO'
+import ModalTopologia from '@/components/map/ModalTopologia'
 
 import { getCTOs, upsertCTO }   from '@/actions/ctos'
 import { getCaixas, upsertCaixa } from '@/actions/caixas'
@@ -76,6 +77,8 @@ export default function MapaFTTH({
 
   // ---- Modal de Diagrama ABNT para CDO/CE ----
   const [diagramaCDOEl, setDiagramaCDOEl]   = useState(null)  // data da caixa
+
+  const [mostrarTopologia, setMostrarTopologia] = useState(false)
 
   // ---- Dados do mapa (hidratados pelo servidor; recarregados após mutações) ----
   const [ctos,   setCTOs]   = useState(initialCTOs)
@@ -216,10 +219,23 @@ export default function MapaFTTH({
       setMovimentacaoEl(data)
       setSelectedElement(null)
     } else if (action === 'diagrama') {
-      setDiagramaEl(data)
+      const id = data?.cto_id ?? data?.id ?? ''
+      if ((userRole === 'admin' || userRole === 'superadmin') && id) {
+        router.push(`/admin/diagramas?tab=ctos&id=${encodeURIComponent(id)}`)
+      } else {
+        setDiagramaEl(data)
+      }
       setSelectedElement(null)
     } else if (action === 'diagrama_abnt') {
-      setDiagramaCDOEl(data)
+      const id = data?.ce_id ?? data?.id ?? ''
+      if ((userRole === 'admin' || userRole === 'superadmin') && id) {
+        router.push(`/admin/diagramas?tab=cdos&id=${encodeURIComponent(id)}`)
+      } else {
+        setDiagramaCDOEl(data)
+      }
+      setSelectedElement(null)
+    } else if (action === 'topologia') {
+      setMostrarTopologia(true)
       setSelectedElement(null)
     }
   }, [router])
@@ -546,6 +562,14 @@ export default function MapaFTTH({
           projetoId={projetoId}
           onClose={() => setDiagramaCDOEl(null)}
           onSaved={() => reloadData()}
+        />
+      )}
+
+      {/* Modal Topologia */}
+      {mostrarTopologia && (
+        <ModalTopologia
+          projetoId={projetoId}
+          onClose={() => setMostrarTopologia(false)}
         />
       )}
 

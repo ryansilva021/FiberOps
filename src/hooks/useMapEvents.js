@@ -10,6 +10,7 @@ const CLICKABLE_LAYERS = [
   'rotas-layer',
   'rotas-layer-drop',
   'postes-layer',
+  'olts-layer',
 ]
 
 // Mapeamento layer → tipo de elemento
@@ -20,29 +21,16 @@ const LAYER_TYPE_MAP = {
   'rotas-layer':      'rota',
   'rotas-layer-drop': 'rota',
   'postes-layer':     'poste',
+  'olts-layer':       'olt',
 }
 
-/**
- * Registra eventos do mapa: clique em elementos, clique no mapa, cursor e hover.
- *
- * @param {maplibregl.Map | null} map
- * @param {boolean} mapLoaded
- * @param {{
- *   onElementClick?: (payload: { type: string, data: Object }) => void,
- *   onMapClick?: (lngLat: { lng: number, lat: number }) => void,
- * }} callbacks
- */
 export function useMapEvents(map, mapLoaded, callbacks) {
-  // Manter ref estável para callbacks para evitar re-registro desnecessário
   const callbacksRef = useRef(callbacks)
-  useEffect(() => {
-    callbacksRef.current = callbacks
-  }, [callbacks])
+  useEffect(() => { callbacksRef.current = callbacks }, [callbacks])
 
   useEffect(() => {
     if (!map || !mapLoaded) return
 
-    // Estado de hover encapsulado neste closure
     let hoveredFeature = null
 
     function clearHover() {
@@ -52,13 +40,10 @@ export function useMapEvents(map, mapLoaded, callbacks) {
           { source: hoveredFeature.source, id: hoveredFeature.id },
           { hover: false }
         )
-      } catch (_) {
-        // source pode não suportar feature-state; ignorar
-      }
+      } catch (_) {}
       hoveredFeature = null
     }
 
-    // ---- Clique em elemento ou mapa vazio ----
     function handleClick(e) {
       const activeLayers = CLICKABLE_LAYERS.filter((id) => map.getLayer(id))
       const features = map.queryRenderedFeatures(e.point, { layers: activeLayers })
@@ -72,7 +57,6 @@ export function useMapEvents(map, mapLoaded, callbacks) {
       }
     }
 
-    // ---- Cursor pointer + highlight de hover ----
     function handleMouseMove(e) {
       const activeLayers = CLICKABLE_LAYERS.filter((id) => map.getLayer(id))
       if (activeLayers.length === 0) return
@@ -81,10 +65,9 @@ export function useMapEvents(map, mapLoaded, callbacks) {
 
       if (features.length > 0) {
         map.getCanvas().style.cursor = 'pointer'
-
-        const feature    = features[0]
-        const sourceId   = feature.source
-        const featureId  = feature.id
+        const feature   = features[0]
+        const sourceId  = feature.source
+        const featureId = feature.id
 
         const sameFeature =
           hoveredFeature &&
@@ -93,17 +76,11 @@ export function useMapEvents(map, mapLoaded, callbacks) {
 
         if (!sameFeature) {
           clearHover()
-
           if (featureId !== undefined && featureId !== null) {
             try {
-              map.setFeatureState(
-                { source: sourceId, id: featureId },
-                { hover: true }
-              )
+              map.setFeatureState({ source: sourceId, id: featureId }, { hover: true })
               hoveredFeature = { source: sourceId, id: featureId }
-            } catch (_) {
-              // ignorar sources sem suporte a feature-state
-            }
+            } catch (_) {}
           }
         }
       } else {

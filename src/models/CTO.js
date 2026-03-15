@@ -18,36 +18,6 @@ import mongoose from "mongoose";
 const { Schema, model, models } = mongoose;
 
 // ---------------------------------------------------------------------------
-// Sub-schema: diagrama interno da CTO (JSON livre no SQL original)
-// Armazena o mapeamento porta→cliente dentro da caixa
-// ---------------------------------------------------------------------------
-const DiagramaCTOSchema = new Schema(
-  {
-    // Entrada da CTO: qual CDO e porta a alimenta
-    entrada: {
-      ce_id:    { type: String, default: null }, // ID do CDO pai
-      porta_cdo: { type: Number, default: null },
-    },
-
-    // Mapeamento de portas: { "1": { cliente: "João Silva", obs: "..." }, ... }
-    // Armazenado como Map para flexibilidade de chave
-    portas: {
-      type: Map,
-      of: new Schema(
-        {
-          cliente: { type: String, default: null },
-          obs:     { type: String, default: null },
-          ativo:   { type: Boolean, default: true },
-        },
-        { _id: false }
-      ),
-      default: () => new Map(),
-    },
-  },
-  { _id: false }
-);
-
-// ---------------------------------------------------------------------------
 // Schema principal
 // ---------------------------------------------------------------------------
 const CTOSchema = new Schema(
@@ -126,9 +96,11 @@ const CTOSchema = new Schema(
       default: null,
     },
 
-    // Diagrama interno da CTO (estrutura JSON livre no SQL original)
+    // Diagrama interno da CTO (estrutura JSON livre — aceita qualquer shape)
+    // Novo formato: { entrada, bandejas, splitters, portas }
+    // Legado:       { entrada: { ce_id, porta_cdo }, portas: Map }
     diagrama: {
-      type:    DiagramaCTOSchema,
+      type:    Schema.Types.Mixed,
       default: null,
     },
   },

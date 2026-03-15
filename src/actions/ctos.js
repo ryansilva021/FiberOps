@@ -41,10 +41,16 @@ export async function getCTOs(projetoId) {
 
   const ctos = await CTO.find({ projeto_id: targetProjeto }).lean();
 
-  // Calcula ocupação: conta portas com cliente não-nulo no diagrama
+  // Calcula ocupação: novo formato (splitters) ou legado (portas)
   return ctos.map((cto) => {
     let ocupadas = 0;
-    if (cto.diagrama?.portas) {
+    if (cto.diagrama?.splitters?.length) {
+      for (const s of cto.diagrama.splitters) {
+        for (const sd of (s.saidas ?? [])) {
+          if (sd?.cliente?.trim()) ocupadas++;
+        }
+      }
+    } else if (cto.diagrama?.portas) {
       for (const porta of Object.values(cto.diagrama.portas)) {
         if (porta?.cliente) ocupadas++;
       }
@@ -226,12 +232,21 @@ export async function saveDiagramaCTO(data) {
 
   await connectDB();
 
+  // Propaga vínculos de topologia do diagrama para os campos do modelo
+  const topologiaUpdate = {}
+  if (diagrama.entrada) {
+    topologiaUpdate.cdo_id       = diagrama.entrada.cdo_id?.trim()       || null
+    topologiaUpdate.porta_cdo    = diagrama.entrada.porta_cdo    ? (Number(diagrama.entrada.porta_cdo)    || null) : null
+    topologiaUpdate.splitter_cto = diagrama.entrada.splitter_cto?.trim() || null
+  }
+
   const result = await CTO.updateOne(
     { projeto_id: targetProjeto, cto_id },
-    { $set: { diagrama } },
+    { $set: { diagrama, ...topologiaUpdate } },
   );
 
   revalidatePath("/");
+  revalidatePath("/admin/diagramas");
 
   return { saved: result.modifiedCount > 0 };
 }

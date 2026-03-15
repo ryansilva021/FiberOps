@@ -196,12 +196,20 @@ export async function saveDiagramaCaixa(data) {
 
   await connectDB()
 
+  // Propaga vínculos de topologia do diagrama para os campos do modelo
+  const topologiaUpdate = {}
+  if (diagrama.entrada) {
+    topologiaUpdate.olt_id    = diagrama.entrada.olt_id?.trim() || null
+    topologiaUpdate.porta_olt = diagrama.entrada.porta_olt ? (Number(diagrama.entrada.porta_olt) || null) : null
+  }
+
   const result = await CaixaEmendaCDO.updateOne(
     { projeto_id: targetProjeto, id: ce_id },
-    { $set: { diagrama } }
+    { $set: { diagrama, ...topologiaUpdate } }
   )
 
   revalidatePath('/')
+  revalidatePath('/admin/diagramas')
 
   return { saved: result.modifiedCount > 0 }
 }

@@ -11,9 +11,11 @@ import DiagramasClient from '@/components/admin/DiagramasClient'
 
 export const metadata = { title: 'Diagramas | FiberOps' }
 
-export default async function DiagramasPage() {
+export default async function DiagramasPage({ searchParams }) {
   const session = await auth()
   const projetoId = session?.user?.projeto_id
+  const tabInicial = searchParams?.tab ?? null
+  const idInicial  = searchParams?.id  ?? null
 
   let ctos   = []
   let caixas = []
@@ -53,6 +55,8 @@ export default async function DiagramasPage() {
         caixas={caixas}
         olts={olts}
         projetoId={projetoId}
+        tabInicial={tabInicial}
+        idInicial={idInicial}
       />
     </div>
   )

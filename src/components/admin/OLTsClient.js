@@ -193,13 +193,22 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
         </button>
       </div>
 
+      {/* Aviso de OLTs sem coordenadas */}
+      {olts.some((o) => o.lat == null || o.lng == null) && (
+        <div style={{ backgroundColor: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 10 }}
+          className="px-4 py-3 text-xs text-yellow-400 mb-4 flex items-start gap-2">
+          <span className="text-base flex-shrink-0">⚠️</span>
+          <span>OLTs sem coordenadas não aparecem no mapa. Edite a OLT e defina a localização via GPS ou selecionando no mapa.</span>
+        </div>
+      )}
+
       {/* Tabela */}
       <div style={cardStyle} className="rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid #1f2937', backgroundColor: '#0d1526' }}>
-                {['ID', 'Nome', 'Modelo', 'IP Gerência', 'Portas PON', 'Status', 'Ações'].map((h) => (
+                {['ID', 'Nome', 'Modelo', 'IP Gerência', 'Portas PON', 'Status', 'Mapa', 'Ações'].map((h) => (
                   <th key={h} className="text-left text-xs text-slate-400 font-semibold uppercase tracking-wider px-4 py-3">{h}</th>
                 ))}
               </tr>
@@ -207,13 +216,14 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
             <tbody>
               {olts.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-slate-500 py-12 text-sm">
+                  <td colSpan={8} className="text-center text-slate-500 py-12 text-sm">
                     Nenhuma OLT cadastrada ainda.
                   </td>
                 </tr>
               )}
               {olts.map((olt, i) => {
                 const st = STATUS_CONFIG[olt.status] ?? { label: olt.status ?? '—', color: '#94a3b8' }
+                const temCoordenadas = olt.lat != null && olt.lng != null
                 return (
                   <tr key={olt._id} style={{ borderBottom: i < olts.length - 1 ? '1px solid #1f2937' : 'none' }}
                     className="hover:bg-slate-800/30 transition-colors">
@@ -231,6 +241,12 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
                       }}>
                         {st.label}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {temCoordenadas
+                        ? <span title={`${olt.lat?.toFixed(5)}, ${olt.lng?.toFixed(5)}`} style={{ fontSize: 13, color: '#22c55e' }}>✓</span>
+                        : <span title="Sem coordenadas — não aparece no mapa" style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700, cursor: 'help' }}>⚠ Sem local</span>
+                      }
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

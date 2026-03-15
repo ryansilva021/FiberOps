@@ -96,6 +96,7 @@ const OLTSchema = new Schema(
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
     collection: "olts",
+    id: false, // evita conflito do virtual `id` do Mongoose com o campo `id` do schema
   }
 );
 

@@ -94,6 +94,7 @@ export async function upsertOLT(data) {
 
   revalidatePath('/')
   revalidatePath('/admin/olts')
+  revalidatePath('/admin/campo')
   revalidatePath('/admin/diagramas')
 
   return { ...olt, _id: olt._id.toString() }
@@ -126,6 +127,8 @@ export async function deleteOLT(oltId, projetoId) {
 
   revalidatePath('/')
   revalidatePath('/admin/olts')
+  revalidatePath('/admin/campo')
+  revalidatePath('/admin/diagramas')
 
   return { deleted: result.deletedCount > 0 }
 }
@@ -152,18 +155,36 @@ export async function getTopologia(projetoId) {
   const [olts, caixas, ctos] = await Promise.all([
     OLT.find({ projeto_id: targetProjeto }).lean(),
     CaixaEmendaCDO.find({ projeto_id: targetProjeto }).lean(),
-    CTO.find({ projeto_id: targetProjeto }, 'cto_id nome cdo_id porta_cdo capacidade lat lng').lean(),
+    CTO.find({ projeto_id: targetProjeto }, 'cto_id nome cdo_id porta_cdo splitter_cto capacidade diagrama').lean(),
   ])
 
+  // Calcula ocupação para cada CTO (novo formato ou legado)
+  function calcOcupacaoCTO(cto) {
+    if (cto.diagrama?.splitters?.length) {
+      return cto.diagrama.splitters.reduce((s, sp) =>
+        s + (sp.saidas ?? []).filter(sd => sd?.cliente?.trim()).length, 0)
+    }
+    if (cto.diagrama?.portas) {
+      return Object.values(cto.diagrama.portas).filter(p => p?.cliente).length
+    }
+    return 0
+  }
+
   // Monta a árvore em memória
+  // cto.cdo_id deve ser igual a caixa.id (CDO usa campo "id")
   const ctosPorCaixa = {}
   for (const cto of ctos) {
     if (cto.cdo_id) {
       ctosPorCaixa[cto.cdo_id] = ctosPorCaixa[cto.cdo_id] ?? []
-      ctosPorCaixa[cto.cdo_id].push({ ...cto, _id: cto._id.toString() })
+      ctosPorCaixa[cto.cdo_id].push({
+        ...cto,
+        _id:     cto._id.toString(),
+        ocupacao: calcOcupacaoCTO(cto),
+      })
     }
   }
 
+  // caixa.olt_id deve ser igual a olt.id (OLT usa campo "id")
   const caixasPorOLT = {}
   for (const caixa of caixas) {
     if (caixa.olt_id) {
@@ -171,15 +192,16 @@ export async function getTopologia(projetoId) {
       caixasPorOLT[caixa.olt_id].push({
         ...caixa,
         _id:  caixa._id.toString(),
-        ctos: ctosPorCaixa[caixa.ce_id] ?? [],
+        ctos: ctosPorCaixa[caixa.id] ?? [],   // caixa.id = identificador único do CDO
       })
     }
   }
 
+  // olt.id = identificador único da OLT (campo "id" do schema, não olt_id virtual)
   return olts.map((olt) => ({
     ...olt,
     _id:    olt._id.toString(),
-    caixas: caixasPorOLT[olt.olt_id] ?? [],
+    caixas: caixasPorOLT[olt.id] ?? [],
   }))
 }
 

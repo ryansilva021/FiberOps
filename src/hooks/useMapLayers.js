@@ -423,16 +423,6 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
         'icon-image': 'olt-icon',
         'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 14, 0.9, 17, 1.1],
         'icon-allow-overlap': true,
-        'text-field': ['get', 'nome'],
-        'text-size': 11,
-        'text-offset': [0, 1.4],
-        'text-anchor': 'top',
-        'text-optional': true,
-      },
-      paint: {
-        'text-color': '#67e8f9',
-        'text-halo-color': '#000000',
-        'text-halo-width': 1.5,
       },
     })
 
