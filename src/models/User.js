@@ -71,6 +71,13 @@ const UserSchema = new Schema(
       default:  "default",
     },
 
+    // Referência à empresa (gerada na aprovação do registro)
+    empresa_id: {
+      type:    String,
+      trim:    true,
+      default: null,
+    },
+
     // Dados opcionais de perfil
     email: {
       type:  String,

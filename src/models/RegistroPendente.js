@@ -44,12 +44,13 @@ const RegistroPendenteSchema = new Schema(
       select:   false, // não retorna por padrão em queries
     },
 
-    // ID do projeto ao qual o usuário deseja ter acesso
+    // ID do projeto gerado na aprovação (null enquanto pendente)
     projeto_id: {
       type:      String,
-      required:  [true, "projeto_id é obrigatório"],
+      required:  false,
       trim:      true,
       lowercase: true,
+      default:   null,
     },
 
     // Nome da empresa/ISP ou nome completo do solicitante

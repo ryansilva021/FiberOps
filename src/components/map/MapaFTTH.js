@@ -150,6 +150,15 @@ export default function MapaFTTH({
     setFollowMode((prev) => !prev)
   }, [setFollowMode])
 
+  // ---- GPS automático: centraliza na localização do usuário ao abrir o mapa ----
+  useEffect(() => {
+    if (mapLoaded && !tracking) {
+      startTracking()
+      setFollowMode(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapLoaded])
+
   // ---- Recarregar dados quando componente monta (se não veio com dados iniciais) ----
   useEffect(() => {
     if (!initialCTOs.length && !initialCaixas.length) {

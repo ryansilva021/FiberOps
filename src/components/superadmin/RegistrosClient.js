@@ -35,14 +35,11 @@ function StatusBadge({ status }) {
   )
 }
 
-const ROLES_APROVACAO = ['user', 'tecnico', 'admin']
-
 export default function RegistrosClient({ registrosIniciais }) {
   const [registros, setRegistros] = useState(registrosIniciais)
   const [filtro, setFiltro] = useState('pendente')
   const [modalRejeitar, setModalRejeitar] = useState(null)
   const [motivo, setMotivo] = useState('')
-  const [roleAprovar, setRoleAprovar] = useState({})
   const [erro, setErro] = useState(null)
   const [sucesso, setSucesso] = useState(null)
   const [isPending, startTransition] = useTransition()
@@ -57,14 +54,17 @@ export default function RegistrosClient({ registrosIniciais }) {
     : registros.filter((r) => r.status === filtro)
 
   function handleAprovar(registro) {
-    const role = roleAprovar[registro._id] ?? 'user'
     startTransition(async () => {
       try {
-        await aprovarRegistro(registro._id, role)
+        const res = await aprovarRegistro(registro._id)
         setRegistros((prev) =>
-          prev.map((r) => (r._id === registro._id ? { ...r, status: 'aprovado' } : r))
+          prev.map((r) =>
+            r._id === registro._id
+              ? { ...r, status: 'aprovado', projeto_id: res.projeto_id }
+              : r
+          )
         )
-        flash(`Usuário ${registro.username} aprovado com role ${role}.`)
+        flash(`Empresa "${registro.empresa}" aprovada. Projeto: ${res.projeto_id}`)
       } catch (e) {
         setErro(e.message)
       }
@@ -142,7 +142,7 @@ export default function RegistrosClient({ registrosIniciais }) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid #1f2937', backgroundColor: '#0d1526' }}>
-                {['Usuário', 'Empresa', 'Projeto', 'Data', 'Status', 'Motivo', 'Ações'].map((h) => (
+                {['Empresa', 'Usuário (admin)', 'Projeto gerado', 'Data', 'Status', 'Motivo', 'Ações'].map((h) => (
                   <th key={h} className="text-left text-xs text-slate-400 font-semibold uppercase tracking-wider px-4 py-3">
                     {h}
                   </th>
@@ -163,9 +163,11 @@ export default function RegistrosClient({ registrosIniciais }) {
                   style={{ borderBottom: i < registrosFiltrados.length - 1 ? '1px solid #1f2937' : 'none' }}
                   className="hover:bg-slate-800/30 transition-colors"
                 >
+                  <td className="px-4 py-3 text-slate-200 font-medium">{r.empresa ?? '—'}</td>
                   <td className="px-4 py-3 font-mono text-xs text-sky-400">{r.username}</td>
-                  <td className="px-4 py-3 text-slate-200">{r.empresa ?? '—'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">{r.projeto_id}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                    {r.projeto_id ?? <span className="text-slate-600 italic">gerado na aprovação</span>}
+                  </td>
                   <td className="px-4 py-3 text-slate-400 text-xs">
                     {r.solicitado_em
                       ? new Date(r.solicitado_em).toLocaleDateString('pt-BR')
@@ -178,26 +180,10 @@ export default function RegistrosClient({ registrosIniciais }) {
                   <td className="px-4 py-3">
                     {r.status === 'pendente' ? (
                       <div className="flex items-center gap-2">
-                        <select
-                          value={roleAprovar[r._id] ?? 'user'}
-                          onChange={(e) =>
-                            setRoleAprovar((prev) => ({ ...prev, [r._id]: e.target.value }))
-                          }
-                          style={{
-                            backgroundColor: '#0b1220',
-                            border: '1px solid #1f2937',
-                            color: '#94a3b8',
-                          }}
-                          className="text-xs rounded px-2 py-1 focus:outline-none"
-                        >
-                          {ROLES_APROVACAO.map((role) => (
-                            <option key={role} value={role}>{role}</option>
-                          ))}
-                        </select>
                         <button
                           onClick={() => handleAprovar(r)}
                           disabled={isPending}
-                          className="text-xs text-green-400 hover:text-green-300 disabled:opacity-40 transition-colors"
+                          className="text-xs text-green-400 hover:text-green-300 disabled:opacity-40 transition-colors font-medium"
                         >
                           Aprovar
                         </button>

@@ -18,6 +18,7 @@ import { hashPassword } from '@/lib/password'
 import { RegistroPendente } from '@/models/RegistroPendente'
 import { User } from '@/models/User'
 import { Projeto } from '@/models/Projeto'
+import { Empresa } from '@/models/Empresa'
 
 const SUPERADMIN_ONLY = ['superadmin']
 
@@ -55,25 +56,26 @@ export async function checkLoginDisponivel(login) {
 // ---------------------------------------------------------------------------
 
 /**
- * Cria um registro de auto-cadastro público (aguarda aprovação do superadmin).
+ * Cria um registro de auto-cadastro de empresa (aguarda aprovação do superadmin).
  * Rota pública — não requer autenticação.
+ * Ao ser aprovado, cria automaticamente a Empresa, o Projeto (limite 500 CTOs)
+ * e o usuário com role admin.
  *
  * @param {Object} data
- * @param {string} data.username       — obrigatório
+ * @param {string} data.username       — obrigatório (admin da empresa)
  * @param {string} data.password       — obrigatório, mínimo 6 chars
- * @param {string} data.projeto_id     — ID do projeto desejado (obrigatório)
+ * @param {string} data.empresa        — nome da empresa (obrigatório)
  * @param {string} [data.email]
  * @param {string} [data.nome_completo]
  * @param {string} [data.telefone]
- * @param {string} [data.empresa]
  * @returns {Promise<{ criado: boolean, mensagem: string }>}
  */
 export async function criarRegistro(data) {
-  const { username, password, projeto_id, email, nome_completo, telefone, empresa } = data ?? {}
+  const { username, password, email, nome_completo, telefone, empresa } = data ?? {}
 
-  if (!username?.trim())  throw new Error('username é obrigatório')
-  if (!password)          throw new Error('password é obrigatório')
-  if (!projeto_id?.trim()) throw new Error('projeto_id é obrigatório')
+  if (!username?.trim()) throw new Error('username é obrigatório')
+  if (!password)         throw new Error('password é obrigatório')
+  if (!empresa?.trim())  throw new Error('nome da empresa é obrigatório')
 
   if (password.length < 6) throw new Error('Senha deve ter ao menos 6 caracteres')
 
@@ -84,32 +86,27 @@ export async function criarRegistro(data) {
 
   await connectDB()
 
-  // Verifica disponibilidade
+  // Verifica disponibilidade do username
   const { disponivel } = await checkLoginDisponivel(normalized)
   if (!disponivel) throw new Error('Username já está em uso ou em análise')
 
-  // Verifica se o projeto existe e está ativo
-  const projeto = await Projeto.findOne({ projeto_id: projeto_id.trim(), is_active: true }).lean()
-  if (!projeto) throw new Error('Projeto não encontrado ou inativo')
-
-  // Armazena senha hasheada mesmo no registro pendente (não ficará em claro)
+  // Armazena senha hasheada (nunca em claro)
   const passwordHash = await hashPassword(password)
 
   await RegistroPendente.create({
     username:      normalized,
     password_hash: passwordHash,
-    projeto_id:    projeto_id.trim(),
-    email:         email?.trim()?.toLowerCase()   ?? null,
-    nome_completo: nome_completo?.trim()           ?? null,
-    telefone:      telefone?.trim()                ?? null,
-    empresa:       empresa?.trim()                 ?? null,
+    projeto_id:    null, // gerado na aprovação
+    email:         email?.trim()?.toLowerCase() ?? null,
+    nome_completo: nome_completo?.trim()         ?? null,
+    telefone:      telefone?.trim()              ?? null,
+    empresa:       empresa.trim(),
     status:        'pendente',
-    solicitado_em: new Date(),
   })
 
   return {
     criado:   true,
-    mensagem: 'Cadastro enviado. Aguarde a aprovação do administrador.',
+    mensagem: 'Solicitação enviada. O superadmin irá analisar e aprovar seu cadastro.',
   }
 }
 
@@ -143,20 +140,31 @@ export async function getRegistros(status) {
 // ---------------------------------------------------------------------------
 
 /**
- * Aprova um registro pendente, criando o usuário no sistema.
+ * Gera um slug único a partir do nome da empresa.
+ * Ex: "Fibra Rápida Telecom" → "fibra_rapida_telecom_a1b2"
+ */
+function gerarSlug(nomeEmpresa) {
+  const base = nomeEmpresa
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 40)
+  const sufixo = Math.random().toString(36).slice(2, 6)
+  return `${base}_${sufixo}`
+}
+
+/**
+ * Aprova um registro pendente, criando Empresa + Projeto (500 CTOs) + User admin.
  * Requer: superadmin.
  *
  * @param {string} registroId   — _id do RegistroPendente
- * @param {string} [role]       — role do novo usuário (padrão: 'user')
- * @returns {Promise<{ aprovado: boolean, username: string }>}
+ * @returns {Promise<{ aprovado: boolean, username: string, projeto_id: string }>}
  */
-export async function aprovarRegistro(registroId, role = 'user') {
+export async function aprovarRegistro(registroId) {
   const session = await requireRole(SUPERADMIN_ONLY)
 
   if (!registroId) throw new Error('registroId é obrigatório')
-
-  const ALLOWED_ROLES = ['user', 'tecnico', 'admin']
-  if (role && !ALLOWED_ROLES.includes(role)) throw new Error('Role inválido para aprovação de registro')
 
   await connectDB()
 
@@ -164,7 +172,7 @@ export async function aprovarRegistro(registroId, role = 'user') {
   if (!registro) throw new Error('Registro não encontrado')
   if (registro.status !== 'pendente') throw new Error('Registro já foi processado')
 
-  // Verifica novamente se o username ainda está livre
+  // Verifica se o username ainda está livre
   const existeUser = await User.exists({ username: registro.username })
   if (existeUser) {
     registro.status = 'rejeitado'
@@ -175,24 +183,64 @@ export async function aprovarRegistro(registroId, role = 'user') {
     throw new Error('Username já existe no sistema')
   }
 
-  // Cria o usuário com a senha já hasheada do registro
+  // Gera slug único para empresa e projeto
+  const nomeEmpresa = registro.empresa || registro.username
+  let slug = gerarSlug(nomeEmpresa)
+  // Garante unicidade do slug
+  while (await Empresa.exists({ slug })) {
+    slug = gerarSlug(nomeEmpresa)
+  }
+  const projetoId = slug
+
+  // 1. Cria a Empresa
+  const empresa = await Empresa.create({
+    razao_social:       nomeEmpresa,
+    slug,
+    status_assinatura:  'trial',
+    trial_expira_em:    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 dias
+    plano:              'basico',
+    email_contato:      registro.email ?? null,
+    telefone_contato:   registro.telefone ?? null,
+    projetos:           [projetoId],
+    is_active:          true,
+  })
+
+  // 2. Cria o Projeto com limite de 500 CTOs
+  await Projeto.create({
+    projeto_id: projetoId,
+    nome:       nomeEmpresa,
+    plano:      'basico',
+    ativo:      true,
+    config: {
+      maxCtos:              500,
+      maxUsuarios:          null,
+      registroPublicoAtivo: false,
+      autoAprovarRegistro:  false,
+      email:                registro.email ?? null,
+      telefone:             registro.telefone ?? null,
+    },
+  })
+
+  // 3. Cria o User como admin da empresa
   await User.create({
     username:      registro.username,
     password_hash: registro.password_hash,
-    role:          role ?? 'user',
-    projeto_id:    registro.projeto_id,
+    role:          'admin',
+    projeto_id:    projetoId,
+    empresa_id:    empresa._id.toString(),
     email:         registro.email ?? null,
     nome_completo: registro.nome_completo ?? null,
     is_active:     true,
   })
 
-  // Atualiza status do registro
+  // 4. Atualiza o registro com o projeto_id gerado
   registro.status         = 'aprovado'
+  registro.projeto_id     = projetoId
   registro.processado_em  = new Date()
   registro.processado_por = session.user.username
   await registro.save()
 
-  return { aprovado: true, username: registro.username }
+  return { aprovado: true, username: registro.username, projeto_id: projetoId }
 }
 
 // ---------------------------------------------------------------------------

@@ -4,30 +4,12 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { checkLoginDisponivel, criarRegistro } from '@/actions/registros'
 
-const PLANOS = [
-  {
-    id: 'basico',
-    nome: 'Básico',
-    preco: 'Grátis',
-    descricao: 'Até 200 CTOs, 3 usuários',
-    destaque: false,
-  },
-  {
-    id: 'pro',
-    nome: 'Pro',
-    preco: 'R$ 49/mês',
-    descricao: 'CTOs ilimitadas, usuários ilimitados',
-    destaque: true,
-  },
-]
-
 export default function CadastroPage() {
   const [passo, setPasso] = useState(1)
   const [empresa, setEmpresa] = useState('')
   const [username, setUsername] = useState('')
   const [senha, setSenha] = useState('')
   const [senhaConfirm, setSenhaConfirm] = useState('')
-  const [plano, setPlano] = useState('basico')
   const [verificandoLogin, setVerificandoLogin] = useState(false)
   const [loginDisponivel, setLoginDisponivel] = useState(null)
   const [enviando, setEnviando] = useState(false)
@@ -57,12 +39,11 @@ export default function CadastroPage() {
       const res = await criarRegistro({
         username,
         password: senha,
-        projeto_id: empresa.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
         empresa,
         nome_completo: empresa,
       })
-      setResultado({ ...res, plano })
-      setPasso(5)
+      setResultado(res)
+      setPasso(4)
     } catch (e) {
       setErro(e.message || 'Erro ao enviar cadastro.')
     } finally {
@@ -96,14 +77,14 @@ export default function CadastroPage() {
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-white tracking-tight">FiberOps</h1>
-        <p className="text-sm text-slate-400 mt-1">Criar nova conta</p>
+        <p className="text-sm text-slate-400 mt-1">Criar conta de empresa</p>
       </div>
 
       <div style={cardStyle} className="rounded-2xl p-8">
         {/* Indicador de passos */}
-        {passo <= 4 && (
+        {passo <= 3 && (
           <div className="flex items-center justify-between mb-8">
-            {[1, 2, 3, 4].map((n) => (
+            {[1, 2, 3].map((n) => (
               <div key={n} className="flex items-center gap-1 flex-1">
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
@@ -114,7 +95,7 @@ export default function CadastroPage() {
                 >
                   {n}
                 </div>
-                {n < 4 && (
+                {n < 3 && (
                   <div
                     className="flex-1 h-0.5 mx-1"
                     style={{ backgroundColor: passo > n ? '#0284c7' : '#1f2937' }}
@@ -130,7 +111,8 @@ export default function CadastroPage() {
           <div>
             <h2 className="text-lg font-semibold text-white mb-1">Nome da empresa</h2>
             <p className="text-sm text-slate-400 mb-6">
-              Como sua empresa é chamada? Isso identificará seu projeto no sistema.
+              Informe o nome da sua empresa ou ISP. Cada empresa terá seu próprio projeto
+              isolado com até 500 CTOs cadastradas.
             </p>
             <div className="flex flex-col gap-1 mb-6">
               <label className="text-xs text-slate-400 font-medium uppercase tracking-wider">
@@ -144,6 +126,13 @@ export default function CadastroPage() {
                 style={inputStyle}
                 className="rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 placeholder-slate-600"
               />
+            </div>
+            <div
+              style={{ backgroundColor: '#0c2340', border: '1px solid #0369a1' }}
+              className="rounded-lg px-4 py-3 text-xs text-sky-300 mb-6"
+            >
+              Após o envio, o superadmin irá analisar e aprovar seu cadastro.
+              Você receberá acesso com role de <strong>admin</strong> da sua empresa.
             </div>
             <button
               onClick={avancar}
@@ -160,13 +149,13 @@ export default function CadastroPage() {
           <div>
             <h2 className="text-lg font-semibold text-white mb-1">Suas credenciais</h2>
             <p className="text-sm text-slate-400 mb-6">
-              Defina o nome de usuário e senha para acessar o sistema.
+              Defina o login e senha do administrador da empresa.
             </p>
 
             <div className="flex flex-col gap-4 mb-6">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-slate-400 font-medium uppercase tracking-wider">
-                  Nome de usuário
+                  Nome de usuário (admin)
                 </label>
                 <div className="relative">
                   <input
@@ -182,9 +171,7 @@ export default function CadastroPage() {
                     className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 placeholder-slate-600 pr-10"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm">
-                    {verificandoLogin && (
-                      <span className="text-slate-500">...</span>
-                    )}
+                    {verificandoLogin && <span className="text-slate-500">...</span>}
                     {!verificandoLogin && loginDisponivel === true && (
                       <span className="text-green-400">✓</span>
                     )}
@@ -266,79 +253,27 @@ export default function CadastroPage() {
           </div>
         )}
 
-        {/* Passo 3: Plano */}
+        {/* Passo 3: Confirmação */}
         {passo === 3 && (
           <div>
-            <h2 className="text-lg font-semibold text-white mb-1">Escolha seu plano</h2>
-            <p className="text-sm text-slate-400 mb-6">
-              Comece grátis e faça upgrade quando precisar.
-            </p>
-
-            <div className="flex flex-col gap-3 mb-6">
-              {PLANOS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setPlano(p.id)}
-                  style={{
-                    backgroundColor: plano === p.id ? '#0c2340' : '#0b1220',
-                    border: `1px solid ${plano === p.id ? '#0284c7' : '#1f2937'}`,
-                  }}
-                  className="rounded-xl p-4 text-left transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white">{p.nome}</span>
-                        {p.destaque && (
-                          <span
-                            style={{ backgroundColor: '#0369a1', color: '#bae6fd' }}
-                            className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          >
-                            Popular
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{p.descricao}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-bold text-white">{p.preco}</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={voltar}
-                style={{ border: '1px solid #1f2937', color: '#94a3b8' }}
-                className="flex-1 hover:bg-slate-800 font-semibold py-2.5 rounded-lg text-sm transition-colors"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={avancar}
-                className="flex-1 bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
-              >
-                Continuar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Passo 4: Confirmação */}
-        {passo === 4 && (
-          <div>
-            <h2 className="text-lg font-semibold text-white mb-1">Confirmar cadastro</h2>
+            <h2 className="text-lg font-semibold text-white mb-1">Confirmar solicitação</h2>
             <p className="text-sm text-slate-400 mb-6">Revise os dados antes de enviar.</p>
 
             <div
               style={{ backgroundColor: '#0b1220', border: '1px solid #1f2937' }}
-              className="rounded-xl p-4 mb-6 flex flex-col gap-2"
+              className="rounded-xl p-4 mb-4 flex flex-col gap-2"
             >
               <Row label="Empresa" value={empresa} />
-              <Row label="Usuário" value={username} />
-              <Row label="Plano" value={PLANOS.find((p) => p.id === plano)?.nome} />
+              <Row label="Usuário (admin)" value={username} />
+              <Row label="Limite de CTOs" value="500" />
+            </div>
+
+            <div
+              style={{ backgroundColor: '#0c2340', border: '1px solid #0369a1' }}
+              className="rounded-lg px-4 py-3 text-xs text-sky-300 mb-6"
+            >
+              O superadmin irá criar automaticamente a empresa e o projeto ao aprovar.
+              Você entrará como <strong>admin</strong> e poderá gerenciar usuários da sua equipe.
             </div>
 
             {erro && (
@@ -370,21 +305,20 @@ export default function CadastroPage() {
           </div>
         )}
 
-        {/* Passo 5: Resultado */}
-        {passo === 5 && resultado && (
+        {/* Passo 4: Resultado */}
+        {passo === 4 && resultado && (
           <div className="text-center">
-            <div className="text-4xl mb-4">
-              {resultado.plano === 'basico' ? '✅' : '⏳'}
-            </div>
-            <h2 className="text-lg font-semibold text-white mb-2">
-              {resultado.plano === 'basico' ? 'Cadastro aprovado!' : 'Solicitação enviada!'}
-            </h2>
-            <p className="text-sm text-slate-400 mb-6">
-              {resultado.plano === 'basico'
-                ? 'Seu acesso básico foi criado. Aguarde a aprovação do administrador para fazer login.'
-                : 'Sua solicitação pro está em análise. Você receberá acesso após aprovação.'}
+            <div className="text-4xl mb-4">⏳</div>
+            <h2 className="text-lg font-semibold text-white mb-2">Solicitação enviada!</h2>
+            <p className="text-sm text-slate-400 mb-3">
+              Sua solicitação de cadastro da empresa <strong className="text-white">{empresa}</strong> está
+              em análise pelo superadmin.
             </p>
-            <p className="text-xs text-slate-500 mb-6">{resultado.mensagem}</p>
+            <p className="text-xs text-slate-500 mb-6">
+              Após a aprovação, você poderá fazer login com o usuário{' '}
+              <span className="text-sky-400 font-mono">{username}</span> e gerenciar
+              sua equipe e rede FTTH.
+            </p>
             <Link
               href="/login"
               className="inline-block bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 px-6 rounded-lg text-sm transition-colors"
