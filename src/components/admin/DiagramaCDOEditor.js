@@ -2,178 +2,167 @@
 
 /**
  * DiagramaCDOEditor.js
- * Editor profissional ABNT para CE/CDO.
- * Estrutura salva: { entrada: {olt_id, pon, porta_olt}, bandejas: [...], splitters: [...] }
+ * Editor ABNT para CE/CDO com abas: PON/OLT | Bandejas | Splitters | Cabos | Resumo
  */
 
 import { useState, useEffect } from 'react'
 import { getDiagramaCaixa, saveDiagramaCaixa } from '@/actions/caixas'
 
-// ---------------------------------------------------------------------------
-// ABNT NBR 14721
-// ---------------------------------------------------------------------------
+// ─── ABNT NBR 14721 ───────────────────────────────────────────────────────────
 const ABNT = [
-  { idx: 1,  nome: 'Verde',    hex: '#16a34a' },
-  { idx: 2,  nome: 'Amarelo',  hex: '#ca8a04' },
-  { idx: 3,  nome: 'Branco',   hex: '#e2e8f0' },
-  { idx: 4,  nome: 'Azul',     hex: '#2563eb' },
-  { idx: 5,  nome: 'Vermelho', hex: '#dc2626' },
-  { idx: 6,  nome: 'Violeta',  hex: '#7c3aed' },
-  { idx: 7,  nome: 'Marrom',   hex: '#92400e' },
-  { idx: 8,  nome: 'Rosa',     hex: '#db2777' },
-  { idx: 9,  nome: 'Preto',    hex: '#334155' },
-  { idx: 10, nome: 'Cinza',    hex: '#64748b' },
-  { idx: 11, nome: 'Laranja',  hex: '#ea580c' },
-  { idx: 12, nome: 'Ciano',    hex: '#0891b2' },
+  { idx: 1,  nome: 'Verde',    hex: '#15803d', text: '#dcfce7' },
+  { idx: 2,  nome: 'Amarelo',  hex: '#a16207', text: '#fef9c3' },
+  { idx: 3,  nome: 'Branco',   hex: '#475569', text: '#f1f5f9' },
+  { idx: 4,  nome: 'Azul',     hex: '#1d4ed8', text: '#dbeafe' },
+  { idx: 5,  nome: 'Vermelho', hex: '#b91c1c', text: '#fee2e2' },
+  { idx: 6,  nome: 'Violeta',  hex: '#6d28d9', text: '#ede9fe' },
+  { idx: 7,  nome: 'Marrom',   hex: '#78350f', text: '#fef3c7' },
+  { idx: 8,  nome: 'Rosa',     hex: '#9d174d', text: '#fce7f3' },
+  { idx: 9,  nome: 'Preto',    hex: '#1e293b', text: '#cbd5e1' },
+  { idx: 10, nome: 'Cinza',    hex: '#374151', text: '#e5e7eb' },
+  { idx: 11, nome: 'Laranja',  hex: '#c2410c', text: '#ffedd5' },
+  { idx: 12, nome: 'Ciano',    hex: '#0e7490', text: '#cffafe' },
 ]
 
 const SPLITTER_TIPOS = ['1x2', '1x4', '1x8', '1x16', '1x32']
-
 function uid() { return Math.random().toString(36).slice(2, 9) }
 
-// Estilos
+// ─── Estilos base ─────────────────────────────────────────────────────────────
+const BG   = '#0d1117'
+const BG2  = '#161b22'
+const BG3  = '#1c2333'
+const BORDER = '#30363d'
+
 const S = {
-  wrap:     { backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 24, color: '#f1f5f9' },
-  sec:      { backgroundColor: '#0d1526', border: '1px solid #1f2937', borderRadius: 10, padding: 18, marginBottom: 20 },
-  secHead:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  secTitle: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569', display: 'flex', alignItems: 'center', gap: 8 },
-  dot:      (c) => ({ width: 8, height: 8, borderRadius: '50%', backgroundColor: c, display: 'inline-block', flexShrink: 0 }),
-  inp:      { backgroundColor: '#0b1220', border: '1px solid #374151', color: '#f1f5f9', borderRadius: 6, padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', width: '100%' },
-  inpSm:    { backgroundColor: '#0b1220', border: '1px solid #374151', color: '#f1f5f9', borderRadius: 6, padding: '5px 8px', fontSize: 12, outline: 'none', textAlign: 'center', width: '100%' },
-  lbl:      { fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600, display: 'block', marginBottom: 3 },
-  card:     { backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: '12px 14px', marginBottom: 8 },
-  btnPri:   { background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 8, padding: '10px 28px', cursor: 'pointer', border: 'none' },
-  btnSec:   { background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#052e16', fontWeight: 700, fontSize: 11, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', border: 'none' },
-  btnDel:   { backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 11, borderRadius: 6, padding: '4px 8px', cursor: 'pointer' },
-  tag:      (c) => ({ display: 'inline-flex', alignItems: 'center', gap: 5, backgroundColor: `${c}18`, border: `1px solid ${c}44`, borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: c }),
-  tblHead:  { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', padding: '4px 8px', textAlign: 'center' },
-  tblCell:  { padding: '4px 4px', verticalAlign: 'middle' },
+  wrap:     { backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 12, color: '#e6edf3', overflow: 'hidden' },
+  header:   { backgroundColor: BG2, borderBottom: `1px solid ${BORDER}`, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
+  tabBar:   { backgroundColor: BG2, borderBottom: `1px solid ${BORDER}`, display: 'flex', gap: 0, overflowX: 'auto' },
+  tabBtn:   (ativa, cor) => ({
+    padding: '11px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+    backgroundColor: 'transparent', border: 'none', borderBottom: ativa ? `2px solid ${cor}` : '2px solid transparent',
+    color: ativa ? cor : '#8b949e', whiteSpace: 'nowrap', transition: 'all .15s',
+  }),
+  body:     { padding: '20px', minHeight: 300 },
+  sec:      { backgroundColor: BG2, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '16px', marginBottom: 14 },
+  secHead:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  secTitle: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8b949e' },
+  inp:      { backgroundColor: BG3, border: `1px solid ${BORDER}`, color: '#e6edf3', borderRadius: 6, padding: '6px 10px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' },
+  inpSm:    { backgroundColor: BG3, border: `1px solid ${BORDER}`, color: '#e6edf3', borderRadius: 6, padding: '4px 6px', fontSize: 12, outline: 'none', width: 52, textAlign: 'center', boxSizing: 'border-box' },
+  lbl:      { fontSize: 10, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600, display: 'block', marginBottom: 3 },
+  btnAdd:   { background: 'linear-gradient(135deg,#238636,#1a7f37)', color: '#fff', fontWeight: 700, fontSize: 11, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', border: 'none' },
+  btnDel:   { backgroundColor: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.4)', color: '#f85149', fontSize: 11, borderRadius: 6, padding: '4px 8px', cursor: 'pointer' },
+  btnSave:  { background: 'linear-gradient(135deg,#1f6feb,#1158c7)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 8, padding: '9px 24px', cursor: 'pointer', border: 'none' },
+  tag:      (c) => ({ display:'inline-flex', alignItems:'center', gap:5, backgroundColor:`${c}18`, border:`1px solid ${c}44`, borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600, color:c }),
+  card:     { backgroundColor: BG3, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '12px 14px', marginBottom: 8 },
 }
 
-// Bolinha de cor ABNT
-function FibraDot({ fibra, size = 12 }) {
-  const c = ABNT.find(a => a.idx === Number(fibra))
-  if (!c) return null
+// ─── Seletor de fibra como <select> com opções coloridas ─────────────────────
+function FibraSelect({ value, onChange, small }) {
+  const cur = ABNT.find(a => a.idx === Number(value)) ?? ABNT[0]
   return (
-    <div title={`${c.idx} – ${c.nome}`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ width: size, height: size, borderRadius: '50%', backgroundColor: c.hex, border: '1px solid rgba(255,255,255,0.2)', display: 'inline-block', flexShrink: 0 }} />
-      <span style={{ fontSize: 10, color: c.hex, fontWeight: 600, whiteSpace: 'nowrap' }}>{c.nome}</span>
-    </div>
-  )
-}
-
-// Seletor de cor como bolinhas
-function FibraSelect({ value, onChange }) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+    <select
+      value={value}
+      onChange={e => onChange(Number(e.target.value))}
+      style={{
+        backgroundColor: cur.hex,
+        color: cur.text,
+        border: `1px solid ${cur.hex}`,
+        borderRadius: 5,
+        padding: small ? '3px 5px' : '5px 7px',
+        fontSize: small ? 11 : 12,
+        fontWeight: 700,
+        cursor: 'pointer',
+        outline: 'none',
+        width: small ? 110 : 130,
+      }}
+    >
       {ABNT.map(c => (
-        <button
-          key={c.idx}
-          title={`${c.idx} – ${c.nome}`}
-          onClick={() => onChange(c.idx)}
-          style={{
-            width: 16, height: 16, borderRadius: '50%',
-            backgroundColor: c.hex,
-            border: value === c.idx ? '2px solid #fff' : '1px solid rgba(255,255,255,0.12)',
-            cursor: 'pointer', flexShrink: 0,
-            transform: value === c.idx ? 'scale(1.3)' : 'scale(1)',
-            transition: 'transform .1s',
-          }}
-        />
+        <option key={c.idx} value={c.idx}
+          style={{ backgroundColor: c.hex, color: c.text, fontWeight: 700 }}>
+          {c.idx}. {c.nome}
+        </option>
       ))}
-    </div>
+    </select>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Seção Entrada OLT
-// ---------------------------------------------------------------------------
-function SecaoEntrada({ entrada, onChange }) {
+// ─── Aba PON/OLT ─────────────────────────────────────────────────────────────
+function AbaOLT({ entrada, onChange }) {
   return (
     <div style={S.sec}>
-      <div style={S.secHead}>
-        <p style={S.secTitle}>
-          <span style={S.dot('#6366f1')} />
-          Entrada — Origem OLT
-        </p>
-      </div>
+      <p style={{ ...S.secTitle, marginBottom: 14 }}>Origem — OLT / PON</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px', gap: 12 }}>
         <div>
           <label style={S.lbl}>ID da OLT</label>
           <input value={entrada.olt_id} onChange={e => onChange({ ...entrada, olt_id: e.target.value })}
-            placeholder="ex: OLT-01"
-            style={{ ...S.inp, borderColor: entrada.olt_id ? '#4f46e5' : '#374151' }} />
+            placeholder="ex: OLT-01" style={{ ...S.inp, borderColor: entrada.olt_id ? '#1f6feb' : BORDER }} />
         </div>
         <div>
           <label style={S.lbl}>PON / Slot</label>
-          <input type="number" min={1} value={entrada.pon ?? ''} onChange={e => onChange({ ...entrada, pon: e.target.value ? +e.target.value : null })}
+          <input type="number" min={1} value={entrada.pon ?? ''}
+            onChange={e => onChange({ ...entrada, pon: e.target.value ? +e.target.value : null })}
             placeholder="1" style={S.inp} />
         </div>
         <div>
           <label style={S.lbl}>Porta</label>
-          <input type="number" min={1} value={entrada.porta_olt ?? ''} onChange={e => onChange({ ...entrada, porta_olt: e.target.value ? +e.target.value : null })}
+          <input type="number" min={1} value={entrada.porta_olt ?? ''}
+            onChange={e => onChange({ ...entrada, porta_olt: e.target.value ? +e.target.value : null })}
             placeholder="1" style={S.inp} />
         </div>
       </div>
       {entrada.olt_id && (
-        <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={S.tag('#6366f1')}>OLT: {entrada.olt_id}</span>
-          {entrada.pon != null    && <span style={S.tag('#8b5cf6')}>PON {entrada.pon}</span>}
-          {entrada.porta_olt != null && <span style={S.tag('#a78bfa')}>Porta {entrada.porta_olt}</span>}
+        <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <span style={S.tag('#1f6feb')}>🖥️ {entrada.olt_id}</span>
+          {entrada.pon != null      && <span style={S.tag('#8957e5')}>PON {entrada.pon}</span>}
+          {entrada.porta_olt != null && <span style={S.tag('#3fb950')}>Porta {entrada.porta_olt}</span>}
         </div>
       )}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Seção Bandejas de Fusão
-// ---------------------------------------------------------------------------
-function SecaoBandejas({ bandejas, onChange }) {
+// ─── Aba Bandejas ─────────────────────────────────────────────────────────────
+function AbaBandejas({ bandejas, onChange }) {
   function addBandeja() {
     onChange([...bandejas, { id: uid(), nome: `Bandeja ${bandejas.length + 1}`, fusoes: [] }])
   }
-  function removeBandeja(id) { onChange(bandejas.filter(b => b.id !== id)) }
-  function updateBandeja(id, patch) { onChange(bandejas.map(b => b.id === id ? { ...b, ...patch } : b)) }
+  function remBandeja(id) { onChange(bandejas.filter(b => b.id !== id)) }
+  function upBandeja(id, p) { onChange(bandejas.map(b => b.id === id ? { ...b, ...p } : b)) }
 
   function addFusao(bId) {
     const b = bandejas.find(b => b.id === bId)
-    const nova = { id: uid(), entrada: { tubo: 1, fibra: 1 }, saida: { tubo: 1, fibra: 1 }, tipo: 'fusao', obs: '' }
-    updateBandeja(bId, { fusoes: [...b.fusoes, nova] })
+    upBandeja(bId, { fusoes: [...b.fusoes, { id: uid(), entrada: { tubo: 1, fibra: 1 }, saida: { tubo: 1, fibra: 1 }, tipo: 'fusao', obs: '' }] })
   }
-  function removeFusao(bId, fId) {
-    updateBandeja(bId, { fusoes: bandejas.find(b => b.id === bId).fusoes.filter(f => f.id !== fId) })
+  function remFusao(bId, fId) {
+    upBandeja(bId, { fusoes: bandejas.find(b => b.id === bId).fusoes.filter(f => f.id !== fId) })
   }
-  function updateFusao(bId, fId, patch) {
+  function upFusao(bId, fId, p) {
     const b = bandejas.find(b => b.id === bId)
-    updateBandeja(bId, { fusoes: b.fusoes.map(f => f.id === fId ? { ...f, ...patch } : f) })
+    upBandeja(bId, { fusoes: b.fusoes.map(f => f.id === fId ? { ...f, ...p } : f) })
   }
 
   return (
-    <div style={S.sec}>
-      <div style={S.secHead}>
-        <p style={S.secTitle}>
-          <span style={{ ...S.dot('#2563eb'), borderRadius: 2 }} />
-          Bandejas de Fusão ({bandejas.length})
-        </p>
-        <button onClick={addBandeja} style={S.btnSec}>+ Bandeja</button>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <p style={{ color: '#8b949e', fontSize: 13 }}>Bandejas de fusão da caixa</p>
+        <button onClick={addBandeja} style={S.btnAdd}>+ Bandeja</button>
       </div>
 
       {bandejas.length === 0 && (
-        <p style={{ color: '#374151', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
+        <div style={{ ...S.sec, textAlign: 'center', color: '#484f58', padding: '32px' }}>
           Nenhuma bandeja. Clique em "+ Bandeja" para adicionar.
-        </p>
+        </div>
       )}
 
       {bandejas.map((b, bi) => (
-        <div key={b.id} style={{ ...S.card, borderLeft: '3px solid #2563eb' }}>
-          {/* Header da bandeja */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: b.fusoes.length > 0 ? 12 : 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', minWidth: 76 }}>Bandeja {bi + 1}</span>
-            <input value={b.nome} onChange={e => updateBandeja(b.id, { nome: e.target.value })}
-              placeholder="Nome" style={{ ...S.inp, flex: 1, padding: '4px 8px', fontSize: 12 }} />
-            <button onClick={() => addFusao(b.id)} style={{ ...S.btnSec, whiteSpace: 'nowrap' }}>+ Fusão</button>
-            <button onClick={() => removeBandeja(b.id)} style={S.btnDel}>✕</button>
+        <div key={b.id} style={{ ...S.sec, borderLeft: '3px solid #1f6feb' }}>
+          {/* Header bandeja */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: b.fusoes.length ? 14 : 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#58a6ff' }}>🗂️ Bandeja {bi + 1}</span>
+            <input value={b.nome} onChange={e => upBandeja(b.id, { nome: e.target.value })}
+              style={{ ...S.inp, flex: 1, padding: '4px 8px', fontSize: 12, height: 28 }} />
+            <button onClick={() => addFusao(b.id)} style={{ ...S.btnAdd, whiteSpace: 'nowrap' }}>+ Fusão</button>
+            <button onClick={() => remBandeja(b.id)} style={S.btnDel}>🗑️</button>
           </div>
 
           {b.fusoes.length > 0 && (
@@ -181,81 +170,67 @@ function SecaoBandejas({ bandejas, onChange }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}>
-                    <th style={{ ...S.tblHead, width: 28, color: '#475569' }}>#</th>
-                    <th style={{ ...S.tblHead, width: 80, color: '#475569' }}>Tipo</th>
+                    <th style={{ padding: '5px 6px', width: 28, color: '#484f58', fontWeight: 700, textAlign: 'center' }}>Nº</th>
                     {/* Entrada */}
-                    <th style={{ ...S.tblHead, color: '#3b82f6', borderLeft: '2px solid rgba(59,130,246,0.3)', paddingLeft: 8 }}>Tubo Ent.</th>
-                    <th style={{ ...S.tblHead, color: '#3b82f6' }}>Fibra Ent.</th>
-                    <th style={{ ...S.tblHead, color: '#3b82f6' }}>Cor Ent.</th>
-                    {/* Separador */}
-                    <th style={{ ...S.tblHead, width: 24, color: '#374151' }}>→</th>
+                    <th colSpan={2} style={{ padding: '5px 8px', color: '#58a6ff', fontWeight: 700, borderLeft: '2px solid rgba(88,166,255,0.3)', textAlign: 'center' }}>
+                      🔵 Fibra Entrada
+                    </th>
+                    <th style={{ padding: '5px 4px', color: '#484f58', width: 24, textAlign: 'center' }}>↔</th>
                     {/* Saída */}
-                    <th style={{ ...S.tblHead, color: '#34d399', borderLeft: '2px solid rgba(52,211,153,0.3)', paddingLeft: 8 }}>Tubo Saí.</th>
-                    <th style={{ ...S.tblHead, color: '#34d399' }}>Fibra Saí.</th>
-                    <th style={{ ...S.tblHead, color: '#34d399' }}>Cor Saí.</th>
-                    <th style={{ ...S.tblHead, color: '#475569' }}>Obs</th>
+                    <th colSpan={2} style={{ padding: '5px 8px', color: '#3fb950', fontWeight: 700, borderLeft: '2px solid rgba(63,185,80,0.3)', textAlign: 'center' }}>
+                      🟢 Fibra Saída
+                    </th>
+                    <th style={{ padding: '5px 6px', color: '#8b949e', fontWeight: 700, textAlign: 'center' }}>Tipo</th>
+                    <th style={{ padding: '5px 6px', color: '#8b949e', fontWeight: 700, textAlign: 'left', minWidth: 80 }}>Obs</th>
                     <th style={{ width: 28 }} />
                   </tr>
                 </thead>
                 <tbody>
                   {b.fusoes.map((f, fi) => (
-                    <tr key={f.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                      <td style={{ ...S.tblCell, textAlign: 'center', color: '#374151', fontWeight: 700 }}>{fi + 1}</td>
+                    <tr key={f.id} style={{ borderTop: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: '5px 4px', textAlign: 'center', color: '#484f58', fontWeight: 700 }}>{fi + 1}</td>
 
-                      <td style={S.tblCell}>
-                        <select value={f.tipo} onChange={e => updateFusao(b.id, f.id, { tipo: e.target.value })}
-                          style={{ ...S.inpSm, fontSize: 11, padding: '3px 4px' }}>
-                          <option value="fusao">Fusão</option>
-                          <option value="conector">Conector</option>
-                          <option value="passthrough">Pass</option>
+                      {/* Entrada: fibra select + tubo */}
+                      <td style={{ padding: '5px 4px', borderLeft: '2px solid rgba(88,166,255,0.15)' }}>
+                        <FibraSelect value={f.entrada.fibra} small
+                          onChange={v => upFusao(b.id, f.id, { entrada: { ...f.entrada, fibra: v } })} />
+                      </td>
+                      <td style={{ padding: '5px 4px' }}>
+                        <input type="number" min={1} value={f.entrada.tubo}
+                          onChange={e => upFusao(b.id, f.id, { entrada: { ...f.entrada, tubo: +e.target.value } })}
+                          style={S.inpSm} title="Tubo" />
+                      </td>
+
+                      <td style={{ padding: '5px 2px', textAlign: 'center', color: '#484f58' }}>—</td>
+
+                      {/* Saída: fibra select + tubo */}
+                      <td style={{ padding: '5px 4px', borderLeft: '2px solid rgba(63,185,80,0.15)' }}>
+                        <FibraSelect value={f.saida.fibra} small
+                          onChange={v => upFusao(b.id, f.id, { saida: { ...f.saida, fibra: v } })} />
+                      </td>
+                      <td style={{ padding: '5px 4px' }}>
+                        <input type="number" min={1} value={f.saida.tubo}
+                          onChange={e => upFusao(b.id, f.id, { saida: { ...f.saida, tubo: +e.target.value } })}
+                          style={S.inpSm} title="Tubo" />
+                      </td>
+
+                      <td style={{ padding: '5px 4px' }}>
+                        <select value={f.tipo} onChange={e => upFusao(b.id, f.id, { tipo: e.target.value })}
+                          style={{ ...S.inp, padding: '3px 5px', width: 80, fontSize: 11 }}>
+                          <option value="fusao">fusao</option>
+                          <option value="pon">pon</option>
+                          <option value="conector">conector</option>
+                          <option value="passthrough">pass</option>
                         </select>
                       </td>
 
-                      {/* Entrada */}
-                      <td style={{ ...S.tblCell, borderLeft: '2px solid rgba(59,130,246,0.2)' }}>
-                        <input type="number" min={1} value={f.entrada.tubo}
-                          onChange={e => updateFusao(b.id, f.id, { entrada: { ...f.entrada, tubo: +e.target.value } })}
-                          style={{ ...S.inpSm, width: 52 }} />
-                      </td>
-                      <td style={S.tblCell}>
-                        <input type="number" min={1} max={12} value={f.entrada.fibra}
-                          onChange={e => updateFusao(b.id, f.id, { entrada: { ...f.entrada, fibra: +e.target.value } })}
-                          style={{ ...S.inpSm, width: 52 }} />
-                      </td>
-                      <td style={S.tblCell}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-                          <FibraDot fibra={f.entrada.fibra} />
-                          <FibraSelect value={f.entrada.fibra} onChange={v => updateFusao(b.id, f.id, { entrada: { ...f.entrada, fibra: v } })} />
-                        </div>
+                      <td style={{ padding: '5px 4px' }}>
+                        <input value={f.obs} onChange={e => upFusao(b.id, f.id, { obs: e.target.value })}
+                          placeholder="obs..." style={{ ...S.inp, padding: '3px 7px', fontSize: 11, minWidth: 80 }} />
                       </td>
 
-                      <td style={{ ...S.tblCell, textAlign: 'center', color: '#374151', fontWeight: 700, fontSize: 14 }}>→</td>
-
-                      {/* Saída */}
-                      <td style={{ ...S.tblCell, borderLeft: '2px solid rgba(52,211,153,0.2)' }}>
-                        <input type="number" min={1} value={f.saida.tubo}
-                          onChange={e => updateFusao(b.id, f.id, { saida: { ...f.saida, tubo: +e.target.value } })}
-                          style={{ ...S.inpSm, width: 52 }} />
-                      </td>
-                      <td style={S.tblCell}>
-                        <input type="number" min={1} max={12} value={f.saida.fibra}
-                          onChange={e => updateFusao(b.id, f.id, { saida: { ...f.saida, fibra: +e.target.value } })}
-                          style={{ ...S.inpSm, width: 52 }} />
-                      </td>
-                      <td style={S.tblCell}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-                          <FibraDot fibra={f.saida.fibra} />
-                          <FibraSelect value={f.saida.fibra} onChange={v => updateFusao(b.id, f.id, { saida: { ...f.saida, fibra: v } })} />
-                        </div>
-                      </td>
-
-                      <td style={S.tblCell}>
-                        <input value={f.obs} onChange={e => updateFusao(b.id, f.id, { obs: e.target.value })}
-                          placeholder="observação" style={{ ...S.inpSm, width: '100%', minWidth: 100 }} />
-                      </td>
-
-                      <td style={S.tblCell}>
-                        <button onClick={() => removeFusao(b.id, f.id)} style={{ ...S.btnDel, padding: '3px 6px', fontSize: 10 }}>✕</button>
+                      <td style={{ padding: '5px 4px' }}>
+                        <button onClick={() => remFusao(b.id, f.id)} style={{ ...S.btnDel, padding: '3px 6px', fontSize: 10 }}>✕</button>
                       </td>
                     </tr>
                   ))}
@@ -265,8 +240,8 @@ function SecaoBandejas({ bandejas, onChange }) {
           )}
 
           {b.fusoes.length === 0 && (
-            <p style={{ color: '#374151', fontSize: 12, textAlign: 'center', marginTop: 8 }}>
-              Sem fusões — clique em "+ Fusão"
+            <p style={{ color: '#484f58', fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+              Sem fusões — clique "+ Fusão"
             </p>
           )}
         </div>
@@ -275,97 +250,79 @@ function SecaoBandejas({ bandejas, onChange }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Seção Splitters
-// ---------------------------------------------------------------------------
-function SecaoSplitters({ splitters, onChange }) {
+// ─── Aba Splitters ────────────────────────────────────────────────────────────
+function AbaSplitters({ splitters, onChange }) {
   function addSplitter() {
     const saidas = Array.from({ length: 8 }, (_, i) => ({ porta: i + 1, cto_id: '', obs: '' }))
     onChange([...splitters, { id: uid(), nome: `Splitter ${splitters.length + 1}`, tipo: '1x8', entrada: { tubo: 1, fibra: 1 }, saidas }])
   }
-  function removeSplitter(id) { onChange(splitters.filter(s => s.id !== id)) }
-  function updateSplitter(id, patch) { onChange(splitters.map(s => s.id === id ? { ...s, ...patch } : s)) }
+  function remSplitter(id) { onChange(splitters.filter(s => s.id !== id)) }
+  function upSplitter(id, p) { onChange(splitters.map(s => s.id === id ? { ...s, ...p } : s)) }
   function changeTipo(id, tipo) {
     const qtd = parseInt(tipo.split('x')[1])
-    updateSplitter(id, { tipo, saidas: Array.from({ length: qtd }, (_, i) => ({ porta: i + 1, cto_id: '', obs: '' })) })
+    upSplitter(id, { tipo, saidas: Array.from({ length: qtd }, (_, i) => ({ porta: i + 1, cto_id: '', obs: '' })) })
   }
-  function updateSaida(sId, porta, patch) {
+  function upSaida(sId, porta, p) {
     const s = splitters.find(s => s.id === sId)
-    updateSplitter(sId, { saidas: s.saidas.map(sd => sd.porta === porta ? { ...sd, ...patch } : sd) })
+    upSplitter(sId, { saidas: s.saidas.map(sd => sd.porta === porta ? { ...sd, ...p } : sd) })
   }
 
   return (
-    <div style={S.sec}>
-      <div style={S.secHead}>
-        <p style={S.secTitle}>
-          <span style={{ ...S.dot('#ea580c'), borderRadius: 2 }} />
-          Splitters ({splitters.length})
-        </p>
-        <button onClick={addSplitter} style={S.btnSec}>+ Splitter</button>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <p style={{ color: '#8b949e', fontSize: 13 }}>Splitters ópticos da caixa</p>
+        <button onClick={addSplitter} style={S.btnAdd}>+ Splitter</button>
       </div>
 
       {splitters.length === 0 && (
-        <p style={{ color: '#374151', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
-          Nenhum splitter. Clique em "+ Splitter".
-        </p>
+        <div style={{ ...S.sec, textAlign: 'center', color: '#484f58', padding: '32px' }}>
+          Nenhum splitter. Clique "+ Splitter".
+        </div>
       )}
 
       {splitters.map((s, si) => {
         const ligadas = s.saidas.filter(sd => sd.cto_id.trim()).length
-        const cor = ABNT.find(a => a.idx === s.entrada.fibra)
+        const corEnt = ABNT.find(a => a.idx === s.entrada.fibra)
         return (
-          <div key={s.id} style={{ ...S.card, borderLeft: '3px solid #ea580c' }}>
-            {/* Header */}
+          <div key={s.id} style={{ ...S.sec, borderLeft: '3px solid #e3b341' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#fb923c', minWidth: 76 }}>Splitter {si + 1}</span>
-              <input value={s.nome} onChange={e => updateSplitter(s.id, { nome: e.target.value })}
-                placeholder="Nome" style={{ ...S.inp, flex: 1, minWidth: 120, padding: '4px 8px', fontSize: 12 }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#e3b341' }}>Splitter {si + 1}</span>
+              <input value={s.nome} onChange={e => upSplitter(s.id, { nome: e.target.value })}
+                style={{ ...S.inp, flex: 1, minWidth: 100, padding: '4px 8px', fontSize: 12, height: 28 }} />
               <select value={s.tipo} onChange={e => changeTipo(s.id, e.target.value)}
-                style={{ ...S.inpSm, width: 70 }}>
-                {SPLITTER_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                style={{ ...S.inp, width: 70, padding: '4px 6px', fontSize: 12 }}>
+                {SPLITTER_TIPOS.map(t => <option key={t}>{t}</option>)}
               </select>
-              <span style={S.tag('#16a34a')}>{ligadas}/{s.saidas.length}</span>
-              <button onClick={() => removeSplitter(s.id)} style={S.btnDel}>✕</button>
+              <span style={S.tag('#3fb950')}>{ligadas}/{s.saidas.length} ligadas</span>
+              <button onClick={() => remSplitter(s.id)} style={S.btnDel}>🗑️</button>
             </div>
 
-            {/* Entrada do splitter */}
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, padding: '8px 10px', backgroundColor: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', whiteSpace: 'nowrap' }}>Entrada:</span>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div>
-                  <label style={{ ...S.lbl, color: '#3b82f6' }}>Tubo</label>
-                  <input type="number" min={1} value={s.entrada.tubo}
-                    onChange={e => updateSplitter(s.id, { entrada: { ...s.entrada, tubo: +e.target.value } })}
-                    style={{ ...S.inpSm, width: 56 }} />
-                </div>
-                <div>
-                  <label style={{ ...S.lbl, color: '#3b82f6' }}>Fibra (1–12)</label>
-                  <input type="number" min={1} max={12} value={s.entrada.fibra}
-                    onChange={e => updateSplitter(s.id, { entrada: { ...s.entrada, fibra: +e.target.value } })}
-                    style={{ ...S.inpSm, width: 56 }} />
-                </div>
-                {cor && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 14 }}>
-                    <span style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: cor.hex, border: '1px solid rgba(255,255,255,0.2)' }} />
-                    <span style={{ fontSize: 11, color: cor.hex, fontWeight: 700 }}>{cor.nome}</span>
-                  </div>
-                )}
+            {/* Entrada */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px', backgroundColor: 'rgba(88,166,255,0.05)', border: '1px solid rgba(88,166,255,0.15)', borderRadius: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#58a6ff', whiteSpace: 'nowrap' }}>🔵 Entrada:</span>
+              <FibraSelect value={s.entrada.fibra}
+                onChange={v => upSplitter(s.id, { entrada: { ...s.entrada, fibra: v } })} />
+              <div>
+                <span style={{ ...S.lbl, display: 'inline' }}>Tubo </span>
+                <input type="number" min={1} value={s.entrada.tubo}
+                  onChange={e => upSplitter(s.id, { entrada: { ...s.entrada, tubo: +e.target.value } })}
+                  style={{ ...S.inpSm, width: 52 }} />
               </div>
             </div>
 
             {/* Saídas */}
-            <p style={{ ...S.lbl, color: '#34d399', marginBottom: 8 }}>Saídas — {s.saidas.length} portas</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6 }}>
+            <p style={{ ...S.lbl, color: '#3fb950', marginBottom: 8 }}>🟢 Saídas — {s.saidas.length} portas</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))', gap: 6 }}>
               {s.saidas.map(sd => (
                 <div key={sd.porta} style={{
-                  backgroundColor: sd.cto_id.trim() ? 'rgba(22,163,74,0.08)' : '#0d1526',
-                  border: `1px solid ${sd.cto_id.trim() ? 'rgba(22,163,74,0.35)' : '#1f2937'}`,
-                  borderRadius: 8, padding: '8px 10px',
+                  backgroundColor: sd.cto_id.trim() ? 'rgba(63,185,80,0.08)' : BG3,
+                  border: `1px solid ${sd.cto_id.trim() ? 'rgba(63,185,80,0.3)' : BORDER}`,
+                  borderRadius: 7, padding: '7px 9px',
                 }}>
-                  <p style={{ ...S.lbl, color: sd.cto_id.trim() ? '#86efac' : '#374151', marginBottom: 5 }}>Porta {sd.porta}</p>
-                  <input value={sd.cto_id} onChange={e => updateSaida(s.id, sd.porta, { cto_id: e.target.value })}
-                    placeholder="ID CTO" style={{ ...S.inp, marginBottom: 4, padding: '4px 7px', fontSize: 12 }} />
-                  <input value={sd.obs} onChange={e => updateSaida(s.id, sd.porta, { obs: e.target.value })}
+                  <p style={{ ...S.lbl, color: sd.cto_id.trim() ? '#3fb950' : '#484f58', marginBottom: 4 }}>S{sd.porta}</p>
+                  <input value={sd.cto_id} onChange={e => upSaida(s.id, sd.porta, { cto_id: e.target.value })}
+                    placeholder="ID CTO" style={{ ...S.inp, marginBottom: 3, padding: '3px 7px', fontSize: 12 }} />
+                  <input value={sd.obs} onChange={e => upSaida(s.id, sd.porta, { obs: e.target.value })}
                     placeholder="Obs" style={{ ...S.inp, padding: '3px 7px', fontSize: 11 }} />
                 </div>
               ))}
@@ -377,58 +334,152 @@ function SecaoSplitters({ splitters, onChange }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Legenda ABNT
-// ---------------------------------------------------------------------------
-function LegendaABNT() {
+// ─── Aba Cabos ────────────────────────────────────────────────────────────────
+function AbaCabos({ cabos, onChange }) {
+  function addCabo() {
+    onChange([...(cabos ?? []), { id: uid(), nome: `Cabo ${(cabos?.length ?? 0) + 1}`, tipo: 'OPGW', fibras: 12, obs: '' }])
+  }
+  function remCabo(id) { onChange((cabos ?? []).filter(c => c.id !== id)) }
+  function upCabo(id, p) { onChange((cabos ?? []).map(c => c.id === id ? { ...c, ...p } : c)) }
+
+  const lista = cabos ?? []
   return (
-    <div style={{ ...S.sec, marginBottom: 0 }}>
-      <p style={{ ...S.secTitle, marginBottom: 10 }}>
-        <span style={S.dot('#f59e0b')} />
-        Legenda ABNT NBR 14721
-      </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {ABNT.map(c => (
-          <div key={c.idx} style={{ display: 'flex', alignItems: 'center', gap: 5, backgroundColor: `${c.hex}12`, border: `1px solid ${c.hex}40`, borderRadius: 6, padding: '3px 8px' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: c.hex, display: 'inline-block' }} />
-            <span style={{ fontSize: 10, color: c.hex, fontWeight: 700 }}>{c.idx} – {c.nome}</span>
-          </div>
-        ))}
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <p style={{ color: '#8b949e', fontSize: 13 }}>Cabos de fibra entrando/saindo da caixa</p>
+        <button onClick={addCabo} style={S.btnAdd}>+ Cabo</button>
       </div>
+      {lista.length === 0 && (
+        <div style={{ ...S.sec, textAlign: 'center', color: '#484f58', padding: '32px' }}>
+          Nenhum cabo cadastrado.
+        </div>
+      )}
+      {lista.map((c, ci) => (
+        <div key={c.id} style={{ ...S.sec, borderLeft: '3px solid #8957e5' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#bc8cff', minWidth: 60 }}>Cabo {ci + 1}</span>
+            <input value={c.nome} onChange={e => upCabo(c.id, { nome: e.target.value })}
+              placeholder="Nome" style={{ ...S.inp, flex: 1, minWidth: 100, padding: '4px 8px', fontSize: 12 }} />
+            <select value={c.tipo} onChange={e => upCabo(c.id, { tipo: e.target.value })}
+              style={{ ...S.inp, width: 90, padding: '4px 6px', fontSize: 12 }}>
+              {['OPGW','ASU','ADSS','DROP','Interno'].map(t => <option key={t}>{t}</option>)}
+            </select>
+            <input type="number" min={1} max={864} value={c.fibras}
+              onChange={e => upCabo(c.id, { fibras: +e.target.value })}
+              style={{ ...S.inpSm, width: 56 }} title="Nº de fibras" />
+            <span style={{ fontSize: 11, color: '#8b949e' }}>fibras</span>
+            <input value={c.obs ?? ''} onChange={e => upCabo(c.id, { obs: e.target.value })}
+              placeholder="Obs" style={{ ...S.inp, flex: 2, minWidth: 80, padding: '4px 8px', fontSize: 12 }} />
+            <button onClick={() => remCabo(c.id)} style={S.btnDel}>✕</button>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Componente principal
-// ---------------------------------------------------------------------------
+// ─── Aba Resumo (legenda ABNT + estatísticas) ──────────────────────────────
+function AbaResumo({ entrada, bandejas, splitters, cabos }) {
+  const totalFusoes = bandejas.reduce((a, b) => a + b.fusoes.length, 0)
+  const ligadas     = splitters.reduce((a, s) => a + s.saidas.filter(sd => sd.cto_id?.trim()).length, 0)
+  const totalSaidas = splitters.reduce((a, s) => a + s.saidas.length, 0)
+
+  return (
+    <div>
+      {/* Estatísticas */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10, marginBottom: 20 }}>
+        {[
+          { label: 'OLT', val: entrada.olt_id || '—', cor: '#1f6feb' },
+          { label: 'PON', val: entrada.pon ?? '—', cor: '#8957e5' },
+          { label: 'Porta', val: entrada.porta_olt ?? '—', cor: '#3fb950' },
+          { label: 'Bandejas', val: bandejas.length, cor: '#58a6ff' },
+          { label: 'Fusões', val: totalFusoes, cor: '#a5d6ff' },
+          { label: 'Splitters', val: splitters.length, cor: '#e3b341' },
+          { label: 'CTOs ligadas', val: `${ligadas}/${totalSaidas}`, cor: '#3fb950' },
+          { label: 'Cabos', val: (cabos ?? []).length, cor: '#bc8cff' },
+        ].map(it => (
+          <div key={it.label} style={{ backgroundColor: BG2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${it.cor}` }}>
+            <p style={{ ...S.lbl, color: '#484f58', marginBottom: 4 }}>{it.label}</p>
+            <p style={{ fontSize: 18, fontWeight: 700, color: it.cor }}>{it.val}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Legenda ABNT */}
+      <div style={S.sec}>
+        <p style={{ ...S.secTitle, marginBottom: 12 }}>Legenda ABNT NBR 14721 — Cores de Fibra Óptica</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {ABNT.map(c => (
+            <div key={c.idx} style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              backgroundColor: c.hex, border: `1px solid ${c.hex}`,
+              borderRadius: 6, padding: '4px 10px',
+            }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: c.text }}>{c.idx} — {c.nome}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Mapa de splitters */}
+      {splitters.length > 0 && (
+        <div style={S.sec}>
+          <p style={{ ...S.secTitle, marginBottom: 12 }}>Mapa de Saídas dos Splitters</p>
+          {splitters.map((s, si) => (
+            <div key={s.id} style={{ marginBottom: 12 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#e3b341', marginBottom: 6 }}>{s.nome} ({s.tipo})</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {s.saidas.map(sd => (
+                  <div key={sd.porta} style={{
+                    fontSize: 11, padding: '3px 8px', borderRadius: 5,
+                    backgroundColor: sd.cto_id?.trim() ? 'rgba(63,185,80,0.15)' : BG3,
+                    border: `1px solid ${sd.cto_id?.trim() ? 'rgba(63,185,80,0.4)' : BORDER}`,
+                    color: sd.cto_id?.trim() ? '#3fb950' : '#484f58',
+                    fontWeight: 600,
+                  }}>
+                    S{sd.porta}: {sd.cto_id?.trim() || '—'}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
+const TABS = [
+  { id: 'olt',       label: 'PON/OLT',   cor: '#1f6feb' },
+  { id: 'bandejas',  label: 'Bandejas',  cor: '#58a6ff' },
+  { id: 'splitters', label: 'Splitters', cor: '#e3b341' },
+  { id: 'cabos',     label: 'Cabos',     cor: '#8957e5' },
+  { id: 'resumo',    label: 'Resumo',    cor: '#3fb950' },
+]
+
 export default function DiagramaCDOEditor({ ceId, projetoId, capacidadeSaidas, initialDiagrama }) {
+  const [aba, setAba]           = useState('bandejas')
   const [carregando, setCarregando] = useState(!initialDiagrama)
-  const [saving, setSaving]         = useState(false)
-  const [sucesso, setSucesso]       = useState(null)
-  const [erro, setErro]             = useState(null)
+  const [saving, setSaving]     = useState(false)
+  const [sucesso, setSucesso]   = useState(null)
+  const [erro, setErro]         = useState(null)
 
   const [entrada, setEntrada]     = useState({ olt_id: '', pon: null, porta_olt: null })
   const [bandejas, setBandejas]   = useState([])
   const [splitters, setSplitters] = useState([])
+  const [cabos, setCabos]         = useState([])
 
   function aplicarDiagrama(d) {
     if (!d) return
-    setEntrada({
-      olt_id:    d.entrada?.olt_id    ?? '',
-      pon:       d.entrada?.pon       ?? null,
-      porta_olt: d.entrada?.porta_olt ?? null,
-    })
+    setEntrada({ olt_id: d.entrada?.olt_id ?? '', pon: d.entrada?.pon ?? null, porta_olt: d.entrada?.porta_olt ?? null })
     setBandejas(d.bandejas   ?? [])
     setSplitters(d.splitters ?? [])
+    setCabos(d.cabos         ?? [])
   }
 
   useEffect(() => {
-    if (initialDiagrama) {
-      aplicarDiagrama(initialDiagrama)
-      setCarregando(false)
-      return
-    }
+    if (initialDiagrama) { aplicarDiagrama(initialDiagrama); setCarregando(false); return }
     let cancelado = false
     getDiagramaCaixa(ceId, projetoId)
       .then(res => { if (!cancelado && res?.diagrama) aplicarDiagrama(res.diagrama) })
@@ -439,64 +490,66 @@ export default function DiagramaCDOEditor({ ceId, projetoId, capacidadeSaidas, i
 
   async function salvar() {
     if (saving) return
-    setSaving(true)
-    setErro(null)
-    setSucesso(null)
+    setSaving(true); setErro(null); setSucesso(null)
     try {
-      const res = await saveDiagramaCaixa({
-        ce_id:      ceId,
-        projeto_id: projetoId,
-        diagrama:   { entrada, bandejas, splitters },
-      })
-      setSucesso(res?.saved ? 'Diagrama salvo com sucesso!' : 'Salvo (sem alterações detectadas).')
+      const res = await saveDiagramaCaixa({ ce_id: ceId, projeto_id: projetoId, diagrama: { entrada, bandejas, splitters, cabos } })
+      setSucesso(res?.saved ? 'Diagrama salvo!' : 'Salvo (sem alterações).')
       setTimeout(() => setSucesso(null), 4000)
     } catch (e) {
-      setErro('Erro ao salvar: ' + e.message)
+      setErro('Erro: ' + e.message)
     } finally {
       setSaving(false)
     }
   }
 
   const totalFusoes  = bandejas.reduce((a, b) => a + b.fusoes.length, 0)
-  const totalLigadas = splitters.reduce((a, s) => a + s.saidas.filter(sd => sd.cto_id.trim()).length, 0)
-  const totalPortas  = splitters.reduce((a, s) => a + s.saidas.length, 0)
+  const totalLigadas = splitters.reduce((a, s) => a + s.saidas.filter(sd => sd.cto_id?.trim()).length, 0)
+  const totalSaidas  = splitters.reduce((a, s) => a + s.saidas.length, 0)
 
   if (carregando) {
-    return <div style={S.wrap}><p style={{ color: '#475569', fontSize: 14 }}>Carregando diagrama...</p></div>
+    return <div style={{ ...S.wrap, padding: 24 }}><p style={{ color: '#484f58' }}>Carregando diagrama...</p></div>
   }
 
   return (
     <div style={S.wrap}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+      <div style={S.header}>
         <div>
-          <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>Diagrama ABNT — CE / CDO</h3>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <span style={S.tag('#2563eb')}>{bandejas.length} bandejas</span>
-            <span style={S.tag('#7c3aed')}>{totalFusoes} fusões</span>
-            <span style={S.tag('#ea580c')}>{splitters.length} splitters</span>
-            <span style={S.tag('#16a34a')}>{totalLigadas}/{totalPortas} saídas</span>
-          </div>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#e6edf3', margin: 0 }}>
+            {ceId} — Diagrama ABNT
+          </p>
+          <p style={{ fontSize: 12, color: '#8b949e', margin: '3px 0 0' }}>
+            CDO · {bandejas.length} bandeja(s) · {splitters.length} splitter(s)
+          </p>
         </div>
-        <button onClick={salvar} disabled={saving}
-          style={{ ...S.btnPri, opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}>
-          {saving ? 'Salvando...' : 'Salvar Diagrama'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {sucesso && <span style={{ fontSize: 12, color: '#3fb950' }}>{sucesso}</span>}
+          {erro    && <span style={{ fontSize: 12, color: '#f85149' }}>{erro}</span>}
+          <button onClick={salvar} disabled={saving} style={{ ...S.btnSave, opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Salvando...' : '💾 Salvar'}
+          </button>
+        </div>
       </div>
 
-      {sucesso && <div style={{ backgroundColor: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '10px 16px', fontSize: 13, color: '#4ade80', marginBottom: 16 }}>{sucesso}</div>}
-      {erro    && <div style={{ backgroundColor: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 16px', fontSize: 13, color: '#f87171', marginBottom: 16 }}>{erro}</div>}
+      {/* Tabs */}
+      <div style={S.tabBar}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setAba(t.id)} style={S.tabBtn(aba === t.id, t.cor)}>
+            {t.label}
+            {t.id === 'bandejas'  && bandejas.length   > 0 && <span style={{ marginLeft: 5, fontSize: 10, backgroundColor: `${t.cor}22`, borderRadius: 4, padding: '1px 5px', color: t.cor }}>{bandejas.length}</span>}
+            {t.id === 'splitters' && splitters.length  > 0 && <span style={{ marginLeft: 5, fontSize: 10, backgroundColor: `${t.cor}22`, borderRadius: 4, padding: '1px 5px', color: t.cor }}>{splitters.length}</span>}
+            {t.id === 'cabos'     && (cabos ?? []).length > 0 && <span style={{ marginLeft: 5, fontSize: 10, backgroundColor: `${t.cor}22`, borderRadius: 4, padding: '1px 5px', color: t.cor }}>{(cabos ?? []).length}</span>}
+          </button>
+        ))}
+      </div>
 
-      <SecaoEntrada   entrada={entrada}     onChange={setEntrada}   />
-      <SecaoBandejas  bandejas={bandejas}   onChange={setBandejas}  />
-      <SecaoSplitters splitters={splitters} onChange={setSplitters} />
-      <LegendaABNT />
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-        <button onClick={salvar} disabled={saving}
-          style={{ ...S.btnPri, opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}>
-          {saving ? 'Salvando...' : 'Salvar Diagrama'}
-        </button>
+      {/* Conteúdo */}
+      <div style={S.body}>
+        {aba === 'olt'       && <AbaOLT       entrada={entrada}     onChange={setEntrada}   />}
+        {aba === 'bandejas'  && <AbaBandejas  bandejas={bandejas}   onChange={setBandejas}  />}
+        {aba === 'splitters' && <AbaSplitters splitters={splitters} onChange={setSplitters} />}
+        {aba === 'cabos'     && <AbaCabos     cabos={cabos}         onChange={setCabos}     />}
+        {aba === 'resumo'    && <AbaResumo    entrada={entrada} bandejas={bandejas} splitters={splitters} cabos={cabos} />}
       </div>
     </div>
   )

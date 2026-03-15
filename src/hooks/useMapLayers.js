@@ -134,6 +134,48 @@ function createPosteIcon(color = '#94a3b8', size = 24) {
   return ctx.getImageData(0, 0, size, size)
 }
 
+/**
+ * Ícone diamante para OLT.
+ */
+function createOLTIcon(color = '#0891b2', size = 32) {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const cx = size / 2, cy = size / 2
+  const r = size * 0.42
+  // Shadow diamond
+  ctx.beginPath()
+  ctx.moveTo(cx, cy - r - 2)
+  ctx.lineTo(cx + r + 2, cy)
+  ctx.lineTo(cx, cy + r + 2)
+  ctx.lineTo(cx - r - 2, cy)
+  ctx.closePath()
+  ctx.fillStyle = '#000000'
+  ctx.fill()
+  // Main diamond
+  ctx.beginPath()
+  ctx.moveTo(cx, cy - r)
+  ctx.lineTo(cx + r, cy)
+  ctx.lineTo(cx, cy + r)
+  ctx.lineTo(cx - r, cy)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.fill()
+  // Highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+  ctx.lineWidth = 1.5
+  const ri = r * 0.65
+  ctx.beginPath()
+  ctx.moveTo(cx, cy - ri)
+  ctx.lineTo(cx + ri, cy)
+  ctx.lineTo(cx, cy + ri)
+  ctx.lineTo(cx - ri, cy)
+  ctx.closePath()
+  ctx.stroke()
+  return ctx.getImageData(0, 0, size, size)
+}
+
 // ---------------------------------------------------------------------------
 // Conversores: dados do backend → GeoJSON FeatureCollection
 // ---------------------------------------------------------------------------
@@ -186,13 +228,25 @@ function postesToGeoJSON(postes = []) {
   }
 }
 
+function oltsToGeoJSON(olts = []) {
+  return {
+    type: 'FeatureCollection',
+    features: olts.filter(o => o.lat != null && o.lng != null).map((o) => ({
+      type: 'Feature',
+      id: o.id,
+      geometry: { type: 'Point', coordinates: [o.lng, o.lat] },
+      properties: { ...o, _type: 'olt' },
+    })),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Constantes de IDs
 // ---------------------------------------------------------------------------
 
 const SATELLITE_SOURCE = 'esri-satellite'
 const SATELLITE_LAYER  = 'satellite-layer'
-const SOURCES = ['ctos', 'caixas', 'rotas', 'postes']
+const SOURCES = ['ctos', 'caixas', 'rotas', 'postes', 'olts']
 const LAYERS  = [
   'postes-layer',
   'rotas-layer',
@@ -200,6 +254,7 @@ const LAYERS  = [
   'ctos-layer',
   'caixas-ce-layer',
   'caixas-cdo-layer',
+  'olts-layer',
 ]
 
 // ---------------------------------------------------------------------------
@@ -215,7 +270,7 @@ const LAYERS  = [
  * @param {{ ctos: boolean, caixas: boolean, rotas: boolean, postes: boolean, satellite: boolean }} layerToggles
  */
 export function useMapLayers(map, mapLoaded, data, layerToggles) {
-  const { ctos = [], caixas = [], rotas = null, postes = [] } = data ?? {}
+  const { ctos = [], caixas = [], rotas = null, postes = [], olts = [] } = data ?? {}
   const layersReady = useRef(false)
 
   // ---------- Setup inicial das sources + layers ----------
@@ -229,6 +284,7 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
     map.addImage('ce-icon',    createCEIcon('#1d4ed8'))
     map.addImage('cdo-icon',   createCDOIcon('#7c3aed'))
     map.addImage('poste-icon', createPosteIcon('#94a3b8'))
+    map.addImage('olt-icon',   createOLTIcon('#0891b2'))
 
     // Fonte satélite (Esri)
     map.addSource(SATELLITE_SOURCE, {
@@ -354,6 +410,32 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
       },
     })
 
+    // Source + layer: OLTs
+    map.addSource('olts', {
+      type: 'geojson',
+      data: oltsToGeoJSON(olts),
+    })
+    map.addLayer({
+      id: 'olts-layer',
+      type: 'symbol',
+      source: 'olts',
+      layout: {
+        'icon-image': 'olt-icon',
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 14, 0.9, 17, 1.1],
+        'icon-allow-overlap': true,
+        'text-field': ['get', 'nome'],
+        'text-size': 11,
+        'text-offset': [0, 1.4],
+        'text-anchor': 'top',
+        'text-optional': true,
+      },
+      paint: {
+        'text-color': '#67e8f9',
+        'text-halo-color': '#000000',
+        'text-halo-width': 1.5,
+      },
+    })
+
     layersReady.current = true
 
     return () => {
@@ -364,7 +446,7 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
         if (map.getLayer(SATELLITE_LAYER))  map.removeLayer(SATELLITE_LAYER)
         SOURCES.forEach((id) => { if (map.getSource(id))  map.removeSource(id) })
         if (map.getSource(SATELLITE_SOURCE)) map.removeSource(SATELLITE_SOURCE)
-        ;['cto-green','cto-yellow','cto-red','ce-icon','cdo-icon','poste-icon'].forEach(
+        ;['cto-green','cto-yellow','cto-red','ce-icon','cdo-icon','poste-icon','olt-icon'].forEach(
           (name) => { if (map.hasImage(name)) map.removeImage(name) }
         )
       } catch (_) {
@@ -401,6 +483,12 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
     if (src) src.setData(postesToGeoJSON(postes))
   }, [map, mapLoaded, postes])
 
+  useEffect(() => {
+    if (!map || !mapLoaded || !layersReady.current) return
+    const src = map.getSource('olts')
+    if (src) src.setData(oltsToGeoJSON(olts))
+  }, [map, mapLoaded, olts])
+
   // ---------- Visibilidade das layers ----------
   useEffect(() => {
     if (!map || !mapLoaded || !layersReady.current) return
@@ -418,5 +506,6 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
     setVis('rotas-layer-drop', layerToggles?.rotas     !== false)
     setVis('postes-layer',     layerToggles?.postes    !== false)
     setVis(SATELLITE_LAYER,    layerToggles?.satellite === true)
+    setVis('olts-layer', layerToggles?.olts !== false)
   }, [map, mapLoaded, layerToggles])
 }

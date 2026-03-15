@@ -81,7 +81,7 @@ export async function upsertOLT(data) {
     lat:        lat != null ? Number(lat) : null,
     lng:        lng != null ? Number(lng) : null,
     modelo:     modelo?.trim()  ?? null,
-    portas_pon: portas_pon != null ? Number(portas_pon) : 16,
+    capacidade: portas_pon != null ? Number(portas_pon) : (data?.capacidade != null ? Number(data.capacidade) : 16),
     ip:         ip?.trim()      ?? null,
     status:     status          ?? 'ativo',
   }

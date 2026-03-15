@@ -20,6 +20,7 @@ import { getCTOs, upsertCTO }   from '@/actions/ctos'
 import { getCaixas, upsertCaixa } from '@/actions/caixas'
 import { getRotas, upsertRota }  from '@/actions/rotas'
 import { getPostes, upsertPoste } from '@/actions/postes'
+import { getOLTs }               from '@/actions/olts'
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -30,6 +31,7 @@ const DEFAULT_LAYER_TOGGLES = {
   caixas:    true,
   rotas:     true,
   postes:    true,
+  olts:      true,
   satellite: false,
 }
 
@@ -56,6 +58,7 @@ export default function MapaFTTH({
   initialCaixas = [],
   initialRotas  = null,
   initialPostes = [],
+  initialOLTs   = [],
 }) {
   const containerRef = useRef(null)
   const router = useRouter()
@@ -79,6 +82,7 @@ export default function MapaFTTH({
   const [caixas, setCaixas] = useState(initialCaixas)
   const [rotas,  setRotas]  = useState(initialRotas)
   const [postes, setPostes] = useState(initialPostes)
+  const [olts,   setOLTs]   = useState(initialOLTs)
   const [loadingData, setLoadingData] = useState(false)
 
   // ---- Estado de UI ----
@@ -100,7 +104,7 @@ export default function MapaFTTH({
     zoom:   14,
   })
 
-  useMapLayers(map, mapLoaded, { ctos, caixas, rotas, postes }, layerToggles)
+  useMapLayers(map, mapLoaded, { ctos, caixas, rotas, postes, olts }, layerToggles)
 
   const addModeRef = useRef(addMode)
   addModeRef.current = addMode
@@ -170,16 +174,18 @@ export default function MapaFTTH({
     if (!projetoId) return
     setLoadingData(true)
     try {
-      const [newCTOs, newCaixas, newRotas, newPostes] = await Promise.all([
+      const [newCTOs, newCaixas, newRotas, newPostes, newOLTs] = await Promise.all([
         getCTOs(projetoId),
         getCaixas(projetoId),
         getRotas(projetoId),
         getPostes(projetoId),
+        getOLTs(projetoId),
       ])
       setCTOs(newCTOs)
       setCaixas(newCaixas)
       setRotas(newRotas)
       setPostes(newPostes)
+      setOLTs(newOLTs)
     } catch (err) {
       console.error('[MapaFTTH] Erro ao recarregar dados:', err)
     } finally {

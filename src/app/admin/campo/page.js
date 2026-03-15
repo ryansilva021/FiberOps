@@ -3,6 +3,7 @@ import { getCTOs }   from '@/actions/ctos'
 import { getCaixas } from '@/actions/caixas'
 import { getRotas }  from '@/actions/rotas'
 import { getPostes } from '@/actions/postes'
+import { getOLTs }   from '@/actions/olts'
 import CampoClient   from '@/components/admin/CampoClient'
 
 export const metadata = {
@@ -14,11 +15,12 @@ export default async function CampoPage() {
   const projetoId = session?.user?.projeto_id
   const userRole  = session?.user?.role
 
-  const [ctos, caixas, rotasFC, postes] = await Promise.allSettled([
+  const [ctos, caixas, rotasFC, postes, olts] = await Promise.allSettled([
     getCTOs(projetoId),
     getCaixas(projetoId),
     getRotas(projetoId),
     getPostes(projetoId),
+    getOLTs(projetoId),
   ]).then((results) => results.map((r) => (r.status === 'fulfilled' ? r.value : [])))
 
   const rotas = rotasFC?.features ?? []
@@ -28,7 +30,7 @@ export default async function CampoPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-white">Gestão de Campo</h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          CTOs, caixas, rotas e postes do projeto
+          CTOs, caixas, rotas, postes e OLTs do projeto
         </p>
       </div>
 
@@ -37,6 +39,7 @@ export default async function CampoPage() {
         caixasIniciais={caixas}
         rotasIniciais={rotas}
         postesIniciais={postes}
+        oltsIniciais={olts}
         projetoId={projetoId}
         userRole={userRole}
       />
