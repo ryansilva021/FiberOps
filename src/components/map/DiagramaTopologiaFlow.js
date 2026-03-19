@@ -12,6 +12,7 @@ import { useEffect, useState, useCallback, memo } from 'react'
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   Handle,
@@ -22,6 +23,7 @@ import {
   useReactFlow,
   ReactFlowProvider,
   Panel,
+  addEdge,
 } from '@xyflow/react'
 import dagre from '@dagrejs/dagre'
 import { getTopologia } from '@/actions/olts'
@@ -30,13 +32,13 @@ import { getTopologia } from '@/actions/olts'
 const ABNT = [
   { idx: 1,  nome: 'Verde',    hex: '#22c55e' },
   { idx: 2,  nome: 'Amarelo',  hex: '#eab308' },
-  { idx: 3,  nome: 'Branco',   hex: '#cbd5e1' },
+  { idx: 3,  nome: 'Branco',   hex: '#e2e8f0' },
   { idx: 4,  nome: 'Azul',     hex: '#3b82f6' },
   { idx: 5,  nome: 'Vermelho', hex: '#ef4444' },
   { idx: 6,  nome: 'Violeta',  hex: '#a855f7' },
   { idx: 7,  nome: 'Marrom',   hex: '#a16207' },
   { idx: 8,  nome: 'Rosa',     hex: '#ec4899' },
-  { idx: 9,  nome: 'Preto',    hex: '#6b7280' },
+  { idx: 9,  nome: 'Preto',    hex: '#475569' },
   { idx: 10, nome: 'Cinza',    hex: '#94a3b8' },
   { idx: 11, nome: 'Laranja',  hex: '#f97316' },
   { idx: 12, nome: 'Ciano',    hex: '#06b6d4' },
@@ -190,7 +192,7 @@ function buildGraphData(topologia) {
 
           const destTipo = saida?.tipo ?? (saida?.cto_id ? 'cto' : 'passagem')
           const destNid  = `${destTipo}-${destId}`
-          const portNum  = saida.num ?? (saIdx + 1)
+          const portNum  = saida.num ?? saida.porta ?? (saIdx + 1)
           const portColor = fiberColor(portNum)
 
           if (!seenCTOs.has(destNid)) {
@@ -335,7 +337,10 @@ function applyDagreLayout(nodes, edges) {
     dataOrder[cdoId] = order
   }
 
-  // Splitter → CTO: handles s-out-0, s-out-1, …
+  // Splitter → CTO: reposicionar CTOs por ordem de porta (S1 = topo, S2 = abaixo…)
+  // Não remapeamos handles — s-out-0 sempre = S1 (porta 1).
+  // Em vez disso, redistribuímos as posições Y dos CTOs para que o CTO de S1
+  // fique no topo e o de S8 no fundo, eliminando cruzamentos.
   const splOutEdges = {}
   for (const e of edges) {
     if (e.sourceHandle?.startsWith('s-out-')) {
@@ -343,10 +348,21 @@ function applyDagreLayout(nodes, edges) {
       splOutEdges[e.source].push(e)
     }
   }
-  for (const [splId, grp] of Object.entries(splOutEdges)) {
-    const sorted = [...grp].sort((a, b) => (centerY[a.target] ?? 0) - (centerY[b.target] ?? 0))
-    sorted.forEach((e, newIdx) => {
-      handleMap[`${splId}|${e.sourceHandle}`] = `s-out-${newIdx}`
+
+  // ctoYOverride[nodeId] = novo centerY para o nó CTO
+  const ctoYOverride = {}
+  for (const [, grp] of Object.entries(splOutEdges)) {
+    // Ordena por número de porta (S1 primeiro → topo)
+    const byPort = [...grp].sort((a, b) => {
+      const pA = parseInt(String(a.label ?? '').replace('S', ''), 10) || 999
+      const pB = parseInt(String(b.label ?? '').replace('S', ''), 10) || 999
+      return pA - pB
+    })
+    // Posições Y disponíveis, ordenadas de cima para baixo
+    const sortedYs = [...grp].map(e => centerY[e.target] ?? 0).sort((a, b) => a - b)
+    // Atribui: S1 → Y mais alto (topo), S2 → próximo, etc.
+    byPort.forEach((e, i) => {
+      if (sortedYs[i] !== undefined) ctoYOverride[e.target] = sortedYs[i]
     })
   }
 
@@ -358,9 +374,10 @@ function applyDagreLayout(nodes, edges) {
   const positionedNodes = nodes.map(n => {
     const pos = g.node(n.id)
     const { w, h } = getNodeDims(n)
+    const cy = ctoYOverride[n.id] ?? pos.y
     const base = {
       ...n,
-      position:       { x: pos.x - w / 2, y: pos.y - h / 2 },
+      position:       { x: pos.x - w / 2, y: cy - h / 2 },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
     }
@@ -713,7 +730,7 @@ const SplitterNode = memo(({ data }) => {
       {/* Portas de saída */}
       {Array.from({ length: ratio }, (_, i) => {
         const saida     = data.saidas?.[i]
-        const portNum   = saida?.num ?? (i + 1)
+        const portNum   = saida?.num ?? saida?.porta ?? (i + 1)
         const portColor = fiberColor(portNum)
         const yCenter   = SPL_HEADER_H + i * SPL_PORT_H + SPL_PORT_H / 2
 
@@ -851,73 +868,108 @@ function minimapColor(node) {
   }
 }
 
-// ── Painel de controle ───────────────────────────────────────────────────────
-function ControlPanel({ onAutoLayout, nodeCount, edgeCount, zoom }) {
+// ── Toolbar estilo CAD ────────────────────────────────────────────────────────
+const TOOLS = [
+  { id: 'select',       icon: '↖',  label: 'Selecionar' },
+  { id: 'addSplitter',  icon: '⚡',  label: 'Add Splitter' },
+  { id: 'addCTO',       icon: '📦',  label: 'Add CTO' },
+  { id: 'addCDO',       icon: '🔷',  label: 'Add CDO' },
+  { id: 'delete',       icon: '🗑',  label: 'Deletar seleção' },
+]
+
+function ControlPanel({ onAutoLayout, activeTool, onToolChange, onAlign, onDeleteSelected, onMoveSelected, onSaveLayout }) {
   const { fitView, zoomIn, zoomOut } = useReactFlow()
+
+  const btnStyle = (active) => ({
+    display:      'flex', alignItems: 'center', justifyContent: 'center',
+    width:        30, height: 30,
+    background:   active ? 'rgba(8,145,178,0.35)' : 'rgba(255,255,255,0.05)',
+    border:       active ? '1px solid rgba(8,145,178,0.7)' : '1px solid rgba(255,255,255,0.10)',
+    borderRadius: 6,
+    color:        active ? '#67e8f9' : 'rgba(255,255,255,0.55)',
+    fontSize:     14, cursor: 'pointer', flexShrink: 0,
+  })
+
+  const textBtnStyle = (color, bg, border) => ({
+    display:      'flex', alignItems: 'center', gap: 4,
+    background:   bg ?? 'rgba(255,255,255,0.05)',
+    border:       `1px solid ${border ?? 'rgba(255,255,255,0.10)'}`,
+    borderRadius: 6, padding: '4px 10px',
+    color: color ?? 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+  })
+
+  const sep = <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,0.1)', margin: '0 2px' }} />
 
   return (
     <Panel position="top-left" style={{ margin: 0 }}>
       <div style={{
-        display:      'flex', alignItems: 'center', gap: 8,
-        background:   'rgba(6,10,22,0.95)',
+        display:      'flex', alignItems: 'center', gap: 4,
+        background:   'rgba(6,10,22,0.96)',
         borderBottom: '1px solid rgba(255,255,255,0.07)',
-        padding:      '8px 14px',
+        padding:      '6px 10px',
         fontFamily:   'inherit',
+        flexWrap:     'wrap',
       }}>
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
-          <span style={{ fontSize: 16 }}>🌐</span>
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#0891b2', letterSpacing: '0.05em' }}>
-            FiberOps
-          </span>
-        </div>
+        <span style={{ fontSize: 12, fontWeight: 800, color: '#0891b2', marginRight: 4 }}>🌐 FiberOps</span>
+        {sep}
 
-        {/* Botão Auto Layout */}
-        <button
-          onClick={onAutoLayout}
-          style={{
-            display:      'flex', alignItems: 'center', gap: 5,
-            background:   'rgba(8,145,178,0.15)',
-            border:       '1px solid rgba(8,145,178,0.4)',
-            borderRadius: 6, padding: '4px 10px',
-            color: '#67e8f9', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-          }}
-        >
-          ⚡ Auto Layout
+        {/* Tool modes */}
+        {TOOLS.map(t => (
+          <button key={t.id}
+            title={t.label}
+            onClick={() => t.id === 'delete' ? onDeleteSelected() : onToolChange(t.id)}
+            style={btnStyle(activeTool === t.id && t.id !== 'delete')}
+          >
+            {t.icon}
+          </button>
+        ))}
+        {sep}
+
+        {/* Mover seleção (setas) */}
+        {[
+          { dx:  0, dy: -25, icon: '↑', title: 'Mover cima' },
+          { dx:  0, dy:  25, icon: '↓', title: 'Mover baixo' },
+          { dx: -25, dy: 0,  icon: '←', title: 'Mover esquerda' },
+          { dx:  25, dy: 0,  icon: '→', title: 'Mover direita' },
+        ].map(a => (
+          <button key={a.icon} title={a.title} onClick={() => onMoveSelected(a.dx, a.dy)} style={btnStyle(false)}>
+            {a.icon}
+          </button>
+        ))}
+        {sep}
+
+        {/* Alinhar */}
+        {[
+          { id: 'left',        icon: '⊢', title: 'Alinhar esquerda' },
+          { id: 'centerH',     icon: '⊣', title: 'Centralizar H' },
+          { id: 'right',       icon: '⊣', title: 'Alinhar direita' },
+          { id: 'top',         icon: '⊤', title: 'Alinhar topo' },
+          { id: 'bottom',      icon: '⊥', title: 'Alinhar baixo' },
+          { id: 'distributeH', icon: '⇔', title: 'Distribuir H' },
+          { id: 'distributeV', icon: '⇕', title: 'Distribuir V' },
+        ].map(a => (
+          <button key={a.id} title={a.title} onClick={() => onAlign(a.id)} style={btnStyle(false)}>
+            {a.icon}
+          </button>
+        ))}
+        {sep}
+
+        {/* Ações principais */}
+        <button onClick={onAutoLayout} title="Reorganizar com Dagre" style={textBtnStyle('#67e8f9', 'rgba(8,145,178,0.15)', 'rgba(8,145,178,0.4)')}>
+          ⚡ Organizar
         </button>
-
-        {/* Botão Ajustar */}
-        <button
-          onClick={() => fitView({ padding: 0.15, duration: 500 })}
-          style={{
-            display:      'flex', alignItems: 'center', gap: 5,
-            background:   'rgba(255,255,255,0.05)',
-            border:       '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 6, padding: '4px 10px',
-            color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
+        <button onClick={onSaveLayout} title="Salvar posições do diagrama" style={textBtnStyle('#86efac', 'rgba(22,163,74,0.12)', 'rgba(22,163,74,0.35)')}>
+          💾 Salvar
+        </button>
+        <button onClick={() => fitView({ padding: 0.15, duration: 500 })} style={textBtnStyle()} title="Ajustar tela">
           ☐ Ajustar
         </button>
-
-        {/* Zoom +/- */}
-        <div style={{ display: 'flex', gap: 2 }}>
-          {[
-            { label: '+', fn: zoomIn },
-            { label: '−', fn: zoomOut },
-          ].map(({ label, fn }) => (
-            <button key={label} onClick={fn} style={{
-              width: 28, height: 28,
-              background:   'rgba(255,255,255,0.05)',
-              border:       '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 6,
-              color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: 700,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {label}
-            </button>
-          ))}
-        </div>
+        {[{ label: '+', fn: zoomIn }, { label: '−', fn: zoomOut }].map(({ label, fn }) => (
+          <button key={label} onClick={fn} style={{ ...btnStyle(false), width: 24, height: 24, fontSize: 15, fontWeight: 700 }}>
+            {label}
+          </button>
+        ))}
       </div>
     </Panel>
   )
@@ -956,15 +1008,33 @@ function FlowInner({ projetoId, userRole, altura }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [loading, setLoading]            = useState(true)
   const [error,   setError]              = useState(null)
-  const { fitView }                      = useReactFlow()
+  const { fitView, screenToFlowPosition } = useReactFlow()
+  const [activeTool, setActiveTool]      = useState('select')
+  const SNAP = 25
 
-  const buildAndLayout = useCallback((topologia) => {
+  const buildAndLayout = useCallback((topologia, useSaved = true) => {
     const { nodes: raw, edges: rawEdges } = buildGraphData(topologia)
     const { nodes: laid, edges: laidEdges } = applyDagreLayout(raw, rawEdges)
-    setNodes(laid)
-    setEdges(laidEdges)
+    if (useSaved && projetoId) {
+      try {
+        const savedPos   = JSON.parse(localStorage.getItem(`ftth-topo-pos-${projetoId}`)   || '{}')
+        const savedEdges = JSON.parse(localStorage.getItem(`ftth-topo-edges-${projetoId}`) || 'null')
+        const nodesOut = Object.keys(savedPos).length > 0
+          ? laid.map(n => savedPos[n.id] ? { ...n, position: savedPos[n.id] } : n)
+          : laid
+        const laidIds = new Set(laidEdges.map(e => e.id))
+        const manualEdges = savedEdges ? savedEdges.filter(e => !laidIds.has(e.id)) : []
+        setNodes(nodesOut)
+        setEdges([...laidEdges, ...manualEdges])
+      } catch {
+        setNodes(laid); setEdges(laidEdges)
+      }
+    } else {
+      setNodes(laid)
+      setEdges(laidEdges)
+    }
     setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 50)
-  }, [setNodes, setEdges, fitView])
+  }, [setNodes, setEdges, fitView, projetoId])
 
   const load = useCallback(async () => {
     if (!projetoId) { setLoading(false); return }
@@ -986,9 +1056,128 @@ function FlowInner({ projetoId, userRole, altura }) {
     if (!projetoId) return
     try {
       const data = await getTopologia(projetoId)
-      buildAndLayout(data ?? [])
+      buildAndLayout(data ?? [], false) // ignorar posições salvas ao reorganizar
     } catch {}
   }, [projetoId, buildAndLayout])
+
+  const onConnect = useCallback((params) => {
+    // Derivar cor da fibra a partir do handle de origem
+    let color = '#64748b'
+    const sh = params.sourceHandle
+    if (sh?.startsWith('s-out-')) {
+      // Splitter porta N (0-indexed) → fibra N+1
+      const idx = parseInt(sh.replace('s-out-', ''), 10)
+      color = fiberColor(idx + 1)
+    } else if (sh?.startsWith('out-')) {
+      // CDO bandeja N → usar fibra registrada no nó
+      const idx = parseInt(sh.replace('out-', ''), 10)
+      const srcNode = nodes.find(n => n.id === params.source)
+      const fibra = srcNode?.data?.splFibras?.[idx]
+      color = fibra ? fiberColor(fibra) : fiberColor(idx + 1)
+    } else if (sh === 'out') {
+      color = '#0891b2' // OLT backbone
+    }
+    setEdges(eds => addEdge({
+      ...params, type: 'bezier',
+      style: { stroke: color, strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color, width: 9, height: 9 },
+    }, eds))
+  }, [setEdges, nodes])
+
+  const handlePaneClick = useCallback((event) => {
+    if (readOnly || activeTool === 'select') return
+    const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    const snapped = { x: Math.round(pos.x / SNAP) * SNAP, y: Math.round(pos.y / SNAP) * SNAP }
+    const newId = `manual-${Date.now()}`
+    let newNode = null
+    if (activeTool === 'addSplitter') {
+      newNode = { id: newId, type: 'splitterNode', position: snapped,
+        data: { nome: 'Splitter', tipo: '1x8', ratio: 8, tubeLabel: 'T1:F1', colorIn: '#3b82f6', saidas: [] } }
+    } else if (activeTool === 'addCTO') {
+      newNode = { id: newId, type: 'ctoNode', position: snapped,
+        data: { nome: 'Nova CTO', ctoId: newId, capacidade: 16, ocupacao: 0 } }
+    } else if (activeTool === 'addCDO') {
+      newNode = { id: newId, type: 'cdoNode', position: snapped,
+        data: { nome: 'Nova CDO', tipo: 'CDO', splitterCount: 0, splFibras: [], splitters: [] } }
+    }
+    if (newNode) setNodes(prev => [...prev, newNode])
+  }, [readOnly, activeTool, screenToFlowPosition, setNodes])
+
+  const handleDeleteSelected = useCallback(() => {
+    const selectedIds = new Set(nodes.filter(n => n.selected).map(n => n.id))
+    if (selectedIds.size === 0) return
+    setNodes(prev => prev.filter(n => !n.selected))
+    setEdges(prev => prev.filter(e => !selectedIds.has(e.source) && !selectedIds.has(e.target)))
+  }, [nodes, setNodes, setEdges])
+
+  // Mover nodes selecionados por step fixo (teclas de seta)
+  const handleMoveSelected = useCallback((dx, dy) => {
+    setNodes(prev => prev.map(n =>
+      n.selected
+        ? { ...n, position: { x: Math.round((n.position.x + dx) / SNAP) * SNAP, y: Math.round((n.position.y + dy) / SNAP) * SNAP } }
+        : n
+    ))
+  }, [setNodes])
+
+  // Salvar layout no localStorage
+  const handleSaveLayout = useCallback(() => {
+    if (!projetoId) return
+    const layout = {}
+    nodes.forEach(n => { layout[n.id] = n.position })
+    const edgeData = edges.map(e => ({ id: e.id, source: e.source, target: e.target,
+      sourceHandle: e.sourceHandle, targetHandle: e.targetHandle,
+      style: e.style, markerEnd: e.markerEnd, label: e.label,
+      labelStyle: e.labelStyle, labelBgStyle: e.labelBgStyle, type: e.type }))
+    try {
+      localStorage.setItem(`ftth-topo-pos-${projetoId}`, JSON.stringify(layout))
+      localStorage.setItem(`ftth-topo-edges-${projetoId}`, JSON.stringify(edgeData))
+      alert('Diagrama salvo!')
+    } catch {}
+  }, [projetoId, nodes, edges])
+
+
+  const handleAlign = useCallback((direction) => {
+    const selected = nodes.filter(n => n.selected)
+    if (selected.length < 2) return
+    setNodes(prev => {
+      const sel = prev.filter(n => n.selected)
+      const posMap = {}
+      if (direction === 'left') {
+        const v = Math.min(...sel.map(n => n.position.x))
+        sel.forEach(n => { posMap[n.id] = { x: v, y: n.position.y } })
+      } else if (direction === 'right') {
+        const v = Math.max(...sel.map(n => n.position.x))
+        sel.forEach(n => { posMap[n.id] = { x: v, y: n.position.y } })
+      } else if (direction === 'top') {
+        const v = Math.min(...sel.map(n => n.position.y))
+        sel.forEach(n => { posMap[n.id] = { x: n.position.x, y: v } })
+      } else if (direction === 'bottom') {
+        const v = Math.max(...sel.map(n => n.position.y))
+        sel.forEach(n => { posMap[n.id] = { x: n.position.x, y: v } })
+      } else if (direction === 'centerH') {
+        const xs = sel.map(n => n.position.x)
+        const v = (Math.min(...xs) + Math.max(...xs)) / 2
+        sel.forEach(n => { posMap[n.id] = { x: v, y: n.position.y } })
+      } else if (direction === 'centerV') {
+        const ys = sel.map(n => n.position.y)
+        const v = (Math.min(...ys) + Math.max(...ys)) / 2
+        sel.forEach(n => { posMap[n.id] = { x: n.position.x, y: v } })
+      } else if (direction === 'distributeH') {
+        const sorted = [...sel].sort((a, b) => a.position.x - b.position.x)
+        const minX = sorted[0].position.x
+        const maxX = sorted[sorted.length - 1].position.x
+        const step = sorted.length > 1 ? (maxX - minX) / (sorted.length - 1) : 0
+        sorted.forEach((n, i) => { posMap[n.id] = { x: minX + i * step, y: n.position.y } })
+      } else if (direction === 'distributeV') {
+        const sorted = [...sel].sort((a, b) => a.position.y - b.position.y)
+        const minY = sorted[0].position.y
+        const maxY = sorted[sorted.length - 1].position.y
+        const step = sorted.length > 1 ? (maxY - minY) / (sorted.length - 1) : 0
+        sorted.forEach((n, i) => { posMap[n.id] = { x: n.position.x, y: minY + i * step } })
+      }
+      return prev.map(n => posMap[n.id] ? { ...n, position: posMap[n.id] } : n)
+    })
+  }, [nodes, setNodes])
 
   if (loading) return (
     <div style={{ height: altura, display: 'flex', alignItems: 'center',
@@ -1034,7 +1223,8 @@ function FlowInner({ projetoId, userRole, altura }) {
   )
 
   return (
-    <div style={{ height: altura, background: '#060a16', borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
+    <div style={{ height: altura, background: '#060a16', borderRadius: 12, overflow: 'hidden', position: 'relative',
+      cursor: activeTool === 'addSplitter' || activeTool === 'addCTO' || activeTool === 'addCDO' ? 'crosshair' : 'default' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -1051,8 +1241,18 @@ function FlowInner({ projetoId, userRole, altura }) {
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         elementsSelectable={!readOnly}
+        snapToGrid={!readOnly}
+        snapGrid={[SNAP, SNAP]}
+        onConnect={!readOnly ? onConnect : undefined}
+        onPaneClick={!readOnly ? handlePaneClick : undefined}
+        panOnDrag={readOnly || activeTool === 'select'}
       >
-        <Background color="#0d1f35" gap={28} size={1} />
+        <Background
+          variant={BackgroundVariant.Dots}
+          color="rgba(255,255,255,0.06)"
+          gap={SNAP}
+          size={1}
+        />
 
         <Controls
           showInteractive={false}
@@ -1076,8 +1276,12 @@ function FlowInner({ projetoId, userRole, altura }) {
         {!readOnly && (
           <ControlPanel
             onAutoLayout={handleAutoLayout}
-            nodeCount={nodes.length}
-            edgeCount={edges.length}
+            activeTool={activeTool}
+            onToolChange={setActiveTool}
+            onAlign={handleAlign}
+            onDeleteSelected={handleDeleteSelected}
+            onMoveSelected={handleMoveSelected}
+            onSaveLayout={handleSaveLayout}
           />
         )}
 
