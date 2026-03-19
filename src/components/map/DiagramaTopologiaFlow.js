@@ -1042,7 +1042,7 @@ function FlowInner({ projetoId, userRole, altura }) {
     setError(null)
     try {
       const data = await getTopologia(projetoId)
-      buildAndLayout(data ?? [])
+      buildAndLayout(data ?? [], false)
     } catch (e) {
       setError(e?.message ?? 'Erro ao carregar')
     } finally {
