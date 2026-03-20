@@ -408,7 +408,7 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole }) {
                         <label style={labelStyle}>ID da CDO/CE pai</label>
                         <input name="cdo_pai_id" value={form.cdo_pai_id} onChange={handleFormChange}
                           placeholder="ex: CDO-001"
-                          style={{ ...fieldInput, borderColor: form.cdo_pai_id && form.cdo_pai_id === form.ce_id ? '#ef4444' : undefined }}
+                          style={{ ...fieldInput, border: form.cdo_pai_id && form.cdo_pai_id === form.ce_id ? '1px solid #ef4444' : fieldInput.border }}
                           className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500/40" />
                         {form.cdo_pai_id && form.cdo_pai_id === form.ce_id && (
                           <p style={{ color: '#f87171', fontSize: 10, marginTop: 2 }}>Não pode ser pai de si mesma</p>

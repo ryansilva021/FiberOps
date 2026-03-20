@@ -506,6 +506,7 @@ export default function DiagramaCDOEditor({ ceId, projetoId, capacidadeSaidas, i
       const res = await saveDiagramaCaixa({ ce_id: ceId, projeto_id: projetoId, diagrama: { entrada, bandejas, splitters, cabos } })
       setSucesso(res?.saved ? 'Diagrama salvo!' : 'Salvo (sem alterações).')
       setTimeout(() => setSucesso(null), 4000)
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('fiberops:topologia-changed'))
     } catch (e) {
       setErro('Erro: ' + e.message)
     } finally {

@@ -171,6 +171,7 @@ export default function MapaFTTH({
 
   // ---- GPS ----
   const {
+    position:    gpsPosition,
     tracking,
     error:       gpsError,
     followMode,
@@ -178,6 +179,20 @@ export default function MapaFTTH({
     startTracking,
     stopTracking,
   } = useGPS(map)
+
+  // Centralizar na localização do usuário ao abrir o mapa (uma vez só)
+  useEffect(() => {
+    if (!mapLoaded || !map) return
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 12, duration: 1500 })
+      },
+      () => {}, // permissão negada — mantém posição padrão
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapLoaded])
 
   // ---- Offline queue ----
   const syncHandler = useCallback(async (op) => {
@@ -281,17 +296,6 @@ export default function MapaFTTH({
     reloadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // ---- GPS pelo menu lateral (evento global) ----
-  useEffect(() => {
-    function handleGPSCenter() {
-      startTracking()
-      setFollowMode(true)
-    }
-    window.addEventListener('fiberops:gps-center', handleGPSCenter)
-    return () => window.removeEventListener('fiberops:gps-center', handleGPSCenter)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startTracking, setFollowMode])
 
   // ---- Fly-to por busca de cliente no sidebar ----
   useEffect(() => {
@@ -527,32 +531,12 @@ export default function MapaFTTH({
         <LayerToggles toggles={layerToggles} onToggle={handleLayerToggle} />
       </div>
 
-      {/* Indicador GPS + botão Seguir */}
-      {tracking && (
-        <div className="absolute top-24 right-2.5 z-40 pointer-events-auto flex flex-col items-end gap-1">
-          <div
-            className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs"
-            style={{ background: 'rgba(37,99,235,0.25)', border: '1px solid rgba(59,130,246,0.4)', color: '#93c5fd' }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
-            GPS ativo
-          </div>
-          <button
-            onClick={handleFollowToggle}
-            className="px-2 py-1 rounded-full text-xs font-semibold transition-all"
-            style={{
-              background: followMode ? 'rgba(37,99,235,0.75)' : 'rgba(15,23,42,0.8)',
-              border: '1px solid rgba(59,130,246,0.5)',
-              color: followMode ? '#fff' : '#93c5fd',
-              cursor: 'pointer',
-            }}
-          >
-            {followMode ? '📍 Seguindo' : '📍 Seguir'}
-          </button>
-        </div>
-      )}
+      {/* Erro GPS flutuante */}
       {gpsError && (
-        <div role="alert" className="absolute top-28 right-2.5 z-40 w-48 bg-red-900/90 text-red-200 text-xs px-3 py-2 rounded-lg shadow">
+        <div role="alert" className="absolute z-40 pointer-events-none"
+          style={{ bottom: 88, right: 16, background: 'rgba(127,29,29,0.95)',
+            border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5',
+            fontSize: 11, padding: '6px 12px', borderRadius: 10, maxWidth: 200, lineHeight: 1.4 }}>
           {gpsError}
         </div>
       )}
@@ -616,35 +600,129 @@ export default function MapaFTTH({
         />
       )}
 
-      {/* FAB de adição — canto inferior direito, isolado das ferramentas GPS */}
-      {(userRole === 'admin' || userRole === 'superadmin') && !addMode && !selectedElement && (
+      {/* FAB unificado — ferramentas + GPS */}
+      {!addMode && !selectedElement && (
         <div className="absolute bottom-6 right-4 z-40 flex flex-col items-end gap-2 pointer-events-auto">
           {addFabOpen && (
-            <div className="flex flex-col gap-1.5 mb-1">
-              {[
-                { type: 'cto',   label: 'CTO',    color: '#0284c7' },
-                { type: 'caixa', label: 'CE/CDO',  color: '#7c3aed' },
-                { type: 'poste', label: 'Poste',   color: '#d97706' },
-                { type: 'rota',  label: 'Rota',    color: '#059669' },
-              ].map(({ type, label, color }) => (
+            <div className="flex flex-col gap-1.5 mb-1"
+              style={{ background: 'rgba(8,13,28,0.96)', border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 16, padding: '10px 10px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', minWidth: 160 }}>
+
+              {/* Ferramentas de adição — só admin/superadmin */}
+              {(userRole === 'admin' || userRole === 'superadmin') && (<>
+                <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.25)',
+                  textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 4px' }}>
+                  Adicionar
+                </div>
+                {[
+                  { type: 'cto',   label: 'CTO',   color: '#0284c7', icon: '📡' },
+                  { type: 'caixa', label: 'CE/CDO', color: '#7c3aed', icon: '🔷' },
+                  { type: 'poste', label: 'Poste',  color: '#d97706', icon: '🪝' },
+                  { type: 'rota',  label: 'Rota',   color: '#059669', icon: '〰️' },
+                ].map(({ type, label, color, icon }) => (
+                  <button key={type}
+                    onClick={() => { enterAddMode(type); setAddFabOpen(false) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 10px', borderRadius: 10, border: 'none',
+                      background: 'rgba(255,255,255,0.05)', color: '#e2e8f0',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = color + '33'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                  >
+                    <span style={{ width: 20, textAlign: 'center' }}>{icon}</span>
+                    {label}
+                  </button>
+                ))}
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', margin: '4px 0' }} />
+              </>)}
+
+              {/* GPS */}
+              <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.25)',
+                textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 4px' }}>
+                GPS
+              </div>
+
+              {/* Minha localização */}
+              <button
+                onClick={() => {
+                  if (!navigator.geolocation) return
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => map?.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16, duration: 1000 }),
+                    (err) => console.warn('GPS:', err.message),
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                  )
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 10, border: 'none',
+                  background: 'rgba(255,255,255,0.05)', color: '#93c5fd',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.15)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              >
+                <GPSIcon />
+                Minha localização
+              </button>
+
+              {/* Seguir técnico */}
+              <button
+                onClick={() => {
+                  if (tracking && followMode) { stopTracking() }
+                  else if (tracking) { setFollowMode(true) }
+                  else { startTracking(); setFollowMode(true) }
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 10, border: 'none',
+                  background: tracking && followMode ? 'rgba(37,99,235,0.35)' : 'rgba(255,255,255,0.05)',
+                  color: tracking && followMode ? '#fff' : '#93c5fd',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.background = tracking && followMode ? 'rgba(37,99,235,0.5)' : 'rgba(59,130,246,0.15)'}
+                onMouseLeave={e => e.currentTarget.style.background = tracking && followMode ? 'rgba(37,99,235,0.35)' : 'rgba(255,255,255,0.05)'}
+              >
+                <FollowIcon />
+                <span style={{ flex: 1 }}>{tracking && followMode ? 'Seguindo...' : 'Seguir técnico'}</span>
+                {tracking && <span style={{ width: 7, height: 7, borderRadius: '50%',
+                  background: '#60a5fa', animation: 'gps-pulse 1.5s ease-in-out infinite', flexShrink: 0 }} />}
+              </button>
+
+              {/* Recentralizar — só quando tem posição mas não está seguindo */}
+              {gpsPosition && !followMode && (
                 <button
-                  key={type}
-                  onClick={() => enterAddMode(type)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-lg"
-                  style={{ backgroundColor: color }}
+                  onClick={() => map?.flyTo({ center: [gpsPosition.lng, gpsPosition.lat], zoom: 16, duration: 800 })}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 10px', borderRadius: 10, border: 'none',
+                    background: 'rgba(255,255,255,0.05)', color: '#94a3b8',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(100,116,139,0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                 >
-                  + {label}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="16" y2="14"/>
+                  </svg>
+                  Recentralizar
                 </button>
-              ))}
+              )}
             </div>
           )}
+
+          {/* Botão principal FAB */}
           <button
             onClick={() => setAddFabOpen((v) => !v)}
-            aria-label="Adicionar elemento no mapa"
-            className="w-12 h-12 flex items-center justify-center rounded-full shadow-xl text-white text-xl font-bold transition-all"
-            style={{ backgroundColor: addFabOpen ? '#475569' : '#0284c7', border: '2px solid rgba(255,255,255,0.2)' }}
+            aria-label={addFabOpen ? 'Fechar menu' : 'Abrir menu'}
+            className="w-14 h-14 flex items-center justify-center rounded-full shadow-2xl text-white text-2xl font-bold transition-all"
+            style={{
+              backgroundColor: addFabOpen ? '#475569' : '#0284c7',
+              border: '2px solid rgba(255,255,255,0.2)',
+              position: 'relative',
+            }}
           >
             {addFabOpen ? '✕' : '+'}
+            {/* Indicador GPS ativo */}
+            {tracking && !addFabOpen && (
+              <span style={{ position: 'absolute', top: 0, right: 0, width: 12, height: 12,
+                background: '#3b82f6', border: '2px solid #0284c7', borderRadius: '50%',
+                animation: 'gps-pulse 1.5s ease-in-out infinite' }} />
+            )}
           </button>
         </div>
       )}

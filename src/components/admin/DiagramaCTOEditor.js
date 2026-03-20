@@ -125,6 +125,7 @@ export default function DiagramaCTOEditor({ ctoId, projetoId, capacidadePortas, 
       })
       setSucesso(res?.saved ? 'Diagrama salvo!' : 'Salvo.')
       setTimeout(() => setSucesso(null), 4000)
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('fiberops:topologia-changed'))
     } catch (e) {
       setErro('Erro: ' + e.message)
     } finally {

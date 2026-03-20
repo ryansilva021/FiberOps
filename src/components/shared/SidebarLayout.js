@@ -6,10 +6,6 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { buscarClientes } from "@/actions/search";
 
-function centralizarGPS() {
-  window.dispatchEvent(new CustomEvent("fiberops:gps-center"));
-}
-
 const NAV_ITEMS = [
   { href: "/",                   label: "Mapa",        icon: "🗺️" },
   // --- Admin ---
@@ -235,16 +231,6 @@ export default function SidebarLayout({ session, children }) {
 
         {/* Footer do sidebar */}
         <div style={{ borderTop: "1px solid #1f2937" }} className="px-4 py-4">
-          {/* GPS */}
-          <button
-            onClick={() => { centralizarGPS(); setAberta(false) }}
-            style={{ border: "1px solid #1e3a5f", color: "#7dd3fc", backgroundColor: "rgba(8,145,178,0.08)" }}
-            className="w-full text-xs py-2 rounded-lg hover:bg-sky-900/30 transition-colors mb-3 flex items-center justify-center gap-2"
-          >
-            <span>📍</span>
-            Minha localização
-          </button>
-
           <div className="flex items-center gap-3 mb-3">
             <div
               style={{ backgroundColor: "#1e3a5f" }}

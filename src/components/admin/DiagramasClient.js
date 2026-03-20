@@ -9,7 +9,6 @@ import { useState, useEffect, useRef } from 'react'
 import DiagramaCTOEditor from '@/components/admin/DiagramaCTOEditor'
 import DiagramaCDOEditor from '@/components/admin/DiagramaCDOEditor'
 import { upsertOLT, deleteOLT } from '@/actions/olts'
-import DiagramaTopologia from '@/components/admin/DiagramaTopologia'
 
 // ---------------------------------------------------------------------------
 // Estilos
@@ -346,7 +345,7 @@ function OLTForm({ form, onChange, onSubmit, onCancel, saving, editMode }) {
 // Componente principal
 // ---------------------------------------------------------------------------
 export default function DiagramasClient({ ctos, caixas, olts = [], projetoId, tabInicial, idInicial }) {
-  const [aba, setAba] = useState(tabInicial ?? 'topologia')
+  const [aba, setAba] = useState(tabInicial ?? 'ctos')
   const [ctoSelecionada, setCTOSelecionada]     = useState(null)
   const [caixaSelecionada, setCaixaSelecionada] = useState(null)
 
@@ -379,10 +378,6 @@ export default function DiagramasClient({ ctos, caixas, olts = [], projetoId, ta
     <div style={S.container}>
       {/* Abas */}
       <div style={S.tabBar}>
-        <button style={aba === 'topologia' ? S.tabAtiva : S.tabInativa}
-          onClick={() => { setAba('topologia'); setCTOSelecionada(null); setCaixaSelecionada(null) }}>
-          🌐 Topologia
-        </button>
         <button style={aba === 'ctos'  ? S.tabAtiva : S.tabInativa}
           onClick={() => { setAba('ctos'); setCTOSelecionada(null) }}>
           CTOs ({ctos.length})
@@ -396,14 +391,6 @@ export default function DiagramasClient({ ctos, caixas, olts = [], projetoId, ta
           OLTs ({olts.length})
         </button>
       </div>
-
-      {/* Aba Topologia */}
-      {aba === 'topologia' && (
-        <div>
-          <p style={{ ...S.sectionTitle, marginBottom: 16 }}>Topologia completa da rede óptica</p>
-          <DiagramaTopologia projetoId={projetoId} altura={600} />
-        </div>
-      )}
 
       {/* Aba CTOs */}
       {aba === 'ctos' && (

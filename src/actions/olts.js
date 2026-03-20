@@ -197,11 +197,27 @@ export async function getTopologia(projetoId) {
     }
   }
 
+  // Flat list of ALL caixas for cascade CDO lookups (cdo_pai_id links)
+  const allCaixasFlat = caixas.map(c => ({
+    ...c,
+    _id:  c._id.toString(),
+    ctos: ctosPorCaixa[c.id] ?? [],
+  }))
+
+  // Flat list of ALL CTOs for cascade CTO lookups
+  const allCTOsFlat = ctos.map(c => ({
+    ...c,
+    _id:     c._id.toString(),
+    ocupacao: calcOcupacaoCTO(c),
+  }))
+
   // olt.id = identificador único da OLT (campo "id" do schema, não olt_id virtual)
-  return olts.map((olt) => ({
+  return olts.map((olt, i) => ({
     ...olt,
     _id:    olt._id.toString(),
     caixas: caixasPorOLT[olt.id] ?? [],
+    // Attach full caixa/cto lists to first OLT only (for cascade lookups in buildGraphData)
+    ...(i === 0 ? { _allCaixas: allCaixasFlat, _allCTOs: allCTOsFlat } : {}),
   }))
 }
 
