@@ -45,8 +45,32 @@ export function useMapEvents(map, mapLoaded, callbacks) {
     }
 
     function handleClick(e) {
+      const addMode = callbacksRef.current?.addMode
       const activeLayers = CLICKABLE_LAYERS.filter((id) => map.getLayer(id))
       const features = map.queryRenderedFeatures(e.point, { layers: activeLayers })
+
+      if (addMode) {
+        // Em modo de adição: rota pode se vincular a CTO/CDO; outros modos ignoram elementos
+        if (addMode === 'rota' && features.length > 0) {
+          const feature = features[0]
+          const type = LAYER_TYPE_MAP[feature.layer.id] ?? 'unknown'
+          if (type === 'cto' || type === 'caixa') {
+            const props = feature.properties ?? {}
+            const snapLng = parseFloat(props.lng)
+            const snapLat = parseFloat(props.lat)
+            if (!isNaN(snapLng) && !isNaN(snapLat)) {
+              const snapId = props.cto_id ?? props.ce_id ?? props.id ?? null
+              callbacksRef.current?.onMapClick?.(
+                { lng: snapLng, lat: snapLat },
+                { type, id: snapId, nome: props.nome ?? snapId }
+              )
+              return
+            }
+          }
+        }
+        callbacksRef.current?.onMapClick?.(e.lngLat)
+        return
+      }
 
       if (features.length > 0) {
         const feature = features[0]
@@ -54,6 +78,13 @@ export function useMapEvents(map, mapLoaded, callbacks) {
         callbacksRef.current?.onElementClick?.({ type, data: feature.properties ?? {} })
       } else {
         callbacksRef.current?.onMapClick?.(e.lngLat)
+      }
+    }
+
+    function handleDblClick(e) {
+      if (callbacksRef.current?.addMode === 'rota') {
+        e.preventDefault()
+        callbacksRef.current?.onRouteDblClick?.()
       }
     }
 
@@ -94,13 +125,15 @@ export function useMapEvents(map, mapLoaded, callbacks) {
       clearHover()
     }
 
-    map.on('click',      handleClick)
-    map.on('mousemove',  handleMouseMove)
+    map.on('click',     handleClick)
+    map.on('dblclick',  handleDblClick)
+    map.on('mousemove', handleMouseMove)
     map.on('mouseleave', handleMouseLeave)
 
     return () => {
-      map.off('click',      handleClick)
-      map.off('mousemove',  handleMouseMove)
+      map.off('click',     handleClick)
+      map.off('dblclick',  handleDblClick)
+      map.off('mousemove', handleMouseMove)
       map.off('mouseleave', handleMouseLeave)
       clearHover()
     }

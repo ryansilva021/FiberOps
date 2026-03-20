@@ -189,8 +189,9 @@ function RotaContent({ data, isAdmin, onAction }) {
       </InfoSection>
 
       {isAdmin && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <ActBtn onClick={() => onAction('editar')} color="#f1f5f9" bg="rgba(255,255,255,0.07)" border="rgba(255,255,255,0.15)" icon="✏️" label="Editar dados" full />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+          <ActBtn onClick={() => onAction('editar_pontos')} color="#a5b4fc" bg="rgba(99,102,241,0.12)" border="rgba(99,102,241,0.35)" icon="🖊️" label="Mover pontos" />
+          <ActBtn onClick={() => onAction('editar')} color="#f1f5f9" bg="rgba(255,255,255,0.07)" border="rgba(255,255,255,0.15)" icon="✏️" label="Editar dados" />
         </div>
       )}
     </div>

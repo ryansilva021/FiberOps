@@ -3,6 +3,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import maplibregl from 'maplibre-gl'
 import { useRouter } from 'next/navigation'
 import { useMap }        from '@/hooks/useMap'
 import { useMapLayers }  from '@/hooks/useMapLayers'
@@ -96,10 +97,18 @@ export default function MapaFTTH({
   const [addMode, setAddMode]           = useState(null) // null | 'cto' | 'caixa' | 'poste' | 'rota'
   const [addCoords, setAddCoords]       = useState(null) // { lng, lat } para ponto
   const [addRoutePoints, setAddRoutePoints] = useState([]) // [[lng,lat]...] para rota
+  const [addRouteLinks, setAddRouteLinks]   = useState([]) // [{ pointIndex, type, id, nome }]
+  const [routeFinalized, setRouteFinalized] = useState(false) // true = parou de coletar pontos
   const [addForm, setAddForm]           = useState({})
   const [addFabOpen, setAddFabOpen]     = useState(false)
   const [addSaving, setAddSaving]       = useState(false)
   const [addErro, setAddErro]           = useState(null)
+
+  // ---- Edição de rota existente (drag de pontos) ----
+  const [editingRota, setEditingRota]   = useState(null) // { rota_id, coordinates: [[lng,lat],...] }
+  const [editRotaSaving, setEditRotaSaving] = useState(false)
+  const [editRotaErro, setEditRotaErro]     = useState(null)
+  const editMarkersRef = useRef([]) // instâncias MapLibre Marker
 
   // ---- Hooks do mapa ----
   const { map, mapLoaded } = useMap(containerRef, {
@@ -112,16 +121,26 @@ export default function MapaFTTH({
   const addModeRef = useRef(addMode)
   addModeRef.current = addMode
 
+  const routeFinalizedRef = useRef(routeFinalized)
+  routeFinalizedRef.current = routeFinalized
+
+  const addRoutePointsRef = useRef(addRoutePoints)
+  addRoutePointsRef.current = addRoutePoints
+
+  const addRouteLinksRef = useRef(addRouteLinks)
+  addRouteLinksRef.current = addRouteLinks
+
   const reposicionandoRef = useRef(reposicionandoEl)
   reposicionandoRef.current = reposicionandoEl
 
   const eventCallbacks = {
+    addMode: addMode,
     onElementClick: useCallback(({ type, data }) => {
       if (addModeRef.current) return
       if (reposicionandoRef.current) return
       setSelectedElement({ type, data })
     }, []),
-    onMapClick: useCallback(async (lngLat) => {
+    onMapClick: useCallback(async (lngLat, snapInfo) => {
       const mode = addModeRef.current
       const repos = reposicionandoRef.current
 
@@ -160,12 +179,22 @@ export default function MapaFTTH({
         return
       }
       if (mode === 'rota') {
+        if (routeFinalizedRef.current) return // não adiciona ponto após finalizar
         setAddRoutePoints((prev) => [...prev, [lngLat.lng, lngLat.lat]])
+        if (snapInfo) {
+          const idx = addRoutePointsRef.current.length
+          setAddRouteLinks((prev) => [...prev, { pointIndex: idx, ...snapInfo }])
+        }
       } else {
         setAddCoords(lngLat)
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projetoId]),
+    onRouteDblClick: useCallback(() => {
+      if (addModeRef.current === 'rota' && addRoutePointsRef.current.length >= 2) {
+        setRouteFinalized(true)
+      }
+    }, []),
   }
   useMapEvents(map, mapLoaded, eventCallbacks)
 
@@ -231,6 +260,74 @@ export default function MapaFTTH({
     }
   }, [projetoId])
 
+  // ---- Edição de rota: marcadores arrastáveis ----
+  useEffect(() => {
+    // Limpar marcadores anteriores
+    editMarkersRef.current.forEach(m => m.remove())
+    editMarkersRef.current = []
+    if (!editingRota || !map || !mapLoaded) return
+
+    editingRota.coordinates.forEach((coord, i) => {
+      const el = document.createElement('div')
+      const isEndpoint = i === 0 || i === editingRota.coordinates.length - 1
+      el.style.cssText = `width:${isEndpoint?16:12}px;height:${isEndpoint?16:12}px;background:${isEndpoint?'#f97316':'#6366f1'};border:2px solid white;border-radius:50%;cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.5);z-index:10`
+      const marker = new maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat(coord)
+        .addTo(map)
+      marker.on('dragend', () => {
+        const { lng, lat } = marker.getLngLat()
+        setEditingRota(prev => {
+          if (!prev) return null
+          const newCoords = [...prev.coordinates]
+          newCoords[i] = [lng, lat]
+          return { ...prev, coordinates: newCoords }
+        })
+      })
+      editMarkersRef.current.push(marker)
+    })
+
+    return () => {
+      editMarkersRef.current.forEach(m => m.remove())
+      editMarkersRef.current = []
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingRota?.rota_id, map, mapLoaded])
+
+  // ---- Preview da rota em edição ----
+  useEffect(() => {
+    const SRC = 'edit-rota-src', LYR = 'edit-rota-lyr'
+    if (!map || !mapLoaded) return
+    if (!editingRota) {
+      if (map.getLayer(LYR)) map.removeLayer(LYR)
+      if (map.getSource(SRC)) map.removeSource(SRC)
+      return
+    }
+    const geojson = { type: 'Feature', geometry: { type: 'LineString', coordinates: editingRota.coordinates }, properties: {} }
+    if (map.getSource(SRC)) {
+      map.getSource(SRC).setData(geojson)
+    } else {
+      map.addSource(SRC, { type: 'geojson', data: geojson })
+      map.addLayer({ id: LYR, type: 'line', source: SRC, paint: { 'line-color': '#6366f1', 'line-width': 3, 'line-dasharray': [5, 3] } })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingRota, map, mapLoaded])
+
+  async function salvarEditRota() {
+    if (!editingRota || editRotaSaving) return
+    if (editingRota.coordinates.length < 2) { setEditRotaErro('Mínimo 2 pontos'); return }
+    setEditRotaSaving(true)
+    setEditRotaErro(null)
+    try {
+      await upsertRota({ rota_id: editingRota.rota_id, projeto_id: projetoId, coordinates: editingRota.coordinates, nome: editingRota.nome, tipo: editingRota.tipo, obs: editingRota.obs })
+      await reloadData()
+      setEditingRota(null)
+    } catch (e) {
+      setEditRotaErro(e.message)
+    } finally {
+      setEditRotaSaving(false)
+    }
+  }
+
   // ---- Toggles de camada ----
   const handleLayerToggle = useCallback((key, value) => {
     setLayerToggles((prev) => ({ ...prev, [key]: value }))
@@ -274,8 +371,20 @@ export default function MapaFTTH({
     } else if (action === 'topologia') {
       setMostrarTopologia(true)
       setSelectedElement(null)
+    } else if (action === 'editar_pontos') {
+      const feature = rotas?.features?.find(f => f.properties?.rota_id === data?.rota_id)
+      if (feature?.geometry?.coordinates?.length >= 2) {
+        setEditingRota({
+          rota_id: feature.properties.rota_id,
+          nome:    feature.properties.nome ?? null,
+          tipo:    feature.properties.tipo ?? null,
+          obs:     feature.properties.obs  ?? null,
+          coordinates: feature.geometry.coordinates.map(c => [...c]),
+        })
+      }
+      setSelectedElement(null)
     }
-  }, [router])
+  }, [router, rotas])
 
   // ---- GPS toggle handler ----
   const handleGPSToggle = useCallback(() => {
@@ -329,6 +438,7 @@ export default function MapaFTTH({
       return
     }
 
+    const snappedIndices = new Set(addRouteLinksRef.current.map(l => l.pointIndex))
     const geojson = {
       type: 'FeatureCollection',
       features: [
@@ -337,10 +447,10 @@ export default function MapaFTTH({
           geometry: { type: 'LineString', coordinates: addRoutePoints },
           properties: {},
         }] : []),
-        ...addRoutePoints.map((pt) => ({
+        ...addRoutePoints.map((pt, i) => ({
           type: 'Feature',
           geometry: { type: 'Point', coordinates: pt },
-          properties: {},
+          properties: { snapped: snappedIndices.has(i) ? 1 : 0 },
         })),
       ],
     }
@@ -373,8 +483,8 @@ export default function MapaFTTH({
         source: SOURCE,
         filter: ['==', ['geometry-type'], 'Point'],
         paint: {
-          'circle-radius': 5,
-          'circle-color': routeColor,
+          'circle-radius': ['case', ['==', ['get', 'snapped'], 1], 7, 5],
+          'circle-color': ['case', ['==', ['get', 'snapped'], 1], '#86efac', routeColor],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
         },
@@ -395,6 +505,8 @@ export default function MapaFTTH({
     setAddMode(type)
     setAddCoords(null)
     setAddRoutePoints([])
+    setAddRouteLinks([])
+    setRouteFinalized(false)
     setAddForm({ tipo: type === 'caixa' ? 'CDO' : undefined, capacidade: 16, tipoRota: 'RAMAL' })
     setAddErro(null)
     setAddFabOpen(false)
@@ -405,6 +517,8 @@ export default function MapaFTTH({
     setAddMode(null)
     setAddCoords(null)
     setAddRoutePoints([])
+    setAddRouteLinks([])
+    setRouteFinalized(false)
     setAddForm({})
     setAddErro(null)
     setAddSaving(false)
@@ -415,11 +529,14 @@ export default function MapaFTTH({
     setAddSaving(true)
     setAddErro(null)
 
+    const rotaLinks = addRouteLinks.length > 0
+      ? addRouteLinks.map(l => `${l.type}:${l.id ?? l.nome}`).join(', ')
+      : null
     const payloads = {
-      cto:   { cto_id: addForm.id.trim(), projeto_id: projetoId, lat: addCoords.lat, lng: addCoords.lng, nome: addForm.nome || null, capacidade: addForm.capacidade || 16 },
-      caixa: { ce_id: addForm.id.trim(), projeto_id: projetoId, lat: addCoords.lat, lng: addCoords.lng, nome: addForm.nome || null, tipo: addForm.tipo || 'CDO' },
-      poste: { poste_id: addForm.id.trim(), projeto_id: projetoId, lat: addCoords.lat, lng: addCoords.lng, nome: addForm.nome || null, tipo: 'simples', status: 'ativo' },
-      rota:  { rota_id: addForm.id.trim(), projeto_id: projetoId, nome: addForm.nome || null, tipo: addForm.tipoRota || 'RAMAL', coordinates: addRoutePoints },
+      cto:   { cto_id: addForm.id.trim(), projeto_id: projetoId, lat: addCoords?.lat, lng: addCoords?.lng, nome: addForm.nome || null, capacidade: addForm.capacidade || 16 },
+      caixa: { ce_id: addForm.id.trim(), projeto_id: projetoId, lat: addCoords?.lat, lng: addCoords?.lng, nome: addForm.nome || null, tipo: addForm.tipo || 'CDO' },
+      poste: { poste_id: addForm.id.trim(), projeto_id: projetoId, lat: addCoords?.lat, lng: addCoords?.lng, nome: addForm.nome || null, tipo: 'simples', status: 'ativo' },
+      rota:  { rota_id: addForm.id.trim(), projeto_id: projetoId, nome: addForm.nome || null, tipo: addForm.tipoRota || 'RAMAL', coordinates: addRoutePoints, obs: rotaLinks || addForm.obs || null },
     }
 
     if (!isOnline) {
@@ -730,14 +847,27 @@ export default function MapaFTTH({
       {/* Banner de instrução durante add mode */}
       {addMode && (
         <div
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-xs font-semibold text-white shadow-lg flex items-center gap-3 whitespace-nowrap"
-          style={{ backgroundColor: 'rgba(8,13,28,0.95)', border: '1px solid rgba(255,255,255,0.15)' }}
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-xs font-semibold text-white shadow-lg flex items-center gap-3"
+          style={{ backgroundColor: 'rgba(8,13,28,0.95)', border: '1px solid rgba(255,255,255,0.15)', maxWidth: '90vw' }}
         >
-          {addMode === 'rota'
+          {addMode === 'rota' && !routeFinalized
             ? <>
                 <span style={{ color: '#f97316' }}>〰️</span>
-                <span>{addRoutePoints.length === 0 ? 'Clique no mapa para iniciar a rota' : `${addRoutePoints.length} ${addRoutePoints.length === 1 ? 'ponto' : 'pontos'} — continue clicando`}</span>
+                {addRouteLinks.length > 0 && (
+                  <span style={{ color: '#86efac', fontSize: 10 }}>🔗 {addRouteLinks[addRouteLinks.length - 1].nome ?? addRouteLinks[addRouteLinks.length - 1].id}</span>
+                )}
+                <span>{addRoutePoints.length === 0 ? 'Clique no mapa para iniciar' : `${addRoutePoints.length} pontos`}</span>
+                {addRoutePoints.length >= 2 && (
+                  <button
+                    onClick={() => setRouteFinalized(true)}
+                    style={{ background: '#f97316', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Finalizar
+                  </button>
+                )}
               </>
+            : addMode === 'rota' && routeFinalized
+            ? <><span style={{ color: '#22c55e' }}>✓</span><span>{addRoutePoints.length} pontos — preencha os dados</span></>
             : addCoords
             ? <><span style={{ color: '#22c55e' }}>✓</span><span>Local selecionado — preencha os dados</span></>
             : <><span>📍</span><span>Clique no mapa para posicionar</span></>}
@@ -746,7 +876,7 @@ export default function MapaFTTH({
       )}
 
       {/* Painel de formulário add mode */}
-      {addMode && (addCoords || (addMode === 'rota' && addRoutePoints.length >= 2)) && (
+      {addMode && (addCoords || (addMode === 'rota' && routeFinalized && addRoutePoints.length >= 2)) && (
         <div
           className="absolute bottom-0 left-0 right-0 z-50 rounded-t-2xl shadow-2xl"
           style={{ backgroundColor: 'rgba(8,13,28,0.98)', borderTop: '1px solid rgba(255,255,255,0.08)' }}
@@ -866,7 +996,11 @@ export default function MapaFTTH({
             <div className="flex gap-3">
               {addMode === 'rota' && (
                 <button
-                  onClick={() => setAddRoutePoints((p) => p.slice(0, -1))}
+                  onClick={() => {
+                    setAddRoutePoints((p) => p.slice(0, -1))
+                    setAddRouteLinks((p) => p.filter(l => l.pointIndex < addRoutePoints.length - 1))
+                    if (addRoutePoints.length <= 2) setRouteFinalized(false)
+                  }}
                   disabled={addRoutePoints.length === 0}
                   style={{ border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.4)' }}
                   className="flex-1 py-2.5 rounded-lg text-sm hover:bg-white/5 transition-colors disabled:opacity-40"
@@ -881,6 +1015,50 @@ export default function MapaFTTH({
                 className="flex-1 py-2.5 rounded-lg text-sm transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 {addSaving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Overlay de edição de rota */}
+      {editingRota && (
+        <div
+          className="absolute bottom-0 left-0 right-0 z-50 rounded-t-2xl shadow-2xl"
+          style={{ backgroundColor: 'rgba(8,13,28,0.98)', borderTop: '3px solid #6366f1' }}
+        >
+          <div className="flex justify-center pt-3 pb-1">
+            <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          </div>
+          <div className="px-4 pb-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 15 }}>
+                ✏️ Editando rota — {editingRota.rota_id}
+              </h3>
+              <button onClick={() => setEditingRota(null)} style={{ color: 'rgba(255,255,255,0.3)', fontSize: 20 }} className="hover:text-white transition-colors">✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 14 }}>
+              Arraste os pontos no mapa para editar o traçado ({editingRota.coordinates.length} pontos)
+            </p>
+            {editRotaErro && (
+              <div style={{ backgroundColor: '#450a0a', border: '1px solid #7f1d1d' }} className="rounded-lg px-3 py-2 text-xs text-red-400 mb-3">
+                {editRotaErro}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEditingRota(null)}
+                style={{ border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.4)' }}
+                className="flex-1 py-2.5 rounded-lg text-sm hover:bg-white/5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarEditRota}
+                disabled={editRotaSaving}
+                style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: '#fff', fontWeight: 700 }}
+                className="flex-1 py-2.5 rounded-lg text-sm transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {editRotaSaving ? 'Salvando...' : '💾 Salvar rota'}
               </button>
             </div>
           </div>
