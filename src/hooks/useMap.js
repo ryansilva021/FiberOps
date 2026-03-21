@@ -32,6 +32,7 @@ export function useMap(containerRef, options = {}) {
       style: {
         version: 8,
         name: 'FiberOps Dark',
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {
           'osm-tiles': {
             type: 'raster',

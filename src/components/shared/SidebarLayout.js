@@ -13,6 +13,8 @@ const NAV_ITEMS = [
   { href: "/admin/topologia",    label: "Diagramas",   icon: "🌐", minRole: "tecnico" },
   { href: "/admin/diagramas",    label: "Fusões ABNT", icon: "🧩", minRole: "admin" },
   { href: "/admin/usuarios",     label: "Usuários",    icon: "👥", minRole: "admin" },
+  { href: "/admin/importar",     label: "Imp/Exportar", icon: "📦", minRole: "admin" },
+  { href: "/admin/calculos",     label: "Cálc. Potência", icon: "⚡", minRole: "tecnico" },
   // --- Superadmin ---
   { href: "/superadmin/projetos",  label: "Projetos",  icon: "🏢", minRole: "superadmin" },
   { href: "/superadmin/empresas",  label: "Empresas",  icon: "🏬", minRole: "superadmin" },

@@ -7,7 +7,7 @@ import maplibregl from 'maplibre-gl'
 import { useRouter } from 'next/navigation'
 import { useMap }        from '@/hooks/useMap'
 import { useMapLayers }  from '@/hooks/useMapLayers'
-import { useMapEvents }  from '@/hooks/useMapEvents'
+import { useMapEvents, LAYER_TYPE_MAP }  from '@/hooks/useMapEvents'
 import { useGPS }        from '@/hooks/useGPS'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 
@@ -112,6 +112,9 @@ export default function MapaFTTH({
   const [editRotaErro, setEditRotaErro]     = useState(null)
   const editMarkersRef = useRef([]) // instâncias MapLibre Marker
 
+  // ---- Spread de itens sobrepostos (painel React) ----
+  const [spreadPanel, setSpreadPanel] = useState(null) // null | { x, y, items: [{type, data, nome, cor, icone}] }
+
   // ---- Hooks do mapa ----
   const { map, mapLoaded } = useMap(containerRef, {
     center: [-46.633308, -23.55052],
@@ -135,12 +138,39 @@ export default function MapaFTTH({
   const reposicionandoRef = useRef(reposicionandoEl)
   reposicionandoRef.current = reposicionandoEl
 
+  const TIPO_ICONE = { cto: '📦', caixa: '🔌', rota: '〰', poste: '🏗', olt: '🖥' }
+  const TIPO_COR   = { cto: '#0284c7', caixa: '#7c3aed', rota: '#059669', poste: '#d97706', olt: '#0891b2' }
+
   const eventCallbacks = {
     addMode: addMode,
     onElementClick: useCallback(({ type, data }) => {
       if (addModeRef.current) return
       if (reposicionandoRef.current) return
+      setSpreadPanel(null)
       setSelectedElement({ type, data })
+    }, []),
+    onClusterClick: useCallback((features, lngLat, point) => {
+      if (addModeRef.current || reposicionandoRef.current) return
+      setSelectedElement(null)
+      // De-duplicate by id
+      const seen = new Set()
+      const items = []
+      for (const f of features) {
+        const type = LAYER_TYPE_MAP[f.layer.id] ?? 'unknown'
+        const props = f.properties ?? {}
+        const uid = props.cto_id ?? props.ce_id ?? props.rota_id ?? props.poste_id ?? props.id ?? `${f.layer.id}_${items.length}`
+        if (seen.has(uid)) continue
+        seen.add(uid)
+        const nome = props.cto_id ?? props.ce_id ?? props.rota_id ?? props.poste_id ?? props.id ?? type
+        items.push({ type, data: props, nome, cor: TIPO_COR[type] ?? '#64748b', icone: TIPO_ICONE[type] ?? '?' })
+      }
+      if (items.length < 2) {
+        // Only 1 unique item — select directly
+        setSelectedElement({ type: items[0].type, data: items[0].data })
+        return
+      }
+      setSpreadPanel({ x: point.x, y: point.y, items })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
     onMapClick: useCallback(async (lngLat, snapInfo) => {
       const mode = addModeRef.current
@@ -177,6 +207,7 @@ export default function MapaFTTH({
       }
 
       if (!mode) {
+        setSpreadPanel(null)
         setSelectedElement(null)
         return
       }
@@ -349,7 +380,10 @@ export default function MapaFTTH({
       setReposicionandoEl({ type, data })
       setSelectedElement(null)
     } else if (action === 'editar') {
-      router.push('/admin/campo')
+      const tabMap = { cto: 'ctos', caixa: 'caixas', poste: 'postes', rota: 'rotas' }
+      const id     = data?.cto_id ?? data?.rota_id ?? data?.poste_id ?? data?.id ?? ''
+      const tab    = tabMap[type] ?? 'ctos'
+      router.push(`/admin/campo?tab=${tab}&id=${encodeURIComponent(id)}`)
     } else if (action === 'movimentacao') {
       setMovimentacaoEl(data)
       setSelectedElement(null)
@@ -699,6 +733,7 @@ export default function MapaFTTH({
           ctoData={diagramaEl}
           projetoId={projetoId}
           onClose={() => setDiagramaEl(null)}
+          onSaved={() => reloadData()}
         />
       )}
 
@@ -729,6 +764,60 @@ export default function MapaFTTH({
           <span>📍</span>
           <span>Clique no mapa para nova posição de <strong>{reposicionandoEl.data?.nome || reposicionandoEl.data?.cto_id || reposicionandoEl.data?.poste_id || reposicionandoEl.data?.ce_id}</strong></span>
           <button onClick={() => setReposicionandoEl(null)} style={{ color: 'rgba(255,255,255,0.4)', marginLeft: 4 }} className="hover:text-white transition-colors">✕</button>
+        </div>
+      )}
+
+      {/* Spread panel overlay — seletor de itens sobrepostos */}
+      {spreadPanel && (
+        <div
+          style={{
+            position: 'absolute',
+            left: spreadPanel.x,
+            top: spreadPanel.y,
+            zIndex: 200,
+            transform: 'translate(-50%, -110%)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            pointerEvents: 'auto',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {spreadPanel.items.map((item, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setSelectedElement({ type: item.type, data: item.data })
+                  setSpreadPanel(null)
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 12px',
+                  borderRadius: 8,
+                  border: `1.5px solid ${item.cor}66`,
+                  background: 'rgba(11,18,32,0.97)',
+                  color: item.cor,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.7)',
+                  backdropFilter: 'blur(4px)',
+                  textAlign: 'left',
+                }}
+              >
+                <span>{item.icone}</span>
+                <span style={{ color: '#e2e8f0' }}>{item.nome}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setSpreadPanel(null)}
+            style={{ alignSelf: 'center', background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}
+          >
+            fechar
+          </button>
         </div>
       )}
 

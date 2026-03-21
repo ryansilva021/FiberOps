@@ -319,6 +319,18 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
         'icon-image': 'poste-icon',
         'icon-size': 0.9,
         'icon-allow-overlap': false,
+        'text-field': ['get', 'poste_id'],
+        'text-size': 9,
+        'text-offset': [0, 1.2],
+        'text-anchor': 'top',
+        'text-allow-overlap': false,
+        'text-optional': true,
+        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      },
+      paint: {
+        'text-color': '#94a3b8',
+        'text-halo-color': '#0b1220',
+        'text-halo-width': 1.5,
       },
     })
 
@@ -379,6 +391,18 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
         ],
         'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.45, 14, 0.65, 17, 0.85],
         'icon-allow-overlap': true,
+        'text-field': ['get', 'cto_id'],
+        'text-size': 10,
+        'text-offset': [0, 1.6],
+        'text-anchor': 'top',
+        'text-allow-overlap': false,
+        'text-optional': true,
+        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      },
+      paint: {
+        'text-color': '#e2e8f0',
+        'text-halo-color': '#0b1220',
+        'text-halo-width': 1.5,
       },
     })
 
@@ -396,6 +420,18 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
         'icon-image': 'ce-icon',
         'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 14, 0.7, 17, 0.9],
         'icon-allow-overlap': true,
+        'text-field': ['coalesce', ['get', 'nome'], ['get', 'id']],
+        'text-size': 10,
+        'text-offset': [0, 1.6],
+        'text-anchor': 'top',
+        'text-allow-overlap': false,
+        'text-optional': true,
+        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      },
+      paint: {
+        'text-color': '#e2e8f0',
+        'text-halo-color': '#0b1220',
+        'text-halo-width': 1.5,
       },
     })
     map.addLayer({
@@ -407,6 +443,18 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
         'icon-image': 'cdo-icon',
         'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 14, 0.7, 17, 0.9],
         'icon-allow-overlap': true,
+        'text-field': ['coalesce', ['get', 'nome'], ['get', 'id']],
+        'text-size': 10,
+        'text-offset': [0, 1.6],
+        'text-anchor': 'top',
+        'text-allow-overlap': false,
+        'text-optional': true,
+        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      },
+      paint: {
+        'text-color': '#e2e8f0',
+        'text-halo-color': '#0b1220',
+        'text-halo-width': 1.5,
       },
     })
 
@@ -423,6 +471,18 @@ export function useMapLayers(map, mapLoaded, data, layerToggles) {
         'icon-image': 'olt-icon',
         'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 14, 0.9, 17, 1.1],
         'icon-allow-overlap': true,
+        'text-field': ['coalesce', ['get', 'nome'], ['get', 'id']],
+        'text-size': 11,
+        'text-offset': [0, 1.8],
+        'text-anchor': 'top',
+        'text-allow-overlap': false,
+        'text-optional': true,
+        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      },
+      paint: {
+        'text-color': '#38bdf8',
+        'text-halo-color': '#0b1220',
+        'text-halo-width': 2,
       },
     })
 

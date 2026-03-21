@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { upsertCTO, deleteCTO } from '@/actions/ctos'
 
@@ -62,7 +62,7 @@ const cardStyle = {
   border: '1px solid #1f2937',
 }
 
-export default function CTOsClient({ ctosIniciais, projetoId, userRole }) {
+export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicial }) {
   const [ctos, setCTOs] = useState(ctosIniciais)
   const [modalAberto, setModalAberto] = useState(false)
   const [ctoEditando, setCTOEditando] = useState(null)
@@ -111,6 +111,14 @@ export default function CTOsClient({ ctosIniciais, projetoId, userRole }) {
     setErro(null)
     setMostrarMapa(false)
   }
+
+  // Auto-abrir modal quando redirecionado do mapa com ?id=
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!idInicial) return
+    const cto = ctosIniciais.find(c => c.cto_id === idInicial)
+    if (cto) abrirEditar(cto)
+  }, [])
 
   function usarGPS() {
     if (!navigator.geolocation) { setErro('Geolocalização não suportada.'); return }

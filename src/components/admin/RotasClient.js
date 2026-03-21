@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { upsertRota, deleteRota } from '@/actions/rotas'
 
 const TIPOS = ['BACKBONE', 'RAMAL', 'DROP']
@@ -59,7 +59,7 @@ const TIPO_CORES_TABLE = {
   DROP: 'text-emerald-300',
 }
 
-export default function RotasClient({ rotasIniciais, projetoId, userRole }) {
+export default function RotasClient({ rotasIniciais, projetoId, userRole, idInicial }) {
   const [rotas, setRotas] = useState(rotasIniciais)
   const [modalAberto, setModalAberto] = useState(false)
   const [rotaEditando, setRotaEditando] = useState(null)
@@ -99,6 +99,13 @@ export default function RotasClient({ rotasIniciais, projetoId, userRole }) {
     setRotaEditando(null)
     setErro(null)
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!idInicial) return
+    const rota = rotasIniciais.find(r => (r.properties?.rota_id ?? r.rota_id) === idInicial)
+    if (rota) abrirEditar(rota)
+  }, [])
 
   function handleFormChange(e) {
     const { name, value } = e.target

@@ -17,6 +17,7 @@ import { connectDB } from "@/lib/db";
 import { WRITE_ROLES, ALL_ROLES } from "@/lib/auth";
 import { requireActiveEmpresa } from "@/lib/tenant-guard";
 import { CTO } from "@/models/CTO";
+import { CaixaEmendaCDO } from "@/models/CaixaEmendaCDO";
 import { Movimentacao } from "@/models/Movimentacao";
 
 // ---------------------------------------------------------------------------
@@ -198,9 +199,30 @@ export async function getDiagramaCTO(ctoId, projetoId) {
 
   if (!cto) return null;
 
+  // Resolve upstream: determine if cdo_id refers to a CDO/CE or another CTO (cascata)
+  let upstream = null
+  if (cto.cdo_id) {
+    const cdo = await CaixaEmendaCDO.findOne(
+      { projeto_id: targetProjeto, id: cto.cdo_id },
+      'id nome tipo'
+    ).lean()
+    if (cdo) {
+      upstream = { type: 'cdo', id: cdo.id, nome: cdo.nome || cdo.id, tipo: cdo.tipo || 'CDO' }
+    } else {
+      const upCTO = await CTO.findOne(
+        { projeto_id: targetProjeto, cto_id: cto.cdo_id },
+        'cto_id nome'
+      ).lean()
+      if (upCTO) {
+        upstream = { type: 'cto', id: upCTO.cto_id, nome: upCTO.nome || upCTO.cto_id }
+      }
+    }
+  }
+
   return {
     ...cto,
     _id: cto._id.toString(),
+    upstream,
   };
 }
 

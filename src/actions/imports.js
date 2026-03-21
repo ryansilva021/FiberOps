@@ -273,3 +273,49 @@ export async function importPostes(rows, projetoId) {
 
   return result
 }
+
+// ---------------------------------------------------------------------------
+// POST /api/limpar_dados_projeto → limparDadosProjeto
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove todos os dados de campo de um projeto (CTOs, CDOs, Rotas, Postes).
+ * Mantém usuários, OLTs e o próprio projeto.
+ * Requer: admin ou superadmin.
+ *
+ * @param {string} projetoId
+ * @returns {Promise<{ limpado: boolean, totais: object }>}
+ */
+export async function limparDadosProjeto(projetoId) {
+  const session = await requireActiveEmpresa(WRITE_ROLES)
+
+  if (!projetoId) throw new Error('projeto_id é obrigatório')
+
+  await connectDB()
+
+  // superadmin pode limpar qualquer projeto; admin só pode limpar o próprio
+  const targetProjeto = session.user.role === 'superadmin'
+    ? projetoId
+    : session.user.projeto_id
+
+  const [ctos, caixas, rotas, postes] = await Promise.all([
+    CTO.deleteMany({ projeto_id: targetProjeto }),
+    CaixaEmendaCDO.deleteMany({ projeto_id: targetProjeto }),
+    Rota.deleteMany({ projeto_id: targetProjeto }),
+    Poste.deleteMany({ projeto_id: targetProjeto }),
+  ])
+
+  revalidatePath('/admin/campo')
+  revalidatePath('/admin/mapa')
+  revalidatePath('/admin/importar')
+
+  return {
+    limpado: true,
+    totais: {
+      ctos:   ctos.deletedCount,
+      caixas: caixas.deletedCount,
+      rotas:  rotas.deletedCount,
+      postes: postes.deletedCount,
+    },
+  }
+}

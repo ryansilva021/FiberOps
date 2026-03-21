@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { upsertPoste, deletePoste } from '@/actions/postes'
 
@@ -67,7 +67,7 @@ const cardStyle = {
   border: '1px solid #1f2937',
 }
 
-export default function PostesClient({ postesIniciais, projetoId, userRole }) {
+export default function PostesClient({ postesIniciais, projetoId, userRole, idInicial }) {
   const [postes, setPostes] = useState(postesIniciais)
   const [modalAberto, setModalAberto] = useState(false)
   const [posteEditando, setPosteEditando] = useState(null)
@@ -118,6 +118,13 @@ export default function PostesClient({ postesIniciais, projetoId, userRole }) {
     setErro(null)
     setMostrarMapa(false)
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!idInicial) return
+    const poste = postesIniciais.find(p => p.poste_id === idInicial)
+    if (poste) abrirEditar(poste)
+  }, [])
 
   function usarGPS() {
     if (!navigator.geolocation) { setErro('Geolocalização não suportada.'); return }

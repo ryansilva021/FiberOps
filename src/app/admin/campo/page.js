@@ -10,10 +10,13 @@ export const metadata = {
   title: 'Campo | FiberOps',
 }
 
-export default async function CampoPage() {
+export default async function CampoPage({ searchParams }) {
   const session   = await auth()
   const projetoId = session?.user?.projeto_id
   const userRole  = session?.user?.role
+  const sp = await Promise.resolve(searchParams)
+  const tabInicial = sp?.tab ?? 'ctos'
+  const idInicial  = sp?.id  ?? null
 
   const [ctos, caixas, rotasFC, postes, olts] = await Promise.allSettled([
     getCTOs(projetoId),
@@ -42,6 +45,8 @@ export default async function CampoPage() {
         oltsIniciais={olts}
         projetoId={projetoId}
         userRole={userRole}
+        tabInicial={tabInicial}
+        idInicial={idInicial}
       />
     </div>
   )

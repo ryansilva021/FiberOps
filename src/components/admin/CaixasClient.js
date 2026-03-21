@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { upsertCaixa, deleteCaixa } from '@/actions/caixas'
 
@@ -63,7 +63,7 @@ const TIPO_CHIP = {
   CE:  { bg: '#1e3a5f', border: '#2563eb', color: '#93c5fd' },
 }
 
-export default function CaixasClient({ caixasIniciais, projetoId, userRole }) {
+export default function CaixasClient({ caixasIniciais, projetoId, userRole, idInicial }) {
   const [caixas, setCaixas] = useState(caixasIniciais)
   const [modalAberto, setModalAberto] = useState(false)
   const [caixaEditando, setCaixaEditando] = useState(null)
@@ -120,6 +120,13 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole }) {
     setErro(null)
     setMostrarMapa(false)
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!idInicial) return
+    const caixa = caixasIniciais.find(c => (c.id ?? c.ce_id) === idInicial)
+    if (caixa) abrirEditar(caixa)
+  }, [])
 
   function usarGPS() {
     if (!navigator.geolocation) { setErro('Geolocalização não suportada.'); return }

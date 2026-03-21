@@ -13,8 +13,8 @@ const CLICKABLE_LAYERS = [
   'olts-layer',
 ]
 
-// Mapeamento layer → tipo de elemento
-const LAYER_TYPE_MAP = {
+// Mapeamento layer → tipo de elemento (exportado para uso externo)
+export const LAYER_TYPE_MAP = {
   'ctos-layer':       'cto',
   'caixas-ce-layer':  'caixa',
   'caixas-cdo-layer': 'caixa',
@@ -47,7 +47,11 @@ export function useMapEvents(map, mapLoaded, callbacks) {
     function handleClick(e) {
       const addMode = callbacksRef.current?.addMode
       const activeLayers = CLICKABLE_LAYERS.filter((id) => map.getLayer(id))
-      const features = map.queryRenderedFeatures(e.point, { layers: activeLayers })
+      const TOL = 6
+      const features = map.queryRenderedFeatures(
+        [[e.point.x - TOL, e.point.y - TOL], [e.point.x + TOL, e.point.y + TOL]],
+        { layers: activeLayers }
+      )
 
       if (addMode) {
         // Em modo de adição: rota pode se vincular a CTO/CDO; outros modos ignoram elementos
@@ -72,7 +76,10 @@ export function useMapEvents(map, mapLoaded, callbacks) {
         return
       }
 
-      if (features.length > 0) {
+      if (features.length > 1) {
+        // Múltiplos itens sobrepostos — expande em círculo
+        callbacksRef.current?.onClusterClick?.(features, e.lngLat, e.point)
+      } else if (features.length === 1) {
         const feature = features[0]
         const type = LAYER_TYPE_MAP[feature.layer.id] ?? 'unknown'
         callbacksRef.current?.onElementClick?.({ type, data: feature.properties ?? {} })

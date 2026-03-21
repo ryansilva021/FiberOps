@@ -88,6 +88,12 @@ function oltHeight(caixas = []) {
 function splHeight(ratio) {
   return SPL_HEADER_H + ratio * SPL_PORT_H + 12
 }
+function ctoHeight(bandejas = []) {
+  if (!bandejas.length) return CTO_HEIGHT
+  let h = CTO_HEIGHT
+  for (const b of bandejas) h += CDO_BDJ_HDR_H + (b.fusoes?.length ?? 0) * CDO_FUSAO_H + 4
+  return h + 4
+}
 
 // ── 1. DATA LAYER ───────────────────────────────────────────────────────────
 
@@ -171,6 +177,8 @@ function buildGraphData(topologia) {
         ctoId:      cto?.cto_id ?? id,
         capacidade: cto?.capacidade ?? null,
         ocupacao:   cto?.ocupacao   ?? 0,
+        bandejas:   cto?.diagrama?.bandejas ?? [],
+        entrada:    cto?.diagrama?.entrada  ?? null,
       },
     })
   }
@@ -206,13 +214,18 @@ function buildGraphData(topologia) {
     }
   }
 
-  // Adiciona CTO + processa splitters em cascata recursivamente
+  // Adiciona CTO + processa cascatas de bandejas e splitters recursivamente
   function addCTOWithCascade(ctoNid, ctoData) {
     if (seenNodes.has(ctoNid)) return
     addCTONode(ctoNid, ctoData)
+
+    // ── splitters com saídas para CTOs (formato legado/CDO-style) ─────────────
     const ctoSpls = ctoData?.diagrama?.splitters ?? []
     for (let ci = 0; ci < ctoSpls.length; ci++) {
-      const cspl      = ctoSpls[ci]
+      const cspl    = ctoSpls[ci]
+      // Só criar nó de splitter se tiver saídas com CTO destino
+      const saidas  = (cspl.saidas ?? []).filter(sd => sd?.cto_id || sd?.id)
+      if (saidas.length === 0) continue          // splitter de clientes — não aparece na topologia
       const csplNid   = `spl-${ctoNid}-${ci}`
       const ratio     = parseSplitterRatio(cspl.tipo)
       const fibra     = cspl.entrada?.fibra ?? (ci + 1)
@@ -233,7 +246,30 @@ function buildGraphData(topologia) {
         labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
         markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 9, height: 9 },
       })
-      addSplitterOutputEdges(csplNid, cspl.saidas ?? [], caixaById, ctoById)
+      addSplitterOutputEdges(csplNid, saidas, caixaById, ctoById)
+    }
+
+    // ── bandejas: fusões do tipo 'cascata' → CTO em cascata ──────────────────
+    const bandejas = ctoData?.diagrama?.bandejas ?? []
+    for (const b of bandejas) {
+      for (const f of (b.fusoes ?? [])) {
+        if (f.tipo !== 'cascata' || !f.ref_id) continue
+        const cascataNid = `cto-${f.ref_id}`
+        const edgeColor  = fiberColor(f.cor)
+        const corNome    = ABNT[((f.cor ?? 1) - 1) % 12]?.nome ?? ''
+        addCTOWithCascade(cascataNid, ctoById[f.ref_id] ?? null)
+        pushEdge({
+          id:     `e-${ctoNid}-${cascataNid}-${f.id ?? f.ref_id}`,
+          source:  ctoNid,
+          target:  cascataNid,
+          type:   'bezier',
+          label:  `${corNome} → ${f.ref_id}`,
+          style:  { stroke: edgeColor, strokeWidth: 1.5 },
+          labelStyle:   { fill: edgeColor, fontSize: 9, fontWeight: 700 },
+          labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 9, height: 9 },
+        })
+      }
     }
   }
 
@@ -420,7 +456,7 @@ function getNodeDims(node) {
     case 'cdoNode':     return { w: CDO_WIDTH, h: cdoHeight(node.data.splitterCount ?? 0, node.data.bandejas ?? []) }
     case 'ceNode':      return { w: CE_WIDTH,  h: CE_HEIGHT }
     case 'splitterNode':return { w: SPL_WIDTH, h: splHeight(parseSplitterRatio(node.data.tipo)) }
-    case 'ctoNode':     return { w: CTO_WIDTH, h: CTO_HEIGHT }
+    case 'ctoNode':     return { w: CTO_WIDTH, h: ctoHeight(node.data.bandejas ?? []) }
     default:            return { w: 160, h: 80 }
   }
 }
@@ -962,46 +998,121 @@ const SplitterNode = memo(({ data }) => {
 SplitterNode.displayName = 'SplitterNode'
 
 // ── CTO Node ──────────────────────────────────────────────────────────────────
-const CTONode = memo(({ data }) => (
-  <div style={{
-    background:   '#041209',
-    border:       '1.5px solid #16a34a',
-    borderRadius: 8,
-    width:        CTO_WIDTH,
-    fontFamily:   'inherit',
-    overflow:     'hidden',
-    boxShadow:    '0 0 0 1px rgba(22,163,74,0.1)',
-  }}>
-    <Handle type="target" position={Position.Left} id="in"
-      style={{ background: '#16a34a', border: 'none', width: 8, height: 8 }} />
+const CTONode = memo(({ data }) => {
+  const bandejas = data.bandejas ?? []
+  const entrada  = data.entrada  ?? null
 
+  return (
     <div style={{
-      background:   'rgba(22,163,74,0.12)',
-      borderBottom: '1px solid rgba(22,163,74,0.2)',
-      padding:      '5px 10px',
-      display:      'flex', alignItems: 'center', justifyContent: 'space-between',
+      background:   '#041209',
+      border:       '1.5px solid #16a34a',
+      borderRadius: 8,
+      width:        CTO_WIDTH,
+      fontFamily:   'inherit',
+      overflow:     'hidden',
+      boxShadow:    '0 0 0 1px rgba(22,163,74,0.1)',
     }}>
-      <span style={{ fontSize: 8, color: '#16a34a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>CTO</span>
-      {data.capacidade != null && (
-        <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.25)' }}>{data.capacidade}p</span>
-      )}
-    </div>
+      <Handle type="target" position={Position.Left} id="in"
+        style={{ background: '#16a34a', border: 'none', width: 8, height: 8 }} />
 
-    <div style={{ padding: '6px 10px 8px' }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#86efac', lineHeight: 1.2 }}>
-        {data.nome}
+      {/* Header */}
+      <div style={{
+        background:   'rgba(22,163,74,0.12)',
+        borderBottom: '1px solid rgba(22,163,74,0.2)',
+        padding:      '5px 10px',
+        display:      'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontSize: 8, color: '#16a34a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>CTO</span>
+        {data.capacidade != null && (
+          <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.25)' }}>{data.capacidade}p</span>
+        )}
       </div>
-      {data.ctoId && data.ctoId !== data.nome && (
-        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace', marginTop: 2 }}>
-          {data.ctoId}
+
+      {/* Body */}
+      <div style={{ padding: '6px 10px 8px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#86efac', lineHeight: 1.2 }}>
+          {data.nome}
+        </div>
+        {data.ctoId && data.ctoId !== data.nome && (
+          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace', marginTop: 2 }}>
+            {data.ctoId}
+          </div>
+        )}
+        {/* FO de entrada */}
+        {entrada?.cdo_id && (
+          <div style={{ fontSize: 7.5, color: 'rgba(100,220,140,0.5)', marginTop: 3, display: 'flex', gap: 3, alignItems: 'center' }}>
+            <span>↑</span>
+            <span style={{ fontFamily: 'monospace' }}>{entrada.cdo_id}</span>
+            {entrada.porta_cdo != null && (
+              <span style={{ color: 'rgba(255,255,255,0.2)' }}>P{entrada.porta_cdo}</span>
+            )}
+            {entrada.splitter_cto && (
+              <span style={{ color: 'rgba(249,115,22,0.6)', fontFamily: 'monospace' }}>{entrada.splitter_cto}</span>
+            )}
+          </div>
+        )}
+        {data.capacidade != null && (
+          <OccBar ocupacao={data.ocupacao ?? 0} capacidade={data.capacidade} />
+        )}
+      </div>
+
+      {/* Bandejas */}
+      {bandejas.length > 0 && (
+        <div style={{ borderTop: '1px solid rgba(22,163,74,0.15)' }}>
+          {bandejas.map((bdj, bi) => {
+            const fusoes = bdj.fusoes ?? []
+            return (
+              <div key={bdj.id ?? bi} style={{
+                borderBottom: bi < bandejas.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                background:   bi % 2 === 0 ? 'rgba(22,163,74,0.02)' : 'transparent',
+              }}>
+                {/* Bandeja header */}
+                <div style={{
+                  height: CDO_BDJ_HDR_H, display: 'flex', alignItems: 'center',
+                  padding: '0 8px 0 10px', gap: 4,
+                }}>
+                  <span style={{ fontSize: 7.5, fontWeight: 800, color: '#86efac', fontFamily: 'monospace' }}>
+                    {bdj.nome ?? `B${bi + 1}`}
+                  </span>
+                  <span style={{ fontSize: 6.5, color: 'rgba(255,255,255,0.2)', marginLeft: 'auto' }}>
+                    {fusoes.length}f
+                  </span>
+                </div>
+                {/* Fusões */}
+                {fusoes.map((f, fi) => {
+                  const color   = fiberColor(f.cor)
+                  const corNome = ABNT[((f.cor ?? 1) - 1) % 12]?.nome ?? ''
+                  const label   = f.tipo === 'cascata'  ? `→ ${f.ref_id}`
+                                : f.tipo === 'splitter' ? `SPL ${f.ref_id ?? ''}`
+                                : f.tipo === 'direto'   ? 'direto'
+                                : corNome
+                  return (
+                    <div key={f.id ?? fi} style={{
+                      height: CDO_FUSAO_H, display: 'flex', alignItems: 'center',
+                      paddingLeft: 16, paddingRight: 6, gap: 4,
+                      borderTop: '1px solid rgba(255,255,255,0.03)',
+                    }}>
+                      <span style={{ fontSize: 6, color: 'rgba(255,255,255,0.18)', fontFamily: 'monospace', minWidth: 10 }}>{fi + 1}</span>
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: color, flexShrink: 0,
+                        boxShadow: `0 0 3px ${color}88` }} />
+                      <span style={{ fontSize: 6.5, color, fontFamily: 'monospace', fontWeight: 700, flex: 1,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
         </div>
       )}
-      {data.capacidade != null && (
-        <OccBar ocupacao={data.ocupacao ?? 0} capacidade={data.capacidade} />
-      )}
+
+      <Handle type="source" position={Position.Right} id="out-0"
+        style={{ background: '#16a34a', border: 'none', width: 8, height: 8 }} />
     </div>
-  </div>
-))
+  )
+})
 CTONode.displayName = 'CTONode'
 
 // ── Passagem Node (caixa de passagem / ponto genérico) ────────────────────────
