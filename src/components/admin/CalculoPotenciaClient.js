@@ -297,10 +297,12 @@ function ModoAutomatico({ topologia, projetoId, tech }) {
   const [erroCaminho,  setErroCaminho]  = useState(null)
   const [potOLT,       setPotOLT]       = useState(tech?.potOLT ?? 5)
   const [perdaKm,      setPerdaKm]      = useState(0.35)
+  const [perdaFusao,   setPerdaFusao]   = useState(0.10)
+  const [perdaConect,  setPerdaConect]  = useState(0.50)
   const [resultado,    setResultado]    = useState(null)
 
   useEffect(() => {
-    if (tech) { setPotOLT(tech.potOLT); setPerdaKm(0.35); setResultado(null) }
+    if (tech) { setPotOLT(tech.potOLT); setPerdaKm(0.35); setPerdaFusao(0.10); setPerdaConect(0.50); setResultado(null) }
   }, [tech])
 
   // Agrupar CTOs por OLT para o optgroup
@@ -336,7 +338,7 @@ function ModoAutomatico({ topologia, projetoId, tech }) {
   function calcular() {
     if (!caminho) return
     const limites = tech ? { ok: tech.rxMin, alto: tech.rxCrit } : LIMITES
-    setResultado(calcularCaminhoAuto(caminho, potOLT, perdaKm, 0.1, 0.5, limites))
+    setResultado(calcularCaminhoAuto(caminho, potOLT, perdaKm, perdaFusao, perdaConect, limites))
   }
 
   const totalCtos = (topologia?.ctos || []).length
@@ -374,8 +376,10 @@ function ModoAutomatico({ topologia, projetoId, tech }) {
               )}
             </select>
           </div>
-          <Campo label="Pot. OLT" value={potOLT} onChange={setPotOLT} min={-5} max={10} step={0.1} unit="dBm" />
-          <Campo label="Fib./km"  value={perdaKm} onChange={setPerdaKm} min={0.1} max={1} step={0.01} unit="dB/km" />
+          <Campo label="Pot. OLT"     value={potOLT}      onChange={setPotOLT}      min={-5}  max={10}  step={0.1}  unit="dBm"   />
+          <Campo label="Fib./km"      value={perdaKm}     onChange={setPerdaKm}     min={0.1} max={2}   step={0.01} unit="dB/km" />
+          <Campo label="Perda/fusão"  value={perdaFusao}  onChange={setPerdaFusao}  min={0}   max={1}   step={0.01} unit="dB"    />
+          <Campo label="Perda/conect" value={perdaConect} onChange={setPerdaConect} min={0}   max={2}   step={0.01} unit="dB"    />
         </div>
       </div>
 
@@ -466,51 +470,86 @@ function ModoAutomatico({ topologia, projetoId, tech }) {
       )}
 
       {/* Resultado automático */}
-      {resultado && (
-        <div style={{ ...CS.card, borderColor: `${resultado.cor}55` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Potência na ONU (final)</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: resultado.cor, lineHeight: 1.1 }}>
-                {resultado.potFinal.toFixed(2)} dBm
+      {resultado && (() => {
+        const perdaTotal = resultado.trechos.reduce((s, t) => s + t.perdaTotal, 0)
+        const maxLoss    = Math.max(...resultado.trechos.map(t => t.perdaTotal))
+        const budgetPct  = tech ? Math.min(100, perdaTotal / tech.budget * 100) : null
+        const budgetCor  = budgetPct > 95 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#22c55e'
+        const margem     = tech ? resultado.potFinal - tech.rxMin : null
+        return (
+          <div style={{ ...CS.card, borderColor: `${resultado.cor}55` }}>
+            {/* Potência + status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Potência na ONU (final)</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: resultado.cor, lineHeight: 1.1 }}>
+                  {resultado.potFinal.toFixed(2)} dBm
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                <div style={{ padding: '6px 16px', borderRadius: 8, background: `${resultado.cor}1a`, color: resultado.cor, border: `1px solid ${resultado.cor}55`, fontWeight: 700, fontSize: 13 }}>
+                  {resultado.status}
+                </div>
+                {margem != null && (
+                  <span style={{ fontSize: 11, color: margem >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                    Margem: {margem >= 0 ? '+' : ''}{margem.toFixed(2)} dB
+                  </span>
+                )}
               </div>
             </div>
-            <div style={{ padding: '8px 18px', borderRadius: 8, background: `${resultado.cor}1a`, color: resultado.cor, border: `1px solid ${resultado.cor}55`, fontWeight: 700, fontSize: 13 }}>
-              {resultado.status}
+
+            {/* Budget progress bar */}
+            {tech && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 10, color: '#64748b' }}>
+                  <span>Orçamento óptico</span>
+                  <span style={{ color: budgetCor, fontWeight: 700 }}>{perdaTotal.toFixed(2)} / {tech.budget} dB ({budgetPct.toFixed(0)}%)</span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${budgetPct}%`, background: budgetCor, borderRadius: 3, transition: 'width 0.4s' }} />
+                </div>
+              </div>
+            )}
+
+            {/* Tabela resumo de perdas */}
+            <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 480 }}>
+              <thead>
+                <tr style={{ color: '#475569', fontSize: 10, textTransform: 'uppercase' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Trecho</th>
+                  <th style={{ textAlign: 'right', padding: '4px 8px' }}>Fibra</th>
+                  <th style={{ textAlign: 'right', padding: '4px 8px' }}>Splitter</th>
+                  <th style={{ textAlign: 'right', padding: '4px 8px' }}>Fusões</th>
+                  <th style={{ textAlign: 'right', padding: '4px 8px' }}>Conect.</th>
+                  <th style={{ textAlign: 'right', padding: '4px 8px' }}>Total</th>
+                  <th style={{ textAlign: 'right', padding: '4px 8px' }}>Acum.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resultado.trechos.map((t, i) => {
+                  const isCrit = t.perdaTotal === maxLoss && maxLoss > 0
+                  const acumCor = t.potFinal < (tech?.rxCrit ?? LIMITES.alto) ? '#ef4444' : t.potFinal < (tech?.rxMin ?? LIMITES.ok) ? '#f59e0b' : '#22c55e'
+                  return (
+                    <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', color: '#94a3b8', background: isCrit ? 'rgba(239,68,68,0.05)' : 'transparent' }}>
+                      <td style={{ padding: '5px 8px', color: '#cbd5e1' }}>
+                        {t.de} → {t.para}
+                        {isCrit && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.15)', padding: '1px 5px', borderRadius: 3 }}>CRÍTICO</span>}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaFibra.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaSplitters.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaFusoes.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaConectores.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '5px 8px', color: isCrit ? '#ef4444' : '#e2e8f0', fontWeight: 700 }}>{t.perdaTotal.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '5px 8px', color: acumCor, fontWeight: 600 }}>{t.potFinal.toFixed(2)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
             </div>
           </div>
-
-          {/* Tabela resumo de perdas */}
-          <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 480 }}>
-            <thead>
-              <tr style={{ color: '#475569', fontSize: 10, textTransform: 'uppercase' }}>
-                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Trecho</th>
-                <th style={{ textAlign: 'right', padding: '4px 8px' }}>Fibra</th>
-                <th style={{ textAlign: 'right', padding: '4px 8px' }}>Splitter</th>
-                <th style={{ textAlign: 'right', padding: '4px 8px' }}>Fusões</th>
-                <th style={{ textAlign: 'right', padding: '4px 8px' }}>Conect.</th>
-                <th style={{ textAlign: 'right', padding: '4px 8px' }}>Total</th>
-                <th style={{ textAlign: 'right', padding: '4px 8px' }}>Acum.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resultado.trechos.map((t, i) => (
-                <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', color: '#94a3b8' }}>
-                  <td style={{ padding: '5px 8px', color: '#cbd5e1' }}>{t.de} → {t.para}</td>
-                  <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaFibra.toFixed(2)}</td>
-                  <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaSplitters.toFixed(2)}</td>
-                  <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaFusoes.toFixed(2)}</td>
-                  <td style={{ textAlign: 'right', padding: '5px 8px' }}>{t.perdaConectores.toFixed(2)}</td>
-                  <td style={{ textAlign: 'right', padding: '5px 8px', color: '#e2e8f0', fontWeight: 600 }}>{t.perdaTotal.toFixed(2)}</td>
-                  <td style={{ textAlign: 'right', padding: '5px 8px', color: t.potFinal < (tech?.rxCrit ?? LIMITES.alto) ? '#ef4444' : t.potFinal < (tech?.rxMin ?? LIMITES.ok) ? '#f59e0b' : '#22c55e', fontWeight: 600 }}>{t.potFinal.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

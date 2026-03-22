@@ -233,6 +233,49 @@ export async function saveDiagramaCaixa(data) {
 }
 
 // ---------------------------------------------------------------------------
+// getUsadosProjeto → PONs e portas DIO em uso em TODAS as outras caixas
+// ---------------------------------------------------------------------------
+
+/**
+ * Retorna PONs (placa+porta) e portas DIO já usadas no projeto,
+ * excluindo a própria caixa em edição.
+ *
+ * @param {string} ceId       — caixa atual (excluída do resultado)
+ * @param {string} projetoId
+ * @returns {Promise<{ pons: string[], dios: number[] }>}
+ */
+export async function getUsadosProjeto(ceId, projetoId) {
+  const session = await requireActiveEmpresa(ALL_ROLES)
+  const { role, projeto_id: userProjeto } = session.user
+  const targetProjeto = role === 'superadmin' ? projetoId : userProjeto
+
+  await connectDB()
+
+  const caixas = await CaixaEmendaCDO.find(
+    { projeto_id: targetProjeto, id: { $ne: ceId } },
+    'diagrama'
+  ).lean()
+
+  const pons = new Set()
+  const dios = new Set()
+
+  for (const c of caixas) {
+    for (const b of (c.diagrama?.bandejas ?? [])) {
+      for (const f of (b.fusoes ?? [])) {
+        if (f.tipo === 'pon' && f.pon_placa != null && f.pon_porta != null) {
+          pons.add(`${f.pon_placa}-${f.pon_porta}`)
+        }
+        if (f.porta_dio != null) {
+          dios.add(Number(f.porta_dio))
+        }
+      }
+    }
+  }
+
+  return { pons: [...pons], dios: [...dios] }
+}
+
+// ---------------------------------------------------------------------------
 // addCaboToItem — adiciona um cabo ao diagrama.cabos[] de uma CTO ou CDO/CE
 // ---------------------------------------------------------------------------
 

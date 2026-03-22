@@ -59,7 +59,7 @@ function parseSplitterRatio(tipo) {
 const CDO_HEADER_H    = 44
 const CDO_SPLITTER_H  = 34   // altura fixa por linha de splitter
 const CDO_BDJ_HDR_H   = 20   // altura do header de cada bandeja
-const CDO_FUSAO_H     = 13   // altura por linha de fusão
+const CDO_FUSAO_H     = 16   // altura por linha de fusão
 const CDO_WIDTH       = 290
 const SPL_HEADER_H    = 44
 const SPL_PORT_H      = 28
@@ -68,7 +68,7 @@ const OLT_WIDTH       = 200
 const OLT_PORT_H      = 18   // height per PON port row in OLT node
 const OLT_HEADER_H    = 74   // OLT header area
 const CTO_WIDTH       = 148
-const CTO_HEIGHT      = 62
+const CTO_HEIGHT      = 72   // header(~20) + body-min(~52, inclui OccBar)
 const CE_WIDTH        = 178
 const CE_HEIGHT       = 88
 
@@ -93,6 +93,24 @@ function ctoHeight(bandejas = []) {
   let h = CTO_HEIGHT
   for (const b of bandejas) h += CDO_BDJ_HDR_H + (b.fusoes?.length ?? 0) * CDO_FUSAO_H + 4
   return h + 4
+}
+// Y absoluto (px) do centro de uma fusão dentro do CTONode
+function ctoFusaoHandleTop(bandejas, targetBi, targetFi) {
+  let y = CTO_HEIGHT
+  for (let i = 0; i < targetBi; i++) {
+    y += CDO_BDJ_HDR_H + (bandejas[i]?.fusoes?.length ?? 0) * CDO_FUSAO_H + 4
+  }
+  y += CDO_BDJ_HDR_H + targetFi * CDO_FUSAO_H + CDO_FUSAO_H / 2
+  return y
+}
+// Y absoluto (px) do centro de uma fusão dentro do CDONode (seção de bandejas)
+function cdoBandejaFusaoHandleTop(splitterCount, bandejas, targetBi, targetFi) {
+  let y = CDO_HEADER_H + splitterCount * CDO_SPLITTER_H
+  for (let i = 0; i < targetBi; i++) {
+    y += cdoBandejaH(bandejas[i])
+  }
+  y += CDO_BDJ_HDR_H + targetFi * CDO_FUSAO_H + CDO_FUSAO_H / 2
+  return y
 }
 
 // ── 1. DATA LAYER ───────────────────────────────────────────────────────────
@@ -155,6 +173,7 @@ function buildGraphData(topologia) {
         tipo:          caixa?.tipo ?? (destTipo ?? 'CDO').toUpperCase(),
         portaOlt:      entrada.porta_olt ?? caixa?.porta_olt ?? null,
         pon:           entrada.pon ?? null,
+        placa:         entrada.placa ?? null,
         portCount:     Math.max(12, Math.ceil(spls.length / 2) * 12),
         splitterCount: spls.length,
         splFibras,
@@ -177,8 +196,9 @@ function buildGraphData(topologia) {
         ctoId:      cto?.cto_id ?? id,
         capacidade: cto?.capacidade ?? null,
         ocupacao:   cto?.ocupacao   ?? 0,
-        bandejas:   cto?.diagrama?.bandejas ?? [],
-        entrada:    cto?.diagrama?.entrada  ?? null,
+        bandejas:   cto?.diagrama?.bandejas  ?? [],
+        splitters:  cto?.diagrama?.splitters ?? [],
+        entrada:    cto?.diagrama?.entrada   ?? null,
       },
     })
   }
@@ -197,14 +217,24 @@ function buildGraphData(topologia) {
       const eColor    = fiberColor(fibra)
       if (!seenNodes.has(splNid)) {
         seenNodes.add(splNid)
+        // Busca fusão vinculada por splitter_id para herdar PON
+        const linkedFusao = (caixaData?.diagrama?.bandejas ?? [])
+          .flatMap(b => b.fusoes ?? [])
+          .find(f => f.splitter_id === spl.id)
         nodes.push({
           id: splNid, type: 'splitterNode', position: { x: 0, y: 0 },
-          data: { nome: `Splitter ${si + 1}`, tipo: spl.tipo ?? '1x8', ratio, tubeLabel, colorIn: eColor, saidas: spl.saidas ?? [] },
+          data: {
+            nome: `Splitter ${si + 1}`, tipo: spl.tipo ?? '1x8', ratio, tubeLabel, colorIn: eColor,
+            saidas: spl.saidas ?? [],
+            pon_placa: spl.pon_placa ?? linkedFusao?.pon_placa ?? null,
+            pon_porta: spl.pon_porta ?? linkedFusao?.pon_porta ?? null,
+            fo_entrada: spl.entrada?.fibra ?? linkedFusao?.entrada?.fibra ?? null,
+          },
         })
       }
       pushEdge({
         id: `e-${cdoNid}-${splNid}`, source: cdoNid, target: splNid,
-        sourceHandle: `out-${si}`, type: 'bezier', label: tubeLabel,
+        sourceHandle: `out-${si}`, type: 'smoothstep', label: tubeLabel,
         style: { stroke: eColor, strokeWidth: 2 },
         labelStyle: { fill: eColor, fontSize: 10, fontWeight: 700 },
         labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
@@ -220,27 +250,52 @@ function buildGraphData(topologia) {
     addCTONode(ctoNid, ctoData)
 
     // ── splitters com saídas para CTOs (formato legado/CDO-style) ─────────────
-    const ctoSpls = ctoData?.diagrama?.splitters ?? []
+    const ctoSpls  = ctoData?.diagrama?.splitters ?? []
+    const bandejas = ctoData?.diagrama?.bandejas  ?? []
     for (let ci = 0; ci < ctoSpls.length; ci++) {
-      const cspl    = ctoSpls[ci]
+      const cspl   = ctoSpls[ci]
       // Só criar nó de splitter se tiver saídas com CTO destino
-      const saidas  = (cspl.saidas ?? []).filter(sd => sd?.cto_id || sd?.id)
+      const saidas = (cspl.saidas ?? []).filter(sd => sd?.cto_id || sd?.id)
       if (saidas.length === 0) continue          // splitter de clientes — não aparece na topologia
-      const csplNid   = `spl-${ctoNid}-${ci}`
-      const ratio     = parseSplitterRatio(cspl.tipo)
-      const fibra     = cspl.entrada?.fibra ?? (ci + 1)
-      const edgeColor = fiberColor(fibra)
+      const csplNid = `spl-${ctoNid}-${ci}`
+      const ratio   = parseSplitterRatio(cspl.tipo)
+      const fibra   = cspl.entrada?.fibra ?? (ci + 1)
+
+      // Usa cor + handle da fusão na bandeja que referencia este splitter (se houver)
+      let bdjFusao = null, bdjBi = -1, bdjFi = -1
+      for (let bi = 0; bi < bandejas.length; bi++) {
+        const fusoes = bandejas[bi]?.fusoes ?? []
+        for (let fi = 0; fi < fusoes.length; fi++) {
+          const f = fusoes[fi]
+          if (f.tipo === 'splitter' && f.ref_id === cspl.id) {
+            bdjFusao = f; bdjBi = bi; bdjFi = fi; break
+          }
+        }
+        if (bdjFusao) break
+      }
+      const corIdx      = bdjFusao?.cor ?? fibra
+      const edgeColor   = fiberColor(corIdx)
+      const corNome     = ABNT[((corIdx - 1) % 12)]?.nome ?? `F${fibra}`
+      const srcHandle   = bdjBi >= 0 ? `bdj-${bdjBi}-f-${bdjFi}` : 'out-0'
+
       if (!seenNodes.has(csplNid)) {
         seenNodes.add(csplNid)
         nodes.push({
           id: csplNid, type: 'splitterNode', position: { x: 0, y: 0 },
-          data: { nome: cspl.nome ?? `Splitter ${ci + 1}`, tipo: cspl.tipo ?? '1x8', ratio,
-            tubeLabel: cspl.nome ?? `F${fibra}`, colorIn: edgeColor, saidas: cspl.saidas ?? [] },
+          data: {
+            nome:      cspl.nome ?? `SPL-${ci + 1}`,
+            tipo:      cspl.tipo ?? '1x8',
+            ratio,
+            tubeLabel: corNome,
+            colorIn:   edgeColor,
+            saidas:    cspl.saidas ?? [],
+          },
         })
       }
       pushEdge({
         id: `e-${ctoNid}-${csplNid}`, source: ctoNid, target: csplNid,
-        type: 'bezier', label: `Cascata F${fibra}`,
+        sourceHandle: srcHandle,
+        type: 'smoothstep', label: corNome,
         style: { stroke: edgeColor, strokeWidth: 1.5 },
         labelStyle: { fill: edgeColor, fontSize: 9, fontWeight: 700 },
         labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
@@ -249,25 +304,36 @@ function buildGraphData(topologia) {
       addSplitterOutputEdges(csplNid, saidas, caixaById, ctoById)
     }
 
-    // ── bandejas: fusões do tipo 'cascata' → CTO em cascata ──────────────────
-    const bandejas = ctoData?.diagrama?.bandejas ?? []
-    for (const b of bandejas) {
-      for (const f of (b.fusoes ?? [])) {
-        if (f.tipo !== 'cascata' || !f.ref_id) continue
-        const cascataNid = `cto-${f.ref_id}`
-        const edgeColor  = fiberColor(f.cor)
-        const corNome    = ABNT[((f.cor ?? 1) - 1) % 12]?.nome ?? ''
-        addCTOWithCascade(cascataNid, ctoById[f.ref_id] ?? null)
+    // ── bandejas: fusões do tipo 'cascata' ou 'direto' → CTO ou CDO ──────────
+    for (let bi = 0; bi < bandejas.length; bi++) {
+      const fusoes = bandejas[bi]?.fusoes ?? []
+      for (let fi = 0; fi < fusoes.length; fi++) {
+        const f = fusoes[fi]
+        const isCascata = f.tipo === 'cascata'
+        const isDireto  = f.tipo === 'direto'
+        if ((!isCascata && !isDireto) || !f.ref_id) continue
+        const edgeColor = fiberColor(f.cor)
+        // portNum conta apenas fusões não-splitter antes desta
+        const portNum   = fusoes.slice(0, fi).filter(x => x.tipo !== 'splitter').length + 1
+        // Determinar tipo do destino (cto ou cdo)
+        const destTipoPrefix = f.dest_tipo ?? (ctoById[f.ref_id] ? 'cto' : caixaById[String(f.ref_id)] ? 'cdo' : 'cto')
+        const destNid        = `${destTipoPrefix}-${f.ref_id}`
+        if (destTipoPrefix === 'cto') {
+          addCTOWithCascade(destNid, ctoById[f.ref_id] ?? null)
+        } else {
+          addCDOWithSplitters(destNid, caixaById[String(f.ref_id)] ?? null, 'CDO')
+        }
         pushEdge({
-          id:     `e-${ctoNid}-${cascataNid}-${f.id ?? f.ref_id}`,
-          source:  ctoNid,
-          target:  cascataNid,
-          type:   'bezier',
-          label:  `${corNome} → ${f.ref_id}`,
-          style:  { stroke: edgeColor, strokeWidth: 1.5 },
+          id:           `e-${ctoNid}-${destNid}-${f.id ?? f.ref_id}`,
+          source:        ctoNid,
+          target:        destNid,
+          sourceHandle: `bdj-${bi}-f-${fi}`,
+          type:         'bezier',
+          label:        `S${portNum}`,
+          style:        { stroke: edgeColor, strokeWidth: 1.5, strokeDasharray: isDireto ? '5 3' : undefined },
           labelStyle:   { fill: edgeColor, fontSize: 9, fontWeight: 700 },
           labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 9, height: 9 },
+          markerEnd:    { type: MarkerType.ArrowClosed, color: edgeColor, width: 9, height: 9 },
         })
       }
     }
@@ -342,7 +408,7 @@ function buildGraphData(topologia) {
       // Edge OLT → CDO
       pushEdge({
         id: `e-${oltNid}-${caixaNid}`, source: oltNid, target: caixaNid,
-        type: 'bezier', label: 'Backbone',
+        type: 'smoothstep', label: 'Backbone',
         style: { stroke: '#0891b2', strokeWidth: 2.5 },
         labelStyle: { fill: '#67e8f9', fontSize: 10, fontWeight: 700 },
         labelBgStyle: { fill: 'rgba(4,12,28,0.9)', rx: 4 },
@@ -369,7 +435,7 @@ function buildGraphData(topologia) {
 
         pushEdge({
           id: `e-${caixaNid}-${splNid}`, source: caixaNid, target: splNid,
-          sourceHandle: `out-${si}`, type: 'bezier', label: tubeLabel,
+          sourceHandle: `out-${si}`, type: 'smoothstep', label: tubeLabel,
           style: { stroke: edgeColor, strokeWidth: 2 },
           labelStyle: { fill: edgeColor, fontSize: 10, fontWeight: 700 },
           labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
@@ -387,7 +453,7 @@ function buildGraphData(topologia) {
           addCTOWithCascade(ctoNid, ctoById[cto.cto_id] ?? cto)
           pushEdge({
             id: `e-${caixaNid}-${ctoNid}`, source: caixaNid, target: ctoNid,
-            type: 'bezier', label: cto.porta_cdo != null ? `P${cto.porta_cdo}` : undefined,
+            type: 'smoothstep', label: cto.porta_cdo != null ? `P${cto.porta_cdo}` : undefined,
             style: { stroke: portColor, strokeWidth: 1.5 },
             labelStyle: { fill: portColor, fontSize: 10, fontWeight: 700 },
             labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
@@ -418,7 +484,7 @@ function buildGraphData(topologia) {
       pushEdge({
         id: `e-${paiNid}-${caixaNid}`,
         source: paiNid, target: caixaNid,
-        type: 'bezier', label: caixa.porta_cdo_pai != null ? `P${caixa.porta_cdo_pai}` : 'CDO→CDO',
+        type: 'smoothstep', label: caixa.porta_cdo_pai != null ? `P${caixa.porta_cdo_pai}` : 'CDO→CDO',
         style: { stroke: portColor, strokeWidth: 2 },
         labelStyle: { fill: portColor, fontSize: 10, fontWeight: 700 },
         labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
@@ -433,7 +499,7 @@ function buildGraphData(topologia) {
           addCTOWithCascade(ctoNid, ctoById[cto.cto_id] ?? cto)
           pushEdge({
             id: `e-${caixaNid}-${ctoNid}`, source: caixaNid, target: ctoNid,
-            type: 'bezier', label: cto.porta_cdo != null ? `P${cto.porta_cdo}` : undefined,
+            type: 'smoothstep', label: cto.porta_cdo != null ? `P${cto.porta_cdo}` : undefined,
             style: { stroke: ctoColor, strokeWidth: 1.5 },
             labelStyle: { fill: ctoColor, fontSize: 10, fontWeight: 700 },
             labelBgStyle: { fill: 'rgba(4,12,28,0.85)', rx: 4 },
@@ -464,7 +530,7 @@ function getNodeDims(node) {
 function applyDagreLayout(nodes, edges) {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'LR', ranksep: 280, nodesep: 90, edgesep: 60, marginx: 120, marginy: 120 })
+  g.setGraph({ rankdir: 'LR', ranksep: 360, nodesep: 130, edgesep: 80, marginx: 160, marginy: 160 })
 
   for (const n of nodes) {
     const { w, h } = getNodeDims(n)
@@ -629,13 +695,13 @@ const OLTNode = memo(({ data }) => {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-          {data.ip && (
+          {data.ip && !data._mobile && (
             <span style={{ fontSize: 9, fontFamily: 'monospace', color: '#67e8f9',
               background: 'rgba(8,145,178,0.12)', padding: '1px 5px', borderRadius: 4 }}>
               {data.ip}
             </span>
           )}
-          {data.modelo && (
+          {data.modelo && !data._mobile && (
             <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)' }}>{data.modelo}</span>
           )}
           <span style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
@@ -731,16 +797,20 @@ const CDONode = memo(({ data }) => {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-          {data.pon != null && (
+          {(data.placa != null || data.pon != null) && (
             <span style={{ fontSize: 9, color: '#67e8f9', background: 'rgba(8,145,178,0.15)',
-              padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>PON {data.pon}</span>
+              padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
+              {data.placa != null ? `Pl${data.placa} ` : ''}PON {data.pon ?? '?'}
+            </span>
           )}
           {data.portaOlt != null && (
             <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>Porta {data.portaOlt}</span>
           )}
-          <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.2)' }}>
-            {splitterCount} spl · {bandejas.length} bdj
-          </span>
+          {!data._mobile && (
+            <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.2)' }}>
+              {splitterCount} spl · {bandejas.length} bdj
+            </span>
+          )}
         </div>
       </div>
 
@@ -782,6 +852,12 @@ const CDONode = memo(({ data }) => {
               <span style={{ fontSize: 7, color: ligadas > 0 ? '#86efac' : 'rgba(255,255,255,0.18)' }}>
                 {ligadas}/{ratio}
               </span>
+              {(spl.pon_placa != null || spl.pon_porta != null) && (
+                <span style={{ fontSize: 6, color: '#a78bfa', fontFamily: 'monospace', fontWeight: 700,
+                  background: 'rgba(139,92,246,0.12)', padding: '0px 3px', borderRadius: 3, whiteSpace: 'nowrap' }}>
+                  {spl.pon_placa != null ? `Pl${spl.pon_placa}·` : ''}P{spl.pon_porta ?? '?'}
+                </span>
+              )}
             </div>
           </div>
         )
@@ -819,28 +895,58 @@ const CDONode = memo(({ data }) => {
                   </span>
                 </div>
                 {/* Fusões */}
-                {fusoes.map((f, fi) => {
+                {!data._mobile && fusoes.map((f, fi) => {
                   const entColor = fiberColor(f.entrada?.fibra)
                   const saiColor = fiberColor(f.saida?.fibra)
+                  const tipo = (f.tipo ?? '').toLowerCase()
+                  // Visual config per tipo — usa valores por-fusão (pon_placa/pon_porta) quando disponíveis
+                  const ponPlaca = f.pon_placa ?? data.placa
+                  const ponPorta = f.pon_porta ?? data.pon
+                  const tipoVisual = tipo === 'pon'
+                    ? { label: `◉${ponPlaca != null ? ' Pl' + ponPlaca : ''} PON${ponPorta != null ? ' ' + ponPorta : ''}`, color: '#60a5fa', bg: 'rgba(59,130,246,0.18)', border: 'rgba(59,130,246,0.4)', title: `PON — OLT: ${data.nome ?? ''} Placa ${ponPlaca ?? '?'} Porta ${ponPorta ?? '?'}` }
+                    : tipo === 'conector'
+                    ? { label: '⊣ CON', color: '#fbbf24', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)', title: 'Conector (≈0.3 dB)' }
+                    : tipo === 'pass' || tipo === 'passagem'
+                    ? { label: '—— ', color: '#94a3b8', bg: 'rgba(100,116,139,0.12)', border: 'rgba(100,116,139,0.3)', title: 'Passagem direta' }
+                    : null
                   return (
                     <div key={fi} style={{
                       height:      CDO_FUSAO_H,
                       display:     'flex', alignItems: 'center',
                       paddingLeft: 20, paddingRight: 8, gap: 4,
                       borderTop:   '1px solid rgba(255,255,255,0.03)',
+                      background:  tipo === 'pon' ? 'rgba(59,130,246,0.04)' : 'transparent',
                     }}>
                       <span style={{ fontSize: 6.5, color: 'rgba(255,255,255,0.18)', fontFamily: 'monospace', minWidth: 10 }}>{fi + 1}</span>
+                      {f.porta_dio != null && (
+                        <span style={{ fontSize: 6, fontWeight: 800, color: '#f97316', fontFamily: 'monospace',
+                          background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)',
+                          borderRadius: 3, padding: '0px 3px', lineHeight: 1.4, flexShrink: 0 }}>
+                          D{f.porta_dio}
+                        </span>
+                      )}
                       <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: entColor, flexShrink: 0 }} />
                       <span style={{ fontSize: 7, color: entColor, fontFamily: 'monospace', fontWeight: 700 }}>F{f.entrada?.fibra ?? '?'}</span>
                       <span style={{ fontSize: 7, color: 'rgba(255,255,255,0.2)' }}>→</span>
                       <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: saiColor, flexShrink: 0 }} />
                       <span style={{ fontSize: 7, color: saiColor, fontFamily: 'monospace', fontWeight: 700 }}>F{f.saida?.fibra ?? '?'}</span>
-                      {f.obs && (
-                        <span style={{ fontSize: 6, color: 'rgba(255,255,255,0.18)', marginLeft: 'auto',
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 55 }}>
-                          {f.obs}
-                        </span>
-                      )}
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }}>
+                        {f.obs && !tipoVisual && (
+                          <span style={{ fontSize: 6, color: 'rgba(255,255,255,0.18)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 40 }}>
+                            {f.obs}
+                          </span>
+                        )}
+                        {tipoVisual && (
+                          <span title={tipoVisual.title} style={{
+                            fontSize: 6, fontWeight: 800, padding: '1px 4px', borderRadius: 3,
+                            color: tipoVisual.color, background: tipoVisual.bg, border: `1px solid ${tipoVisual.border}`,
+                            whiteSpace: 'nowrap', letterSpacing: '0.02em',
+                          }}>
+                            {tipoVisual.label}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -863,6 +969,27 @@ const CDONode = memo(({ data }) => {
       {splitterCount === 0 && (
         <Handle type="source" position={Position.Right} id="out-0"
           style={{ background: '#0891b2', border: 'none', width: 9, height: 9, top: '50%' }} />
+      )}
+
+      {/* Source handles por fusão das bandejas (permite conexões saindo da bandeja) */}
+      {bandejas.flatMap((bdj, bi) =>
+        (bdj.fusoes ?? []).map((f, fi) => {
+          const top   = cdoBandejaFusaoHandleTop(splitterCount, bandejas, bi, fi)
+          const color = fiberColor(f.saida?.fibra ?? f.entrada?.fibra)
+          return (
+            <Handle
+              key={`bdj-${bi}-f-${fi}`}
+              type="source"
+              position={Position.Right}
+              id={`bdj-${bi}-f-${fi}`}
+              style={{
+                background: color, border: `1px solid ${color}`, width: 7, height: 7,
+                position: 'absolute', right: -3.5, top, transform: 'none',
+                boxShadow: `0 0 4px ${color}88`,
+              }}
+            />
+          )
+        })
       )}
     </div>
   )
@@ -946,7 +1073,16 @@ const SplitterNode = memo(({ data }) => {
         height:       SPL_HEADER_H,
         boxSizing:    'border-box',
       }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#fed7aa' }}>{data.nome}</div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#fed7aa' }}>{data.nome}</div>
+          {(data.pon_placa != null || data.pon_porta != null) && (
+            <span style={{ fontSize: 8, color: '#a78bfa', background: 'rgba(139,92,246,0.15)',
+              padding: '1px 5px', borderRadius: 8, fontWeight: 700, display: 'inline-block', marginTop: 1 }}>
+              {data.pon_placa != null ? `Pl${data.pon_placa} ` : ''}PON {data.pon_porta ?? '?'}
+              {data.fo_entrada != null && ` · FO${data.fo_entrada}`}
+            </span>
+          )}
+        </div>
         <span style={{ fontSize: 12, fontWeight: 800, color: '#f97316',
           background: 'rgba(249,115,22,0.15)', padding: '2px 8px', borderRadius: 10 }}>
           {data.tipo ?? `1×${ratio}`}
@@ -1028,18 +1164,18 @@ const CTONode = memo(({ data }) => {
         )}
       </div>
 
-      {/* Body */}
-      <div style={{ padding: '6px 10px 8px' }}>
+      {/* Body — minHeight garante alinhamento dos handles com as rows das bandejas */}
+      <div style={{ padding: '6px 10px 8px', minHeight: 52 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#86efac', lineHeight: 1.2 }}>
           {data.nome}
         </div>
-        {data.ctoId && data.ctoId !== data.nome && (
+        {!data._mobile && data.ctoId && data.ctoId !== data.nome && (
           <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace', marginTop: 2 }}>
             {data.ctoId}
           </div>
         )}
         {/* FO de entrada */}
-        {entrada?.cdo_id && (
+        {!data._mobile && entrada?.cdo_id && (
           <div style={{ fontSize: 7.5, color: 'rgba(100,220,140,0.5)', marginTop: 3, display: 'flex', gap: 3, alignItems: 'center' }}>
             <span>↑</span>
             <span style={{ fontFamily: 'monospace' }}>{entrada.cdo_id}</span>
@@ -1079,13 +1215,22 @@ const CTONode = memo(({ data }) => {
                   </span>
                 </div>
                 {/* Fusões */}
-                {fusoes.map((f, fi) => {
+                {!data._mobile && fusoes.map((f, fi) => {
                   const color   = fiberColor(f.cor)
-                  const corNome = ABNT[((f.cor ?? 1) - 1) % 12]?.nome ?? ''
-                  const label   = f.tipo === 'cascata'  ? `→ ${f.ref_id}`
-                                : f.tipo === 'splitter' ? `SPL ${f.ref_id ?? ''}`
-                                : f.tipo === 'direto'   ? 'direto'
-                                : corNome
+                  // splitter mostra "SPL-N tipo"; demais contam posições não-splitter
+                  const portNum = fusoes.slice(0, fi).filter(x => x.tipo !== 'splitter').length + 1
+                  const splIdx  = f.tipo === 'splitter'
+                    ? (data.splitters ?? []).findIndex(s => s.id === f.ref_id)
+                    : -1
+                  const spl     = splIdx >= 0 ? (data.splitters ?? [])[splIdx] : null
+                  const label   = f.tipo === 'splitter'
+                    ? splIdx >= 0 && spl
+                      ? `SPL-${splIdx + 1} ${spl.tipo || ''}`.trim()
+                      : 'SPL-?'
+                    : f.tipo === 'direto'
+                    ? `→S${portNum}`
+                    : `S${portNum}`
+
                   return (
                     <div key={f.id ?? fi} style={{
                       height: CDO_FUSAO_H, display: 'flex', alignItems: 'center',
@@ -1108,8 +1253,34 @@ const CTONode = memo(({ data }) => {
         </div>
       )}
 
+      {/* Source handle padrão — usado quando não há bandejas com saídas */}
       <Handle type="source" position={Position.Right} id="out-0"
-        style={{ background: '#16a34a', border: 'none', width: 8, height: 8 }} />
+        style={{ background: '#16a34a', border: 'none', width: 8, height: 8,
+          ...(bandejas.length > 0 ? { opacity: 0, pointerEvents: 'none' } : {}) }} />
+
+      {/* Handles individuais por fusão (cascata / splitter) */}
+      {bandejas.flatMap((bdj, bi) =>
+        (bdj.fusoes ?? []).map((f, fi) => {
+          if (f.tipo !== 'cascata' && f.tipo !== 'splitter' && f.tipo !== 'direto') return null
+          const top    = ctoFusaoHandleTop(bandejas, bi, fi)
+          const color  = fiberColor(f.cor)
+          const isSpl  = f.tipo === 'splitter'
+          return (
+            <Handle
+              key={`bdj-${bi}-f-${fi}`}
+              type="source"
+              position={Position.Right}
+              id={`bdj-${bi}-f-${fi}`}
+              style={{
+                background: color, border: `1px solid ${color}`, width: 7, height: 7,
+                position: 'absolute', right: -3.5, top, transform: 'none',
+                boxShadow: `0 0 4px ${color}88`,
+                ...(isSpl ? { opacity: 0, pointerEvents: 'none' } : {}),
+              }}
+            />
+          )
+        })
+      )}
     </div>
   )
 })
@@ -1171,11 +1342,8 @@ function minimapColor(node) {
 
 // ── Toolbar estilo CAD ────────────────────────────────────────────────────────
 const TOOLS = [
-  { id: 'select',       icon: '↖',  label: 'Selecionar' },
-  { id: 'addSplitter',  icon: '⚡',  label: 'Add Splitter' },
-  { id: 'addCTO',       icon: '📦',  label: 'Add CTO' },
-  { id: 'addCDO',       icon: '🔷',  label: 'Add CDO' },
-  { id: 'delete',       icon: '🗑',  label: 'Deletar seleção' },
+  { id: 'select', icon: '↖', label: 'Selecionar' },
+  { id: 'delete', icon: '🗑', label: 'Deletar seleção' },
 ]
 
 function ControlPanel({ onAutoLayout, activeTool, onToolChange, onAlign, onDeleteSelected, onMoveSelected, onSaveLayout }) {
@@ -1227,34 +1395,6 @@ function ControlPanel({ onAutoLayout, activeTool, onToolChange, onAlign, onDelet
         ))}
         {sep}
 
-        {/* Mover seleção (setas) */}
-        {[
-          { dx:  0, dy: -25, icon: '↑', title: 'Mover cima' },
-          { dx:  0, dy:  25, icon: '↓', title: 'Mover baixo' },
-          { dx: -25, dy: 0,  icon: '←', title: 'Mover esquerda' },
-          { dx:  25, dy: 0,  icon: '→', title: 'Mover direita' },
-        ].map(a => (
-          <button key={a.icon} title={a.title} onClick={() => onMoveSelected(a.dx, a.dy)} style={btnStyle(false)}>
-            {a.icon}
-          </button>
-        ))}
-        {sep}
-
-        {/* Alinhar */}
-        {[
-          { id: 'left',        icon: '⊢', title: 'Alinhar esquerda' },
-          { id: 'centerH',     icon: '⊣', title: 'Centralizar H' },
-          { id: 'right',       icon: '⊣', title: 'Alinhar direita' },
-          { id: 'top',         icon: '⊤', title: 'Alinhar topo' },
-          { id: 'bottom',      icon: '⊥', title: 'Alinhar baixo' },
-          { id: 'distributeH', icon: '⇔', title: 'Distribuir H' },
-          { id: 'distributeV', icon: '⇕', title: 'Distribuir V' },
-        ].map(a => (
-          <button key={a.id} title={a.title} onClick={() => onAlign(a.id)} style={btnStyle(false)}>
-            {a.icon}
-          </button>
-        ))}
-        {sep}
 
         {/* Ações principais */}
         <button onClick={onAutoLayout} title="Reorganizar com Dagre" style={textBtnStyle('#67e8f9', 'rgba(8,145,178,0.15)', 'rgba(8,145,178,0.4)')}>
@@ -1328,25 +1468,27 @@ function FlowInner({ projetoId, userRole, altura }) {
   const buildAndLayout = useCallback((topologia, useSaved = true) => {
     const { nodes: raw, edges: rawEdges } = buildGraphData(topologia)
     const { nodes: laid, edges: laidEdges } = applyDagreLayout(raw, rawEdges)
+    const isMob = typeof window !== 'undefined' && window.innerWidth < 480
+    const mLaid = isMob ? laid.map(n => ({ ...n, data: { ...n.data, _mobile: true } })) : laid
     if (useSaved && projetoId) {
       try {
         const savedPos   = JSON.parse(localStorage.getItem(`ftth-topo-pos-${projetoId}`)   || '{}')
         const savedEdges = JSON.parse(localStorage.getItem(`ftth-topo-edges-${projetoId}`) || 'null')
         const nodesOut = Object.keys(savedPos).length > 0
-          ? laid.map(n => savedPos[n.id] ? { ...n, position: savedPos[n.id] } : n)
-          : laid
+          ? mLaid.map(n => savedPos[n.id] ? { ...n, position: savedPos[n.id] } : n)
+          : mLaid
         const laidIds = new Set(laidEdges.map(e => e.id))
         const manualEdges = savedEdges ? savedEdges.filter(e => !laidIds.has(e.id)) : []
         setNodes(nodesOut)
         setEdges([...laidEdges, ...manualEdges])
       } catch {
-        setNodes(laid); setEdges(laidEdges)
+        setNodes(mLaid); setEdges(laidEdges)
       }
     } else {
-      setNodes(laid)
+      setNodes(mLaid)
       setEdges(laidEdges)
     }
-    setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 80)
+    setTimeout(() => fitView({ padding: isMob ? 0.5 : 0.2, duration: 500 }), 80)
   }, [setNodes, setEdges, fitView, projetoId])
 
   const load = useCallback(async () => {
@@ -1364,6 +1506,11 @@ function FlowInner({ projetoId, userRole, altura }) {
   }, [projetoId, buildAndLayout])
 
   useEffect(() => { load() }, [load])
+
+  // Atualizar flag _mobile nos nós quando isMobile muda (resize)
+  useEffect(() => {
+    setNodes(prev => prev.map(n => ({ ...n, data: { ...n.data, _mobile: isMobile } })))
+  }, [isMobile, setNodes])
 
   // Auto-refresh quando fusão ou diagrama são salvos em outro componente
   useEffect(() => {
@@ -1398,7 +1545,7 @@ function FlowInner({ projetoId, userRole, altura }) {
       color = '#0891b2' // OLT backbone
     }
     setEdges(eds => addEdge({
-      ...params, type: 'bezier',
+      ...params, type: 'smoothstep',
       style: { stroke: color, strokeWidth: 1.5 },
       markerEnd: { type: MarkerType.ArrowClosed, color, width: 9, height: 9 },
     }, eds))
@@ -1560,7 +1707,7 @@ function FlowInner({ projetoId, userRole, altura }) {
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
         style={{ background: '#060a16' }}
-        defaultEdgeOptions={{ type: 'bezier' }}
+        defaultEdgeOptions={{ type: 'smoothstep' }}
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly && !isMobile}
         elementsSelectable={!readOnly}
@@ -1589,7 +1736,7 @@ function FlowInner({ projetoId, userRole, altura }) {
             borderRadius: 8,
             '--xy-controls-button-background-color': 'rgba(255,255,255,0.06)',
             '--xy-controls-button-color': 'rgba(255,255,255,0.7)',
-            ...(isMobile ? { transform: 'scale(1.4)', transformOrigin: 'bottom left' } : {}),
+            ...(isMobile ? { transform: 'scale(1.7)', transformOrigin: 'bottom left' } : {}),
           }}
         />
 

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { getDiagramaCaixa, saveDiagramaCaixa } from '@/actions/caixas'
+import { getDiagramaCaixa, saveDiagramaCaixa, getUsadosProjeto } from '@/actions/caixas'
 
 // ─── ABNT NBR 14721 ───────────────────────────────────────────────────────────
 const ABNT = [
@@ -87,42 +87,119 @@ function FibraSelect({ value, onChange, small }) {
 }
 
 // ─── Aba PON/OLT ─────────────────────────────────────────────────────────────
-function AbaOLT({ entrada, onChange }) {
+function AbaOLT({ entrada, onChange, bandejas }) {
+  const placas = entrada.dio_config?.placas ?? []
+
+  function updPlacas(newPlacas) {
+    onChange({ ...entrada, dio_config: { ...(entrada.dio_config ?? {}), placas: newPlacas } })
+  }
+  function addPlaca() {
+    const n = placas.length + 1
+    updPlacas([...placas, { num: n, label: `Placa ${n}`, portas: 16 }])
+  }
+  function remPlaca(num) { updPlacas(placas.filter(p => p.num !== num)) }
+  function updPlaca(num, p) { updPlacas(placas.map(pl => pl.num === num ? { ...pl, ...p } : pl)) }
+
+  // Compute PON usage per placa from bandejas
+  const ponPorPlaca = {}
+  ;(bandejas ?? []).forEach(b => (b.fusoes ?? []).forEach(f => {
+    if (f.tipo === 'pon' && f.pon_placa != null && f.pon_porta != null) {
+      const k = f.pon_placa
+      if (!ponPorPlaca[k]) ponPorPlaca[k] = new Set()
+      ponPorPlaca[k].add(f.pon_porta)
+    }
+  }))
+
   return (
-    <div style={S.sec}>
-      <p style={{ ...S.secTitle, marginBottom: 14 }}>Origem — OLT / PON</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px', gap: 12 }}>
-        <div>
-          <label style={S.lbl}>ID da OLT</label>
-          <input value={entrada.olt_id} onChange={e => onChange({ ...entrada, olt_id: e.target.value })}
-            placeholder="ex: OLT-01" style={{ ...S.inp, borderColor: entrada.olt_id ? '#1f6feb' : BORDER }} />
+    <div>
+      {/* Origem OLT */}
+      <div style={S.sec}>
+        <p style={{ ...S.secTitle, marginBottom: 14 }}>Origem — OLT / PON</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px', gap: 12 }}>
+          <div>
+            <label style={S.lbl}>ID da OLT</label>
+            <input value={entrada.olt_id} onChange={e => onChange({ ...entrada, olt_id: e.target.value })}
+              placeholder="ex: OLT-01" style={{ ...S.inp, borderColor: entrada.olt_id ? '#1f6feb' : BORDER }} />
+          </div>
+          <div>
+            <label style={S.lbl}>Placa / Slot</label>
+            {placas.length > 0 ? (
+              <select value={entrada.placa ?? ''} onChange={e => onChange({ ...entrada, placa: e.target.value ? +e.target.value : null })}
+                style={S.inp}>
+                <option value="">— Placa —</option>
+                {placas.map(p => <option key={p.num} value={p.num}>{p.label}</option>)}
+              </select>
+            ) : (
+              <input type="number" min={1} value={entrada.placa ?? ''} placeholder="1"
+                onChange={e => onChange({ ...entrada, placa: e.target.value ? +e.target.value : null })}
+                style={S.inp} />
+            )}
+          </div>
+          <div>
+            <label style={S.lbl}>PON Nº</label>
+            <input type="number" min={1} value={entrada.pon ?? ''}
+              onChange={e => onChange({ ...entrada, pon: e.target.value ? +e.target.value : null })}
+              placeholder="1" style={S.inp} />
+          </div>
+          <div>
+            <label style={S.lbl}>Porta OLT</label>
+            <input type="number" min={1} value={entrada.porta_olt ?? ''}
+              onChange={e => onChange({ ...entrada, porta_olt: e.target.value ? +e.target.value : null })}
+              placeholder="1" style={S.inp} />
+          </div>
         </div>
-        <div>
-          <label style={S.lbl}>PON / Slot</label>
-          <input type="number" min={1} value={entrada.pon ?? ''}
-            onChange={e => onChange({ ...entrada, pon: e.target.value ? +e.target.value : null })}
-            placeholder="1" style={S.inp} />
-        </div>
-        <div>
-          <label style={S.lbl}>Porta</label>
-          <input type="number" min={1} value={entrada.porta_olt ?? ''}
-            onChange={e => onChange({ ...entrada, porta_olt: e.target.value ? +e.target.value : null })}
-            placeholder="1" style={S.inp} />
-        </div>
+        {entrada.olt_id && (
+          <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={S.tag('#1f6feb')}>🖥️ {entrada.olt_id}</span>
+            {entrada.placa != null    && <span style={S.tag('#e3b341')}>Placa {entrada.placa}</span>}
+            {entrada.pon != null      && <span style={S.tag('#8957e5')}>PON {entrada.pon}</span>}
+            {entrada.porta_olt != null && <span style={S.tag('#3fb950')}>Porta {entrada.porta_olt}</span>}
+          </div>
+        )}
       </div>
-      {entrada.olt_id && (
-        <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={S.tag('#1f6feb')}>🖥️ {entrada.olt_id}</span>
-          {entrada.pon != null      && <span style={S.tag('#8957e5')}>PON {entrada.pon}</span>}
-          {entrada.porta_olt != null && <span style={S.tag('#3fb950')}>Porta {entrada.porta_olt}</span>}
+
+      {/* DIO — Configuração de Slots/Placas */}
+      <div style={S.sec}>
+        <div style={S.secHead}>
+          <span style={S.secTitle}>DIO — Slots / Placas</span>
+          <button onClick={addPlaca} style={S.btnAdd}>+ Placa</button>
         </div>
-      )}
+        {placas.length === 0 && (
+          <p style={{ color: '#484f58', fontSize: 12 }}>Nenhuma placa configurada. Clique "+ Placa".</p>
+        )}
+        {placas.map(p => {
+          const usadas = ponPorPlaca[p.num]?.size ?? 0
+          const pct    = Math.min(1, usadas / Math.max(1, p.portas))
+          const cor    = pct >= 1 ? '#f85149' : pct >= 0.8 ? '#e3b341' : '#3fb950'
+          return (
+            <div key={p.num} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, padding: '8px 10px',
+              backgroundColor: BG3, border: `1px solid ${pct >= 1 ? '#f85149' : BORDER}`, borderRadius: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#8b949e', minWidth: 22 }}>#{p.num}</span>
+              <input value={p.label} onChange={e => updPlaca(p.num, { label: e.target.value })}
+                style={{ ...S.inp, flex: 1, padding: '4px 8px', fontSize: 12, height: 28 }} />
+              <span style={{ fontSize: 10, color: '#8b949e', whiteSpace: 'nowrap' }}>Portas:</span>
+              <input type="number" min={1} max={128} value={p.portas}
+                onChange={e => updPlaca(p.num, { portas: +e.target.value || 16 })}
+                style={{ ...S.inpSm, width: 52 }} />
+              {/* Usage bar */}
+              <div style={{ width: 80, flexShrink: 0 }}>
+                <div style={{ height: 5, borderRadius: 3, backgroundColor: '#30363d', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct * 100}%`, backgroundColor: cor, borderRadius: 3, transition: 'width .3s' }} />
+                </div>
+                <span style={{ fontSize: 9, color: cor, fontWeight: 700 }}>{usadas}/{p.portas} PONs</span>
+                {pct >= 1 && <span style={{ fontSize: 9, color: '#f85149', fontWeight: 700, marginLeft: 4 }}>CHEIO</span>}
+              </div>
+              <button onClick={() => remPlaca(p.num)} style={{ ...S.btnDel, padding: '3px 6px', fontSize: 10 }}>✕</button>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
 // ─── Aba Bandejas ─────────────────────────────────────────────────────────────
-function AbaBandejas({ bandejas, onChange }) {
+function AbaBandejas({ bandejas, onChange, entrada, splitters, onChangeSplitters, usadosGlobal }) {
   function addBandeja() {
     onChange([...bandejas, { id: uid(), nome: `Bandeja ${bandejas.length + 1}`, fusoes: [] }])
   }
@@ -138,8 +215,37 @@ function AbaBandejas({ bandejas, onChange }) {
   }
   function upFusao(bId, fId, p) {
     const b = bandejas.find(b => b.id === bId)
-    upBandeja(bId, { fusoes: b.fusoes.map(f => f.id === fId ? { ...f, ...p } : f) })
+    const currentF = b.fusoes.find(f => f.id === fId)
+    const updated = { ...currentF, ...p }
+    upBandeja(bId, { fusoes: b.fusoes.map(f => f.id === fId ? updated : f) })
+    // Sync linked splitter automatically
+    if (updated.splitter_id && onChangeSplitters && splitters) {
+      onChangeSplitters(splitters.map(s => s.id === updated.splitter_id ? {
+        ...s,
+        entrada: { ...s.entrada, fibra: updated.entrada?.fibra ?? s.entrada.fibra },
+        pon_placa: updated.pon_placa ?? null,
+        pon_porta: updated.pon_porta ?? null,
+      } : s))
+    }
   }
+
+  const placas = entrada?.dio_config?.placas ?? []
+
+  // PON em uso: locais (todas as bandejas desta caixa) + outras caixas do projeto
+  const ponUsadosLocal = new Set()
+  bandejas.forEach(b => (b.fusoes ?? []).forEach(f => {
+    if (f.tipo === 'pon' && f.pon_placa != null && f.pon_porta != null) {
+      ponUsadosLocal.add(`${f.pon_placa}-${f.pon_porta}`)
+    }
+  }))
+  const ponUsados = new Set([...ponUsadosLocal, ...(usadosGlobal?.pons ?? [])])
+
+  // DIO em uso: locais + outras caixas do projeto
+  const dioLocal = new Set()
+  bandejas.forEach(b => (b.fusoes ?? []).forEach(f => {
+    if (f.porta_dio != null) dioLocal.add(Number(f.porta_dio))
+  }))
+  const dioGlobal = new Set([...dioLocal, ...(usadosGlobal?.dios ?? [])])
 
   return (
     <div>
@@ -180,8 +286,9 @@ function AbaBandejas({ bandejas, onChange }) {
                     <th colSpan={2} style={{ padding: '5px 8px', color: '#3fb950', fontWeight: 700, borderLeft: '2px solid rgba(63,185,80,0.3)', textAlign: 'center' }}>
                       🟢 Fibra Saída
                     </th>
+                    <th style={{ padding: '5px 6px', color: '#f97316', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>DIO</th>
                     <th style={{ padding: '5px 6px', color: '#8b949e', fontWeight: 700, textAlign: 'center' }}>Tipo</th>
-                    <th style={{ padding: '5px 6px', color: '#8b949e', fontWeight: 700, textAlign: 'left', minWidth: 80 }}>Obs</th>
+                    <th style={{ padding: '5px 6px', color: '#8b949e', fontWeight: 700, textAlign: 'left', minWidth: 80 }}>Obs / PON</th>
                     <th style={{ width: 28 }} />
                   </tr>
                 </thead>
@@ -214,6 +321,32 @@ function AbaBandejas({ bandejas, onChange }) {
                           style={S.inpSm} title="Tubo" />
                       </td>
 
+                      {/* Porta DIO — bloqueio global */}
+                      <td style={{ padding: '5px 4px' }}>
+                        {(() => {
+                          const totalDIO = (placas.length > 0)
+                            ? placas.reduce((s, p) => s + (p.portas ?? 0), 0)
+                            : 48
+                          // Global (projeto inteiro): exclui apenas o valor desta fusão
+                          const portasOcupadas = new Set([...dioGlobal].filter(p => p !== f.porta_dio))
+                          return (
+                            <select
+                              value={f.porta_dio ?? ''}
+                              onChange={e => upFusao(b.id, f.id, { porta_dio: e.target.value ? +e.target.value : null })}
+                              style={{ ...S.inp, width: 58, padding: '3px 5px', fontSize: 11,
+                                borderColor: f.porta_dio != null ? '#f97316' : BORDER }}
+                            >
+                              <option value="">—</option>
+                              {Array.from({ length: totalDIO }, (_, i) => {
+                                const p = i + 1
+                                const occ = portasOcupadas.has(p)
+                                return <option key={p} value={p} disabled={occ}>{p}{occ ? ' [-]' : ''}</option>
+                              })}
+                            </select>
+                          )
+                        })()}
+                      </td>
+
                       <td style={{ padding: '5px 4px' }}>
                         <select value={f.tipo} onChange={e => upFusao(b.id, f.id, { tipo: e.target.value })}
                           style={{ ...S.inp, padding: '3px 5px', width: 80, fontSize: 11 }}>
@@ -224,9 +357,65 @@ function AbaBandejas({ bandejas, onChange }) {
                         </select>
                       </td>
 
-                      <td style={{ padding: '5px 4px' }}>
-                        <input value={f.obs} onChange={e => upFusao(b.id, f.id, { obs: e.target.value })}
-                          placeholder="obs..." style={{ ...S.inp, padding: '3px 7px', fontSize: 11, minWidth: 80 }} />
+                      <td style={{ padding: '5px 4px', minWidth: f.tipo === 'pon' ? 220 : 80 }}>
+                        {f.tipo === 'pon' ? (() => {
+                          const placaAtual = placas.find(p => p.num === f.pon_placa)
+                          // Duplicate = usado em outra fusão desta caixa OU em outra caixa do projeto
+                          const localDup = f.pon_placa != null && f.pon_porta != null &&
+                            bandejas.some(bx => (bx.fusoes ?? []).some(fx =>
+                              fx.id !== f.id && fx.pon_placa === f.pon_placa && fx.pon_porta === f.pon_porta))
+                          const globalDup = f.pon_placa != null && f.pon_porta != null &&
+                            (usadosGlobal?.pons ?? new Set()).has(`${f.pon_placa}-${f.pon_porta}`)
+                          const isDup = localDup || globalDup
+                          return (
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                              {/* Placa */}
+                              <select value={f.pon_placa ?? ''} onChange={e => upFusao(b.id, f.id, { pon_placa: e.target.value ? +e.target.value : null, pon_porta: null })}
+                                style={{ ...S.inp, width: 90, padding: '3px 5px', fontSize: 11, borderColor: '#8957e5' }}>
+                                <option value="">— Placa —</option>
+                                {placas.map(p => <option key={p.num} value={p.num}>{p.label}</option>)}
+                                {!placas.length && <option value="1">Placa 1</option>}
+                              </select>
+                              {/* PON porta — bloqueio global */}
+                              <select value={f.pon_porta ?? ''} onChange={e => upFusao(b.id, f.id, { pon_porta: e.target.value ? +e.target.value : null })}
+                                style={{ ...S.inp, width: 62, padding: '3px 5px', fontSize: 11, borderColor: isDup ? '#f85149' : '#8957e5' }}>
+                                <option value="">P</option>
+                                {Array.from({ length: placaAtual?.portas ?? 16 }, (_, i) => {
+                                  const p = i + 1
+                                  const k = `${f.pon_placa}-${p}`
+                                  const occupied = p !== f.pon_porta && ponUsados.has(k)
+                                  return <option key={p} value={p} disabled={occupied}>{p}{occupied ? ' [-]' : ''}</option>
+                                })}
+                              </select>
+                              {/* Splitter vinculado */}
+                              <select value={f.splitter_id ?? ''} onChange={e => {
+                                const sid = e.target.value || null
+                                upFusao(b.id, f.id, { splitter_id: sid })
+                                if (sid && onChangeSplitters && splitters) {
+                                  onChangeSplitters(splitters.map(s => s.id === sid ? {
+                                    ...s,
+                                    entrada: { ...s.entrada, fibra: f.entrada?.fibra ?? s.entrada.fibra },
+                                    pon_placa: f.pon_placa ?? null,
+                                    pon_porta: f.pon_porta ?? null,
+                                  } : s))
+                                }
+                              }} style={{ ...S.inp, width: 90, padding: '3px 5px', fontSize: 11,
+                                borderColor: f.splitter_id ? '#e3b341' : BORDER }}>
+                                <option value="">↳ Splitter</option>
+                                {(splitters ?? []).map((s, si) => <option key={s.id} value={s.id}>{s.nome || `SPL ${si + 1}`}</option>)}
+                              </select>
+                              {isDup && <span title={globalDup ? 'PON já está em uso em outra CDO/CEO do projeto' : 'PON duplicada nesta caixa'} style={{ fontSize: 10, color: '#f85149', fontWeight: 700 }}>⚠{globalDup ? 'PROJ' : 'DUP'}</span>}
+                              {!isDup && f.pon_placa && f.pon_porta && (
+                                <span style={{ fontSize: 9, color: '#8957e5', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                                  P{f.pon_placa}/{f.pon_porta}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })() : (
+                          <input value={f.obs ?? ''} onChange={e => upFusao(b.id, f.id, { obs: e.target.value })}
+                            placeholder="obs..." style={{ ...S.inp, padding: '3px 7px', fontSize: 11, minWidth: 80 }} />
+                        )}
                       </td>
 
                       <td style={{ padding: '5px 4px' }}>
@@ -251,7 +440,7 @@ function AbaBandejas({ bandejas, onChange }) {
 }
 
 // ─── Aba Splitters ────────────────────────────────────────────────────────────
-function AbaSplitters({ splitters, onChange }) {
+function AbaSplitters({ splitters, onChange, bandejas }) {
   function addSplitter() {
     const saidas = Array.from({ length: 8 }, (_, i) => ({ porta: i + 1, tipo: 'cto', cto_id: '', obs: '' }))
     onChange([...splitters, { id: uid(), nome: `Splitter ${splitters.length + 1}`, tipo: '1x8', entrada: { tubo: 1, fibra: 1 }, saidas }])
@@ -283,8 +472,10 @@ function AbaSplitters({ splitters, onChange }) {
       {splitters.map((s, si) => {
         const ligadas = s.saidas.filter(sd => sd.cto_id?.trim()).length
         const corEnt = ABNT.find(a => a.idx === s.entrada.fibra)
+        // Busca fusão vinculada a este splitter nas bandejas
+        const linkedFusao = (bandejas ?? []).flatMap(b => b.fusoes ?? []).find(f => f.splitter_id === s.id)
         return (
-          <div key={s.id} style={{ ...S.sec, borderLeft: '3px solid #e3b341' }}>
+          <div key={s.id} style={{ ...S.sec, borderLeft: `3px solid ${linkedFusao ? '#e3b341' : '#484f58'}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#e3b341' }}>Splitter {si + 1}</span>
               <input value={s.nome} onChange={e => upSplitter(s.id, { nome: e.target.value })}
@@ -296,6 +487,23 @@ function AbaSplitters({ splitters, onChange }) {
               <span style={S.tag('#3fb950')}>{ligadas}/{s.saidas.length} ligadas</span>
               <button onClick={() => remSplitter(s.id)} style={S.btnDel}>🗑️</button>
             </div>
+
+            {/* PON herdada da bandeja */}
+            {linkedFusao ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '6px 10px',
+                backgroundColor: 'rgba(137,87,229,0.08)', border: '1px solid rgba(137,87,229,0.25)',
+                borderRadius: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#bc8cff', whiteSpace: 'nowrap' }}>↳ PON herdada:</span>
+                {linkedFusao.pon_placa != null && <span style={S.tag('#e3b341')}>Placa {linkedFusao.pon_placa}</span>}
+                {linkedFusao.pon_porta != null && <span style={S.tag('#8957e5')}>PON {linkedFusao.pon_porta}</span>}
+                <span style={S.tag('#58a6ff')}>FO {linkedFusao.entrada?.fibra ?? '?'}</span>
+                <span style={{ fontSize: 10, color: '#484f58' }}>— todas as saídas pertencem a esta PON</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: '#484f58', padding: '4px 10px', marginBottom: 8 }}>
+                Sem bandeja vinculada — selecione um splitter na aba Bandejas (fusão tipo PON).
+              </div>
+            )}
 
             {/* Entrada */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px', backgroundColor: 'rgba(88,166,255,0.05)', border: '1px solid rgba(88,166,255,0.15)', borderRadius: 8, marginBottom: 10 }}>
@@ -401,6 +609,7 @@ function AbaResumo({ entrada, bandejas, splitters, cabos }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10, marginBottom: 20 }}>
         {[
           { label: 'OLT', val: entrada.olt_id || '—', cor: '#1f6feb' },
+          { label: 'Placa', val: entrada.placa ?? '—', cor: '#e3b341' },
           { label: 'PON', val: entrada.pon ?? '—', cor: '#8957e5' },
           { label: 'Porta', val: entrada.porta_olt ?? '—', cor: '#3fb950' },
           { label: 'Bandejas', val: bandejas.length, cor: '#58a6ff' },
@@ -476,32 +685,67 @@ export default function DiagramaCDOEditor({ ceId, projetoId, capacidadeSaidas, i
   const [sucesso, setSucesso]   = useState(null)
   const [erro, setErro]         = useState(null)
 
-  const [entrada, setEntrada]     = useState({ olt_id: '', pon: null, porta_olt: null })
-  const [bandejas, setBandejas]   = useState([])
-  const [splitters, setSplitters] = useState([])
-  const [cabos, setCabos]         = useState([])
+  const [entrada, setEntrada]         = useState({ olt_id: '', pon: null, porta_olt: null, placa: null, dio_config: { placas: [{ num: 1, label: 'Placa 1', portas: 16 }] } })
+  const [bandejas, setBandejas]       = useState([])
+  const [splitters, setSplitters]     = useState([])
+  const [cabos, setCabos]             = useState([])
+  const [usadosGlobal, setUsadosGlobal] = useState({ pons: new Set(), dios: new Set() })
 
   function aplicarDiagrama(d) {
     if (!d) return
-    setEntrada({ olt_id: d.entrada?.olt_id ?? '', pon: d.entrada?.pon ?? null, porta_olt: d.entrada?.porta_olt ?? null })
+    setEntrada({
+      olt_id:     d.entrada?.olt_id ?? '',
+      pon:        d.entrada?.pon ?? null,
+      porta_olt:  d.entrada?.porta_olt ?? null,
+      placa:      d.entrada?.placa ?? null,
+      dio_config: d.entrada?.dio_config ?? { placas: [{ num: 1, label: 'Placa 1', portas: 16 }] },
+    })
     setBandejas(d.bandejas   ?? [])
     setSplitters(d.splitters ?? [])
     setCabos(d.cabos         ?? [])
   }
 
   useEffect(() => {
-    if (initialDiagrama) { aplicarDiagrama(initialDiagrama); setCarregando(false); return }
     let cancelado = false
-    getDiagramaCaixa(ceId, projetoId)
-      .then(res => { if (!cancelado && res?.diagrama) aplicarDiagrama(res.diagrama) })
-      .catch(e  => { if (!cancelado) setErro('Erro ao carregar: ' + e.message) })
-      .finally(() => { if (!cancelado) setCarregando(false) })
+    if (initialDiagrama) {
+      aplicarDiagrama(initialDiagrama)
+      setCarregando(false)
+    } else {
+      getDiagramaCaixa(ceId, projetoId)
+        .then(res => { if (!cancelado && res?.diagrama) aplicarDiagrama(res.diagrama) })
+        .catch(e  => { if (!cancelado) setErro('Erro ao carregar: ' + e.message) })
+        .finally(() => { if (!cancelado) setCarregando(false) })
+    }
+    // Carrega uso global de PON e DIO de todas as outras caixas do projeto
+    getUsadosProjeto(ceId, projetoId)
+      .then(res => { if (!cancelado) setUsadosGlobal({ pons: new Set(res.pons), dios: new Set(res.dios) }) })
+      .catch(() => {}) // não-crítico
     return () => { cancelado = true }
   }, [ceId, projetoId, initialDiagrama])
 
   async function salvar() {
     if (saving) return
-    setSaving(true); setErro(null); setSucesso(null)
+    setErro(null); setSucesso(null)
+
+    // Validação: duplicidade local e global de PON e DIO
+    const ponCheck = new Set([...(usadosGlobal?.pons ?? [])])
+    const dioCheck = new Set([...(usadosGlobal?.dios ?? [])])
+    const errosValidacao = []
+    bandejas.forEach(b => (b.fusoes ?? []).forEach(f => {
+      if (f.tipo === 'pon' && f.pon_placa != null && f.pon_porta != null) {
+        const pk = `${f.pon_placa}-${f.pon_porta}`
+        if (ponCheck.has(pk)) errosValidacao.push(`PON Placa ${f.pon_placa} / Porta ${f.pon_porta} já está em uso no projeto`)
+        else ponCheck.add(pk)
+      }
+      if (f.porta_dio != null) {
+        const dk = Number(f.porta_dio)
+        if (dioCheck.has(dk)) errosValidacao.push(`Porta DIO ${dk} já está em uso no projeto`)
+        else dioCheck.add(dk)
+      }
+    }))
+    if (errosValidacao.length > 0) { setErro(errosValidacao[0]); return }
+
+    setSaving(true)
     try {
       const res = await saveDiagramaCaixa({ ce_id: ceId, projeto_id: projetoId, diagrama: { entrada, bandejas, splitters, cabos } })
       setSucesso(res?.saved ? 'Diagrama salvo!' : 'Salvo (sem alterações).')
@@ -557,9 +801,9 @@ export default function DiagramaCDOEditor({ ceId, projetoId, capacidadeSaidas, i
 
       {/* Conteúdo */}
       <div style={S.body}>
-        {aba === 'olt'       && <AbaOLT       entrada={entrada}     onChange={setEntrada}   />}
-        {aba === 'bandejas'  && <AbaBandejas  bandejas={bandejas}   onChange={setBandejas}  />}
-        {aba === 'splitters' && <AbaSplitters splitters={splitters} onChange={setSplitters} />}
+        {aba === 'olt'       && <AbaOLT       entrada={entrada}     onChange={setEntrada}  bandejas={bandejas} />}
+        {aba === 'bandejas'  && <AbaBandejas  bandejas={bandejas}   onChange={setBandejas} entrada={entrada} splitters={splitters} onChangeSplitters={setSplitters} usadosGlobal={usadosGlobal} />}
+        {aba === 'splitters' && <AbaSplitters splitters={splitters} onChange={setSplitters} bandejas={bandejas} />}
         {aba === 'cabos'     && <AbaCabos     cabos={cabos}         onChange={setCabos}     />}
         {aba === 'resumo'    && <AbaResumo    entrada={entrada} bandejas={bandejas} splitters={splitters} cabos={cabos} />}
       </div>
