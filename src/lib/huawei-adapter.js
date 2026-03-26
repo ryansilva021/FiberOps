@@ -10,18 +10,8 @@
  * A per-OLT mutex prevents concurrent SSH sessions to the same device.
  */
 
-// Dynamic import guard — set to null if ssh2 is unavailable
-let ssh2Module = null
-try {
-  // Evaluated at module load time; wrap in a local async fn if needed
-  // We use a synchronous require-style approach via createRequire
-  const { createRequire } = await import('module')
-  const req = createRequire(import.meta.url)
-  ssh2Module = req('ssh2')
-} catch {
-  // ssh2 not installed — all operations will use mock mode
-  console.warn('[HuaweiAdapter] ssh2 not available, running in mock mode')
-}
+// ssh2 is loaded lazily inside connect() to avoid bundler issues.
+// Do NOT import it at module level — Next.js bundler will fail.
 
 // Per-OLT IP mutex: Map<ip, Promise<void>>
 const oltMutex = new Map()
@@ -51,10 +41,10 @@ export class HuaweiOltAdapter {
    * @param {{ ip: string, ssh_user: string, ssh_pass: string, ssh_port?: number }} olt
    */
   constructor(olt) {
-    this.olt     = olt
-    this.client  = null
-    this.stream  = null
-    this.isMock  = !ssh2Module || olt.ip === 'mock'
+    this.olt      = olt
+    this.client   = null
+    this.stream   = null
+    this.isMock   = olt.ip === 'mock'
     this._release = null
   }
 
@@ -69,7 +59,18 @@ export class HuaweiOltAdapter {
 
     this._release = await acquireLock(this.olt.ip)
 
-    const { Client } = ssh2Module
+    // Lazy dynamic import — keeps ssh2 out of the webpack bundle.
+    // Falls back to mock if ssh2 is not installed.
+    let Client
+    try {
+      const ssh2 = await import('ssh2')
+      Client = ssh2.Client
+    } catch {
+      console.warn('[HuaweiAdapter] ssh2 not available, switching to mock mode')
+      this.isMock = true
+      if (this._release) { this._release(); this._release = null }
+      return
+    }
 
     await new Promise((resolve, reject) => {
       this.client = new Client()

@@ -15,6 +15,7 @@ import { processNextEvent } from '@/actions/provisioning'
 const NOC_ALLOWED   = ['superadmin', 'admin', 'noc']
 const WORKER_KEY    = process.env.NOC_WORKER_KEY ?? null
 
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request) {

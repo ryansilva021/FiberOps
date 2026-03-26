@@ -13,6 +13,7 @@ const NOC_ALLOWED = ['superadmin', 'admin', 'noc']
 const POLL_MS     = 2000
 const HEARTBEAT_MS = 15000
 
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {

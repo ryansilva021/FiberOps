@@ -14,6 +14,7 @@ import { ONU } from '@/models/ONU'
 
 const NOC_ALLOWED = ['superadmin', 'admin', 'noc', 'tecnico']
 
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {

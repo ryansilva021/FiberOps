@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
   reactCompiler: true,
+  // Prevent ssh2 (Node.js-only) from being bundled by webpack.
+  // It will be loaded at runtime from node_modules instead.
+  serverExternalPackages: ['ssh2'],
 };
 
 export default nextConfig;
