@@ -46,11 +46,13 @@ export const ROLES = {
   SUPERADMIN: 'superadmin',
   ADMIN:      'admin',
   TECNICO:    'tecnico',
+  NOC:        'noc',
   USER:       'user',
 }
 
 export const WRITE_ROLES = [ROLES.SUPERADMIN, ROLES.ADMIN]
 export const FIELD_ROLES = [ROLES.SUPERADMIN, ROLES.ADMIN, ROLES.TECNICO]
+export const NOC_ROLES   = [ROLES.SUPERADMIN, ROLES.ADMIN, ROLES.NOC]
 export const ALL_ROLES   = [ROLES.SUPERADMIN, ROLES.ADMIN, ROLES.TECNICO, ROLES.USER]
 
 // ---------------------------------------------------------------------------
@@ -61,6 +63,7 @@ const ROLE_RANK = {
   superadmin: 4,
   admin:      3,
   tecnico:    2,
+  noc:        2,
   user:       1,
 }
 

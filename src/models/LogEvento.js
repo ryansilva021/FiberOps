@@ -49,7 +49,7 @@ const LogEventoSchema = new Schema(
     // Role do operador no momento da ação
     role: {
       type:    String,
-      enum:    ["superadmin", "admin", "tecnico", "user", null],
+      enum:    ["superadmin", "admin", "tecnico", "noc", "user", null],
       default: null,
     },
 

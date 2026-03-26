@@ -8,6 +8,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 
 const NAV_ITEMS = [
   { href: "/",                   label: "Mapa",        icon: "🗺️" },
+  { href: "/admin/noc",          label: "NOC",         icon: "🖥️", allowedRoles: ["superadmin", "admin", "noc"] },
   // --- Admin ---
   { href: "/admin/campo",        label: "Campo",       icon: "📡", minRole: "admin" },
   { href: "/admin/diagramas",    label: "Fusões ABNT", icon: "🧩", minRole: "admin" },
@@ -25,6 +26,7 @@ const ROLE_RANK = {
   superadmin: 4,
   admin: 3,
   tecnico: 2,
+  noc: 2,
   user: 1,
 };
 
@@ -39,9 +41,11 @@ export default function SidebarLayout({ session, children }) {
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
 
-  const itensVisiveis = NAV_ITEMS.filter(
-    (item) => !item.minRole || hasMinRole(role, item.minRole),
-  );
+  const itensVisiveis = NAV_ITEMS.filter((item) => {
+    if (item.allowedRoles) return item.allowedRoles.includes(role)
+    if (item.minRole) return hasMinRole(role, item.minRole)
+    return true
+  });
 
   const sidebarStyle = {
     backgroundColor: "var(--sidebar-bg)",
@@ -122,9 +126,13 @@ export default function SidebarLayout({ session, children }) {
           {itensVisiveis.map((item, idx, arr) => {
             const ativa = pathname === item.href
             const prevItem = arr[idx - 1]
-            // Separador visual entre grupos: público / staff (tecnico+admin) / superadmin
-            const grupo = (r) => r === 'superadmin' ? 'superadmin' : r ? 'staff' : 'public'
-            const showSeparator = idx > 0 && grupo(item.minRole) !== grupo(prevItem?.minRole)
+            // Separador visual entre grupos: público / staff (tecnico+admin+noc) / superadmin
+            const grupo = (i) => {
+              if (i.minRole === 'superadmin') return 'superadmin'
+              if (i.minRole || i.allowedRoles) return 'staff'
+              return 'public'
+            }
+            const showSeparator = idx > 0 && grupo(item) !== grupo(prevItem)
             return (
               <div key={item.href}>
                 {showSeparator && (

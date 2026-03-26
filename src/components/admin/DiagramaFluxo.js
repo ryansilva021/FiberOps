@@ -8,8 +8,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  ReactFlow, Controls, MiniMap, Background, BackgroundVariant,
+  ReactFlow, Controls, Background, BackgroundVariant,
   Panel, Handle, Position, useReactFlow, ReactFlowProvider,
+  useViewport, useStore,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Dagre from '@dagrejs/dagre'
@@ -1011,7 +1012,7 @@ function buildGraph(topologia, T) {
 
         // Verifica se o destino está configurado de acordo com o tipo
         const hasDest =
-          destTipo === 'pon'          ? (s.pon_placa != null || s.pon_porta != null || s.obs?.trim() || s.cto_id?.trim()) :
+          destTipo === 'pon'          ? (s.pon_placa != null || s.pon_porta != null || s.obs?.trim() || (s.pon_continuacao?.length > 0)) :
           destTipo === 'conector'     ? (s.obs?.trim() || s.cto_id?.trim()) :
           destTipo === 'passagem'     ? true :
           destTipo === 'fusao_bandeja'? true :
@@ -1081,7 +1082,7 @@ function buildGraph(topologia, T) {
               data: { T,
                 nome: s.obs?.trim()
                   || (s.pon_placa != null && s.pon_porta != null ? `P${s.pon_placa}/PON${s.pon_porta}` : null)
-                  || s.cto_id || `PON S${porta}`,
+                  || `PON S${porta}`,
                 label: 'PON' },
             })
           }
@@ -1089,6 +1090,44 @@ function buildGraph(topologia, T) {
             { ...T.drop, stroke: portaHex, strokeWidth: 1.5 },
             { sourceHandle: `s-${porta}`, targetHandle: 'in', ...edgeLabelOpts }
           )
+
+          // ── Continuação PON: CTOs conectadas em série a partir do nó PON ──
+          let ponPrevId    = ponId
+          let ponPrevFibra = porta
+          for (const cRaw of (s.pon_continuacao ?? [])) {
+            const cItem   = typeof cRaw === 'string' ? { cto_id: cRaw, fibra: null } : (cRaw ?? {})
+            const cCtoId  = cItem.cto_id?.trim()
+            if (!cCtoId) continue
+            const cKey     = String(cCtoId)
+            const outFibra = cItem.fibra ?? ponPrevFibra
+            const outHex   = abntHex(outFibra)
+            if (!ctoSet.has(cKey)) {
+              ctoSet.add(cKey)
+              const cData = lookupCTO(cCtoId) ?? { cto_id: cCtoId, nome: `CTO ${cCtoId}` }
+              nodes.push({
+                id: `cto-${cKey}`, type: 'cto', position: { x: 0, y: 0 },
+                data: {
+                  T, nome: cData.nome, cto_id: cData.cto_id ?? cCtoId,
+                  capacidade: cData.capacidade ?? 16, ocupacao: cData.ocupacao ?? 0,
+                  fibraEntrada: outFibra,
+                  bandejas:  cData.diagrama?.bandejas  ?? [],
+                  splitters: cData.diagrama?.splitters ?? [],
+                },
+              })
+            }
+            edge(ponPrevId, `cto-${cKey}`,
+              { ...T.drop, stroke: outHex, strokeWidth: 1.5, strokeDasharray: '6,3' },
+              { sourceHandle: 'out', targetHandle: 'in',
+                label: `F${outFibra}`,
+                labelStyle:   { fill: outHex, fontSize: 9, fontWeight: 700 },
+                labelBgStyle: { fill: T.ctoBg + 'cc', borderRadius: 3 },
+              }
+            )
+            followCascade(`cto-${cKey}`, cCtoId, outFibra)
+            expandCTOFusoes(`cto-${cKey}`, cCtoId, lookupCTO(cCtoId))
+            ponPrevId    = `cto-${cKey}`
+            ponPrevFibra = outFibra
+          }
           continue
         }
 
@@ -1445,54 +1484,306 @@ function dagreLayout(nodes, edges) {
   return laid
 }
 
-// ─── Painel de legenda ────────────────────────────────────────────────────────
+// ─── Painel de legenda (compacto + recolhível) ────────────────────────────────
 
 function LegendPanel({ T }) {
+  const [open, setOpen] = useState(false)
+  const links = [
+    { label: 'OLT→CDO',  color: T.feeder.stroke,  w: 3,   dash: '' },
+    { label: 'CDO→SPL',  color: T.distrib.stroke, w: 2,   dash: '' },
+    { label: 'SPL→CTO',  color: T.drop.stroke,    w: 1.5, dash: '' },
+    { label: 'Cascata',  color: T.drop.stroke,    w: 1.5, dash: '5,3' },
+  ]
   return (
     <div style={{
       background: T.panelBg, border: `1px solid ${T.panelBorder}`,
-      borderRadius: 10, padding: '10px 14px', backdropFilter: 'blur(6px)',
-      fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", minWidth: 180,
+      borderRadius: 8, backdropFilter: 'blur(6px)',
+      fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
+      overflow: 'hidden',
     }}>
-      {/* Tipos de enlace */}
-      <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
-        letterSpacing: '0.08em', color: T.muted, marginBottom: 6 }}>
-        Tipos de enlace
-      </div>
-      {[
-        { label: 'Feeder  OLT → CDO',    color: T.feeder.stroke,  w: 3 },
-        { label: 'Distribuição  CDO → SPL', color: T.distrib.stroke, w: 2 },
-        { label: 'Drop  SPL → CTO',      color: T.drop.stroke,    w: 1.5 },
-      ].map(it => (
-        <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <svg width={28} height={10} style={{ flexShrink: 0 }}>
-            <line x1={0} y1={5} x2={28} y2={5} stroke={it.color} strokeWidth={it.w} />
-          </svg>
-          <span style={{ fontSize: 10, color: T.muted }}>{it.label}</span>
-        </div>
-      ))}
-      {/* Fibras ABNT */}
-      <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
-        letterSpacing: '0.08em', color: T.muted, marginTop: 8, marginBottom: 6,
-        borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>
-        Fibras ABNT NBR 14721
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-        {ABNT.map(f => (
-          <div key={f.idx}
-            title={`F${f.idx} — ${f.nome}`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 3,
-              padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-              background: f.hex + '28', border: `1px solid ${f.hex}55`,
-              color: f.hex,
-            }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: f.hex, display: 'inline-block' }} />
-            F{f.idx}
+      {/* Toggle header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '5px 8px', width: '100%', cursor: 'pointer',
+          background: 'none', border: 'none', color: T.muted,
+          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+        }}
+      >
+        <span style={{ fontSize: 11 }}>📋</span>
+        Legenda
+        <span style={{ marginLeft: 'auto', fontSize: 10 }}>{open ? '▾' : '▸'}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '0 8px 8px', borderTop: `1px solid ${T.panelBorder}` }}>
+          {/* Tipos de enlace */}
+          <div style={{ paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {links.map(it => (
+              <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <svg width={22} height={8} style={{ flexShrink: 0 }}>
+                  <line x1={0} y1={4} x2={22} y2={4}
+                    stroke={it.color} strokeWidth={it.w}
+                    strokeDasharray={it.dash || undefined} />
+                </svg>
+                <span style={{ fontSize: 9, color: T.muted, whiteSpace: 'nowrap' }}>{it.label}</span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+          {/* Fibras ABNT — dots only com tooltip */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 6, paddingTop: 5, borderTop: `1px solid ${T.border}` }}>
+            {ABNT.map(f => (
+              <div key={f.idx} title={`F${f.idx} ${f.nome}`} style={{
+                display: 'flex', alignItems: 'center', gap: 2,
+                padding: '1px 4px', borderRadius: 3, fontSize: 9, fontWeight: 700,
+                background: f.hex + '22', border: `1px solid ${f.hex}44`, color: f.hex,
+                cursor: 'default',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: f.hex, display: 'inline-block', flexShrink: 0 }} />
+                {f.idx}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// ─── Painel de navegação customizado ──────────────────────────────────────────
+
+const MAP_W   = 260   // largura do SVG
+const MAP_H   = 160   // altura do SVG
+const MAP_PAD = 8
+
+// hex6 → rgba para compatibilidade SVG universal
+function hexAlpha(hex, a) {
+  const h = (hex ?? '#888888').replace('#', '')
+  const r = parseInt(h.slice(0,2), 16) || 0
+  const g = parseInt(h.slice(2,4), 16) || 0
+  const b = parseInt(h.slice(4,6), 16) || 0
+  return `rgba(${r},${g},${b},${a})`
+}
+
+function MapPanel({ T, rfNodes, rfEdges }) {
+  const [open, setOpen] = useState(true)
+
+  const { x: vpX, y: vpY, zoom } = useViewport()
+  const rfW = useStore(s => s.width)
+  const rfH = useStore(s => s.height)
+
+  const nodes = rfNodes ?? []
+  const edges = rfEdges ?? []
+
+  // Lookup rápido de nó por id
+  const nodeById = useMemo(() => {
+    const m = new Map()
+    for (const n of nodes) m.set(n.id, n)
+    return m
+  }, [nodes])
+
+  // Bounding-box de todos os nós no espaço do grafo
+  const bbox = useMemo(() => {
+    if (!nodes.length) return null
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const n of nodes) {
+      const w = n.measured?.width  ?? NODE_W[n.type] ?? 220
+      const h = n.measured?.height ?? NODE_H[n.type] ?? 140
+      minX = Math.min(minX, n.position.x)
+      minY = Math.min(minY, n.position.y)
+      maxX = Math.max(maxX, n.position.x + w)
+      maxY = Math.max(maxY, n.position.y + h)
+    }
+    return { minX, minY, maxX, maxY }
+  }, [nodes])
+
+  const nodeColor = t => {
+    if (t === 'olt')      return T.oltBdr
+    if (t === 'cdo')      return T.cdoBdr
+    if (t === 'splitter') return T.splBdr
+    if (t === 'cto')      return T.ctoBdr
+    return T.muted
+  }
+
+  // Escala uniforme para caber todo o grafo no SVG
+  const innerW = MAP_W - MAP_PAD * 2
+  const innerH = MAP_H - MAP_PAD * 2
+  const scale = bbox
+    ? Math.min(innerW / Math.max(bbox.maxX - bbox.minX, 1),
+               innerH / Math.max(bbox.maxY - bbox.minY, 1))
+    : 1
+  const drawW = bbox ? (bbox.maxX - bbox.minX) * scale : 0
+  const drawH = bbox ? (bbox.maxY - bbox.minY) * scale : 0
+  const offX  = MAP_PAD + (innerW - drawW) / 2
+  const offY  = MAP_PAD + (innerH - drawH) / 2
+
+  const toSvg = (wx, wy) => [
+    offX + (wx - (bbox?.minX ?? 0)) * scale,
+    offY + (wy - (bbox?.minY ?? 0)) * scale,
+  ]
+
+  // Retângulo do viewport visível
+  const vpRect = bbox && rfW && rfH ? (() => {
+    const [rx, ry] = toSvg(-vpX / zoom, -vpY / zoom)
+    return { x: rx, y: ry, w: (rfW / zoom) * scale, h: (rfH / zoom) * scale }
+  })() : null
+
+  const TYPE_META = [
+    { c: T.oltBdr, label: 'OLT' },
+    { c: T.cdoBdr, label: 'CDO' },
+    { c: T.splBdr, label: 'SPL' },
+    { c: T.ctoBdr, label: 'CTO' },
+  ]
+
+  return (
+    <Panel position="bottom-right" style={{ margin: 8, padding: 0 }}>
+      <div style={{
+        background: T.panelBg, border: `1px solid ${T.panelBorder}`,
+        borderRadius: 9, backdropFilter: 'blur(10px)', overflow: 'hidden',
+        fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
+        boxShadow: '0 4px 20px rgba(0,0,0,0.28)', width: MAP_W,
+      }}>
+
+        {/* ── Header ── */}
+        <button onClick={() => setOpen(o => !o)} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '5px 10px', width: '100%', cursor: 'pointer',
+          background: 'none', border: 'none', color: T.text,
+          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+        }}>
+          <span style={{ fontSize: 12 }}>🗺</span>
+          <span style={{ color: T.muted }}>Mapa</span>
+          <span style={{ display: 'flex', gap: 3, marginLeft: 3 }}>
+            {TYPE_META.map(({ c, label }) => (
+              <span key={label} title={label} style={{
+                width: 7, height: 7, borderRadius: '50%', background: c,
+                display: 'inline-block', boxShadow: `0 0 4px ${c}99`,
+              }} />
+            ))}
+          </span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: T.muted }}>{open ? '▾' : '▸'}</span>
+        </button>
+
+        {/* ── SVG minimap ── */}
+        {open && (
+          <svg width={MAP_W} height={MAP_H} style={{
+            display: 'block',
+            borderTop: `1px solid ${T.panelBorder}`,
+            background: T.mmBg,
+          }}>
+            <defs>
+              <clipPath id="map-clip-inner">
+                <rect x={0} y={0} width={MAP_W} height={MAP_H} />
+              </clipPath>
+            </defs>
+            <g clipPath="url(#map-clip-inner)">
+
+              {/* 1. Arestas — na cor da fibra */}
+              {bbox && edges.map(e => {
+                const src = nodeById.get(e.source)
+                const tgt = nodeById.get(e.target)
+                if (!src || !tgt) return null
+                const sw = (src.measured?.width  ?? NODE_W[src.type] ?? 220) * scale
+                const sh = (src.measured?.height ?? NODE_H[src.type] ?? 140) * scale
+                const tw = (tgt.measured?.width  ?? NODE_W[tgt.type] ?? 220) * scale
+                const th = (tgt.measured?.height ?? NODE_H[tgt.type] ?? 140) * scale
+                const [sx, sy] = toSvg(src.position.x, src.position.y)
+                const [tx, ty] = toSvg(tgt.position.x, tgt.position.y)
+                // LR layout: saída do lado direito do src, entrada no lado esquerdo do tgt
+                const x1 = sx + sw, y1 = sy + sh / 2
+                const x2 = tx,      y2 = ty + th / 2
+                const color = e.style?.stroke ?? T.muted
+                const dashed = !!(e.style?.strokeDasharray)
+                // Curva bezier suave
+                const cx = (x1 + x2) / 2
+                return (
+                  <path key={e.id}
+                    d={`M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={dashed ? 0.7 : 1}
+                    strokeDasharray={dashed ? '3,2' : undefined}
+                    opacity={0.75}
+                  />
+                )
+              })}
+
+              {/* 2. Nós — retângulo colorido + nome */}
+              {bbox && nodes.map(n => {
+                const nw = Math.max((n.measured?.width  ?? NODE_W[n.type] ?? 220) * scale, 4)
+                const nh = Math.max((n.measured?.height ?? NODE_H[n.type] ?? 140) * scale, 4)
+                const [sx, sy] = toSvg(n.position.x, n.position.y)
+                const c = nodeColor(n.type)
+                const label = n.data?.nome ?? n.data?.label ?? ''
+                const fontSize = Math.max(Math.min(nw / 5.5, 7), 4.5)
+                const maxChars = Math.floor(nw / (fontSize * 0.62))
+                const displayLabel = label.length > maxChars
+                  ? label.slice(0, maxChars - 1) + '…'
+                  : label
+                return (
+                  <g key={n.id}>
+                    <rect x={sx} y={sy} width={nw} height={nh} rx={1.5}
+                      fill={hexAlpha(c, 0.28)} stroke={c} strokeWidth={0.9} />
+                    {nh > 7 && nw > 8 && displayLabel && (
+                      <text
+                        x={sx + nw / 2} y={sy + nh / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        fontSize={fontSize} fontWeight={700}
+                        fill={c} style={{ pointerEvents: 'none', userSelect: 'none' }}
+                      >
+                        {displayLabel}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+
+              {/* 3. Retângulo do viewport atual */}
+              {vpRect && (
+                <rect
+                  x={vpRect.x} y={vpRect.y}
+                  width={Math.max(vpRect.w, 6)} height={Math.max(vpRect.h, 6)}
+                  fill={hexAlpha(T.text, 0.04)}
+                  stroke={T.text} strokeWidth={1} strokeDasharray="4,2" opacity={0.5}
+                />
+              )}
+
+              {/* Placeholder quando sem dados */}
+              {!bbox && (
+                <text x={MAP_W/2} y={MAP_H/2}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fontSize={10} fill={T.muted}>
+                  Sem dados
+                </text>
+              )}
+            </g>
+          </svg>
+        )}
+
+        {/* ── Footer: legenda de tipos ── */}
+        {open && (
+          <div style={{
+            display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap',
+            padding: '4px 10px', borderTop: `1px solid ${T.panelBorder}`,
+          }}>
+            {TYPE_META.map(({ c, label }) => (
+              <span key={label} style={{
+                display: 'flex', alignItems: 'center', gap: 3,
+                fontSize: 9, color: c, fontWeight: 700,
+              }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: 2,
+                  background: hexAlpha(c, 0.35), border: `1px solid ${c}`,
+                  display: 'inline-block',
+                }} />
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </Panel>
   )
 }
 
@@ -1635,21 +1926,8 @@ function DiagramaFluxoInner({ projetoId }) {
           borderRadius: 8, backdropFilter: 'blur(4px)',
         }}
       />
-      {/* MiniMap — desktop only (hides on mobile to maximise diagram space) */}
-      {!isMobile && (
-        <MiniMap
-          style={{ background: T.mmBg, border: `1px solid ${T.panelBorder}` }}
-          maskColor={T.mmMask}
-          nodeColor={n => {
-            if (n.type === 'olt')      return T.oltBdr
-            if (n.type === 'cdo')      return T.cdoBdr
-            if (n.type === 'splitter') return T.splBdr
-            if (n.type === 'cto')      return T.ctoBdr
-            if (n.type === 'passagem') return T.muted
-            return T.muted
-          }}
-        />
-      )}
+      {/* MapPanel — desktop only */}
+      {!isMobile && <MapPanel T={T} rfNodes={nodes} rfEdges={edges} />}
 
       {/* Toolbar */}
       <Panel position="top-left">

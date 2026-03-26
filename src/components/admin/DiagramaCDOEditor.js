@@ -834,6 +834,53 @@ function AbaSplitters({ splitters, onChange, bandejas, isDark, ctos = [], caixas
                     {/* Obs */}
                     <input value={sd.obs ?? ''} onChange={e => upSaida(s.id, sd.porta, { obs: e.target.value })}
                       placeholder="Obs" style={{ ...S.inp, padding: '3px 7px', fontSize: 11 }} />
+                    {/* Continuação PON — CTOs que continuam a partir do nó PON */}
+                    {sd.tipo === 'pon' && (
+                      <div style={{ marginTop: 4, paddingLeft: 8, borderLeft: `2px solid ${ABNT[(sd.porta - 1) % 12]?.hex ?? '#374151'}44` }}>
+                        {(sd.pon_continuacao ?? []).map((cRaw, ci) => {
+                          const cItem   = typeof cRaw === 'string' ? { cto_id: cRaw, fibra: null } : (cRaw ?? { cto_id: '', fibra: null })
+                          const fDot    = ABNT[(cItem.fibra - 1) % 12]
+                          const normAll = arr => (arr ?? []).map(x => typeof x === 'string' ? { cto_id: x, fibra: null } : (x ?? { cto_id: '', fibra: null }))
+                          return (
+                            <div key={ci} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 3, flexWrap: 'nowrap' }}>
+                              <span style={{ fontSize: 9, color: ABNT[(sd.porta - 1) % 12]?.hex, flexShrink: 0 }}>↳ P{ci + 1}</span>
+                              <select
+                                value={cItem.cto_id ?? ''}
+                                onChange={e => upSaida(s.id, sd.porta, {
+                                  pon_continuacao: normAll(sd.pon_continuacao).map((it, xi) => xi === ci ? { ...it, cto_id: e.target.value } : it)
+                                })}
+                                style={{ ...S.inp, flex: 1, padding: '2px 6px', fontSize: 11, minWidth: 0 }}
+                              >
+                                <option value="">— CTO —</option>
+                                {ctos.map(c => <option key={c.cto_id ?? c._id} value={c.cto_id ?? c._id}>{c.nome ?? c.cto_id}</option>)}
+                              </select>
+                              <select
+                                value={cItem.fibra ?? ''}
+                                title="Fibra para esta CTO"
+                                onChange={e => upSaida(s.id, sd.porta, {
+                                  pon_continuacao: normAll(sd.pon_continuacao).map((it, xi) => xi === ci ? { ...it, fibra: e.target.value ? Number(e.target.value) : null } : it)
+                                })}
+                                style={{ ...S.inp, width: 68, padding: '2px 4px', fontSize: 10, flexShrink: 0 }}
+                              >
+                                <option value="">FO</option>
+                                {ABNT.map(a => <option key={a.idx} value={a.idx}>{a.idx}. {a.nome}</option>)}
+                              </select>
+                              {fDot && (
+                                <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: fDot.hex, border: `1px solid ${fDot.hex}aa`, boxShadow: `0 0 4px ${fDot.hex}88` }} />
+                              )}
+                              <button
+                                onClick={() => upSaida(s.id, sd.porta, { pon_continuacao: (sd.pon_continuacao ?? []).filter((_, xi) => xi !== ci) })}
+                                style={{ fontSize: 11, padding: '1px 5px', cursor: 'pointer', color: '#f85149', background: 'none', border: 'none', flexShrink: 0 }}
+                              >✕</button>
+                            </div>
+                          )
+                        })}
+                        <button
+                          onClick={() => upSaida(s.id, sd.porta, { pon_continuacao: [...(sd.pon_continuacao ?? []), { cto_id: '', fibra: null }] })}
+                          style={{ fontSize: 10, padding: '2px 8px', cursor: 'pointer', color: '#a78bfa', background: 'none', border: '1px solid #a78bfa55', borderRadius: 4 }}
+                        >+ Continuar</button>
+                      </div>
+                    )}
                     {/* Cascata CTOs — só para tipo=cto com destino preenchido */}
                     {(sd.tipo === 'cto' || !sd.tipo) && sd.cto_id?.trim() && (
                       <div style={{ marginTop: 4, paddingLeft: 8, borderLeft: `2px solid ${ABNT[(sd.porta - 1) % 12]?.hex ?? '#374151'}44` }}>
@@ -1535,7 +1582,7 @@ function MobileCDOEditor({
                                     style={{ flex: 1, padding: '8px 10px', fontSize: 13, borderRadius: 8, border: `1px solid ${cItem.cto_id ? hex + '88' : br}`, backgroundColor: bg, color: txt, outline: 'none' }}
                                   >
                                     <option value="">— CTO —</option>
-                                    {ctos.map(c => <option key={c.cto_id ?? c._id} value={c.cto_id ?? c._id}>{c.nome ?? c.cto_id}</option>)}
+                                    {(ctos ?? []).map(c => <option key={c.cto_id ?? c._id} value={c.cto_id ?? c._id}>{c.nome ?? c.cto_id}</option>)}
                                   </select>
                                   <button
                                     onClick={() => upSaida(s.id, porta, { ctos_cascata: (sd.ctos_cascata ?? []).filter((_, xi) => xi !== ci) })}
@@ -1571,6 +1618,57 @@ function MobileCDOEditor({
                             onClick={() => upSaida(s.id, porta, { ctos_cascata: [...(sd.ctos_cascata ?? []), { cto_id: '', fibra: null }] })}
                             style={{ width: '100%', padding: '8px', marginTop: 4, fontSize: 13, cursor: 'pointer', color: '#58a6ff', background: '#58a6ff11', border: '1px solid #58a6ff44', borderRadius: 8, fontWeight: 600 }}
                           >+ Adicionar CTO em Cascata</button>
+                        </div>
+                      )}
+                      {/* Continuação PON — CTOs a partir do nó PON */}
+                      {tipo === 'pon' && (
+                        <div style={{ marginTop: 8, paddingLeft: 10, borderLeft: `2px solid ${hex}44` }}>
+                          {(sd.pon_continuacao ?? []).map((cRaw, ci) => {
+                            const cItem   = typeof cRaw === 'string' ? { cto_id: cRaw, fibra: null } : (cRaw ?? { cto_id: '', fibra: null })
+                            const fDot    = ABNT[(cItem.fibra - 1) % 12]
+                            const normAll = arr => (arr ?? []).map(x => typeof x === 'string' ? { cto_id: x, fibra: null } : (x ?? { cto_id: '', fibra: null }))
+                            return (
+                              <div key={ci} style={{ marginBottom: 8 }}>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                                  <span style={{ fontSize: 11, color: '#a78bfa', flexShrink: 0, fontWeight: 700 }}>↳ P{ci + 1}</span>
+                                  <select
+                                    value={cItem.cto_id ?? ''}
+                                    onChange={e => upSaida(s.id, porta, {
+                                      pon_continuacao: normAll(sd.pon_continuacao).map((it, xi) => xi === ci ? { ...it, cto_id: e.target.value } : it)
+                                    })}
+                                    style={{ flex: 1, padding: '8px 10px', fontSize: 13, borderRadius: 8, border: `1px solid ${cItem.cto_id ? '#a78bfa88' : br}`, backgroundColor: bg, color: txt, outline: 'none' }}
+                                  >
+                                    <option value="">— CTO —</option>
+                                    {(ctos ?? []).map(c => <option key={c.cto_id ?? c._id} value={c.cto_id ?? c._id}>{c.nome ?? c.cto_id}</option>)}
+                                  </select>
+                                  <button
+                                    onClick={() => upSaida(s.id, porta, { pon_continuacao: (sd.pon_continuacao ?? []).filter((_, xi) => xi !== ci) })}
+                                    style={{ fontSize: 16, padding: '4px 8px', cursor: 'pointer', color: '#f85149', background: 'none', border: 'none', borderRadius: 6, flexShrink: 0 }}
+                                  >✕</button>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 26 }}>
+                                  <span style={{ fontSize: 11, color: '#8b949e', flexShrink: 0 }}>Fibra:</span>
+                                  <select
+                                    value={cItem.fibra ?? ''}
+                                    onChange={e => upSaida(s.id, porta, {
+                                      pon_continuacao: normAll(sd.pon_continuacao).map((it, xi) => xi === ci ? { ...it, fibra: e.target.value ? Number(e.target.value) : null } : it)
+                                    })}
+                                    style={{ flex: 1, padding: '6px 10px', fontSize: 12, borderRadius: 6, border: `1px solid ${fDot ? fDot.hex + '88' : br}`, backgroundColor: bg, color: txt, outline: 'none' }}
+                                  >
+                                    <option value="">— FO —</option>
+                                    {ABNT.map(a => <option key={a.idx} value={a.idx}>{a.idx}. {a.nome}</option>)}
+                                  </select>
+                                  {fDot && (
+                                    <span style={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0, background: fDot.hex, border: `2px solid ${fDot.hex}aa`, boxShadow: `0 0 6px ${fDot.hex}88` }} />
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                          <button
+                            onClick={() => upSaida(s.id, porta, { pon_continuacao: [...(sd.pon_continuacao ?? []), { cto_id: '', fibra: null }] })}
+                            style={{ width: '100%', padding: '8px', marginTop: 4, fontSize: 13, cursor: 'pointer', color: '#a78bfa', background: '#a78bfa11', border: '1px solid #a78bfa44', borderRadius: 8, fontWeight: 600 }}
+                          >+ Continuar CTO via PON</button>
                         </div>
                       )}
                     </div>
