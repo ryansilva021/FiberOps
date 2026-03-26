@@ -1,0 +1,34 @@
+[33mcommit 2c2e5eeb2bf2081b74dd7c911cd53541eeacf50f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: ryansilva021 <ryansmithjr000@gmail.com>
+Date:   Thu Mar 26 01:17:30 2026 -0300
+
+    adicionado painel NOC com provisionamento, Auto-Find, SGP, topologia e clientes em CTOs
+    
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+ instrumentation.js                        |  128 [32m++++++++++[m
+ package-lock.json                         |   88 [32m+++++++[m
+ package.json                              |    2 [32m+[m
+ src/actions/noc.js                        |  129 [32m+++++++++++[m
+ src/actions/provisioning.js               |  408 [32m++++++++++++++++++++++++++++++++[m
+ src/actions/sgp.js                        |  284 [32m+++++++++++++++++++++++[m
+ src/app/admin/noc/page.js                 |   62 [32m+++++[m
+ src/app/api/ctos/full/route.js            |   84 [32m+++++++[m
+ src/app/api/noc/stream/route.js           |  129 [32m+++++++++++[m
+ src/app/api/noc/worker/route.js           |   49 [32m++++[m
+ src/components/admin/DiagramaCDOEditor.js |  100 [32m+++++++[m[31m-[m
+ src/components/admin/DiagramaFluxo.js     |  392 [32m++++++++++++++++++++++++++[m[31m-----[m
+ src/components/admin/NOCClient.js         | 1389 [32m+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++[m
+ src/components/shared/SidebarLayout.js    |   20 [32m+[m[31m-[m
+ src/lib/aes-crypt.js                      |   80 [32m+++++++[m
+ src/lib/auth.js                           |    3 [32m+[m
+ src/lib/huawei-adapter.js                 |  332 [32m++++++++++++++++++++++++++[m
+ src/lib/noc-logger.js                     |   28 [32m+++[m
+ src/lib/sgp-client.js                     |  119 [32m++++++++++[m
+ src/lib/sgp-sync.js                       |  103 [32m+++++++++[m
+ src/models/LogEvento.js                   |    2 [32m+[m[31m-[m
+ src/models/NOCLog.js                      |   82 [32m+++++++[m
+ src/models/ONU.js                         |  125 [32m++++++++++[m
+ src/models/ProvisionEvent.js              |   97 [32m++++++++[m
+ src/models/SGPConfig.js                   |   74 [32m++++++[m
+ 25 files changed, 4244 insertions(+), 65 deletions(-)
