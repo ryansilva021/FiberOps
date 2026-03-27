@@ -45,9 +45,21 @@ const ONUSchema = new Schema(
       default: null,
     },
 
-    // PON port number on the OLT
+    // PON port number on the OLT (numeric, e.g. 0)
     pon_port: {
       type:    Number,
+      default: null,
+    },
+
+    // Full PON identifier string (e.g. "0/1/0")
+    pon: {
+      type:    String,
+      default: null,
+    },
+
+    // Board/slot identifier (e.g. "0/1")
+    board: {
+      type:    String,
       default: null,
     },
 
@@ -104,6 +116,34 @@ const ONUSchema = new Schema(
     signal_quality: {
       type:    String,
       enum:    ['excelente', 'bom', 'medio', 'critico'],
+      default: null,
+    },
+
+    // Human-readable signal diagnosis (e.g. "Sinal no limite operacional")
+    signal_status: {
+      type:    String,
+      default: null,
+    },
+
+    // OLT-internal ONU ID assigned during provisioning (used for diagnostic commands)
+    onu_id_olt: {
+      type:    Number,
+      default: 1,
+    },
+
+    // Last on-demand test results (updated by testOnuConnection)
+    last_tested_at: {
+      type:    Date,
+      default: null,
+    },
+
+    last_status: {
+      type:    String,
+      default: null,
+    },
+
+    last_diagnostic: {
+      type:    String,
       default: null,
     },
   },

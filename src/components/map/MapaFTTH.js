@@ -129,6 +129,14 @@ export default function MapaFTTH({
   // ---- AGENT_CAMPO — registro de potência ----
   const [registroPotencia, setRegistroPotencia] = useState(null) // null | { ctoId }
 
+  // ---- Simulação de instalação ----
+  const [simMode,    setSimMode]    = useState(false)
+  const [simLoading, setSimLoading] = useState(false)
+  const [simResult,  setSimResult]  = useState(null)   // null | API response
+  const [simConfirm, setSimConfirm] = useState(false)  // show confirm panel
+  const [simCliente, setSimCliente] = useState('')
+  const simMarkerRef = useRef(null)
+
   // ---- AGENT_CAMPO — modo campo mobile ----
   const { isCampo } = useModoCampo()
 
@@ -159,6 +167,9 @@ export default function MapaFTTH({
 
   const reposicionandoRef = useRef(reposicionandoEl)
   reposicionandoRef.current = reposicionandoEl
+
+  const simModeRef = useRef(simMode)
+  simModeRef.current = simMode
 
   const TIPO_ICONE = { cto: '📦', caixa: '🔌', rota: '〰', poste: '🏗', olt: '🖥' }
   const TIPO_COR   = { cto: '#0284c7', caixa: '#7c3aed', rota: '#059669', poste: '#d97706', olt: '#0891b2' }
@@ -195,6 +206,28 @@ export default function MapaFTTH({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
     onMapClick: useCallback(async (lngLat, snapInfo) => {
+      // ── Simulation mode: capture click and run analysis ─────────────────
+      if (simModeRef.current) {
+        setSimLoading(true)
+        setSimResult(null)
+        setSimConfirm(false)
+        setSimCliente('')
+        try {
+          const res  = await fetch('/api/simulation/install', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ lat: lngLat.lat, lng: lngLat.lng }),
+          })
+          const data = await res.json()
+          setSimResult(data)
+        } catch (e) {
+          console.error('[Sim]', e.message)
+        } finally {
+          setSimLoading(false)
+        }
+        return
+      }
+
       const mode = addModeRef.current
       const repos = reposicionandoRef.current
 
@@ -371,6 +404,91 @@ export default function MapaFTTH({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingRota, map, mapLoaded])
 
+  // ---- Simulação: camadas MapLibre (ponto cliente + linha até CTO) ----
+  useEffect(() => {
+    const SRC   = 'sim-preview'
+    const LLINE = 'sim-line'
+    const LCIRC = 'sim-point'
+
+    if (!map || !mapLoaded) return
+
+    const cleanup = () => {
+      try {
+        if (map.getLayer(LLINE)) map.removeLayer(LLINE)
+        if (map.getLayer(LCIRC)) map.removeLayer(LCIRC)
+        if (map.getSource(SRC))  map.removeSource(SRC)
+      } catch {}
+    }
+
+    if (!simResult?.success || !simResult.client_lat || !simResult.cto_lat) {
+      cleanup()
+      return
+    }
+
+    const clientCoord = [simResult.client_lng, simResult.client_lat]
+    const ctoCoord    = [simResult.cto_lng,    simResult.cto_lat]
+
+    const sigColor =
+      simResult.signal_quality === 'EXCELENTE' ? '#22c55e' :
+      simResult.signal_quality === 'BOM'        ? '#4ade80' :
+      simResult.signal_quality === 'LIMITE'     ? '#f59e0b' : '#ef4444'
+
+    const geojson = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: [clientCoord, ctoCoord] },
+          properties: {},
+        },
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: clientCoord },
+          properties: {},
+        },
+      ],
+    }
+
+    if (map.getSource(SRC)) {
+      map.getSource(SRC).setData(geojson)
+      if (map.getPaintProperty(LLINE, 'line-color') !== sigColor) {
+        map.setPaintProperty(LLINE, 'line-color', sigColor)
+      }
+    } else {
+      map.addSource(SRC, { type: 'geojson', data: geojson })
+      map.addLayer({
+        id: LLINE, type: 'line', source: SRC,
+        filter: ['==', ['geometry-type'], 'LineString'],
+        paint: {
+          'line-color':      sigColor,
+          'line-width':      2.5,
+          'line-dasharray':  [5, 3],
+          'line-opacity':    0.9,
+        },
+      })
+      map.addLayer({
+        id: LCIRC, type: 'circle', source: SRC,
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius':       10,
+          'circle-color':        '#f59e0b',
+          'circle-stroke-width': 2.5,
+          'circle-stroke-color': '#ffffff',
+        },
+      })
+    }
+
+    // Fit both points in view
+    const minLng = Math.min(clientCoord[0], ctoCoord[0])
+    const maxLng = Math.max(clientCoord[0], ctoCoord[0])
+    const minLat = Math.min(clientCoord[1], ctoCoord[1])
+    const maxLat = Math.max(clientCoord[1], ctoCoord[1])
+    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 120, duration: 800 })
+
+    return cleanup
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simResult, map, mapLoaded])
+
   async function salvarEditRota() {
     if (!editingRota || editRotaSaving) return
     if (editingRota.coordinates.length < 2) { setEditRotaErro('Mínimo 2 pontos'); return }
@@ -486,11 +604,11 @@ export default function MapaFTTH({
     return () => window.removeEventListener('fiberops:fly-to', handleFlyTo)
   }, [map])
 
-  // ---- Cursor crosshair durante add mode ou reposicionamento ----
+  // ---- Cursor crosshair durante add mode, reposicionamento ou simulação ----
   useEffect(() => {
     if (!containerRef.current) return
-    containerRef.current.style.cursor = (addMode || reposicionandoEl) ? 'crosshair' : ''
-  }, [addMode, reposicionandoEl])
+    containerRef.current.style.cursor = (addMode || reposicionandoEl || simMode) ? 'crosshair' : ''
+  }, [addMode, reposicionandoEl, simMode])
 
   // ---- Preview de rota em tempo real ----
   useEffect(() => {
@@ -591,6 +709,25 @@ export default function MapaFTTH({
     setAddForm({})
     setAddErro(null)
     setAddSaving(false)
+  }
+
+  function enterSimMode() {
+    setSimMode(true)
+    setSimResult(null)
+    setSimConfirm(false)
+    setSimCliente('')
+    setAddMode(null)
+    setSelectedElement(null)
+    setReposicionandoEl(null)
+    setMapPainel(false)
+  }
+
+  function cancelSimMode() {
+    setSimMode(false)
+    setSimResult(null)
+    setSimLoading(false)
+    setSimConfirm(false)
+    setSimCliente('')
   }
 
   async function salvarAddElement() {
@@ -826,6 +963,37 @@ export default function MapaFTTH({
             >
               <RefreshIcon spin={loadingData} />
               Recarregar
+            </button>
+
+            {/* Divisor */}
+            <div style={{ height: 1, background: isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', margin: '4px 0' }} />
+
+            {/* Simular Instalação */}
+            <button
+              onClick={simMode ? cancelSimMode : enterSimMode}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 12px', borderRadius: 10,
+                background: simMode
+                  ? (isDark ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.12)')
+                  : (isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'),
+                border: simMode
+                  ? '1.5px solid #f59e0b'
+                  : (isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0'),
+                color: simMode ? '#f59e0b' : (isDark ? '#94a3b8' : '#475569'),
+                fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left',
+                transition: 'all 0.18s',
+              }}
+            >
+              <span style={{ fontSize: 15 }}>🔬</span>
+              {simMode ? 'Cancelar Simulação' : 'Simular Instalação'}
+              {simMode && (
+                <span style={{
+                  marginLeft: 'auto', fontSize: 9, fontWeight: 800,
+                  background: 'rgba(245,158,11,0.2)', color: '#f59e0b',
+                  padding: '2px 5px', borderRadius: 4,
+                }}>ATIVO</span>
+              )}
             </button>
 
             {/* ── Adicionar elementos — visível apenas para admin e superadmin ── */}
@@ -1384,6 +1552,65 @@ export default function MapaFTTH({
           </div>
         </div>
       )}
+      {/* ── Modo Simulação: banner + resultado ──────────────────────────── */}
+
+      {/* Banner de instrução */}
+      {simMode && !simResult && (
+        <div
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-xs font-semibold shadow-lg flex items-center gap-3 whitespace-nowrap"
+          style={{
+            backgroundColor: isDark ? 'rgba(8,13,28,0.95)' : 'rgba(255,255,255,0.97)',
+            border: '1.5px solid rgba(245,158,11,0.6)',
+            color: '#f59e0b',
+            boxShadow: '0 4px 20px rgba(245,158,11,0.2)',
+          }}
+        >
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%', background: '#f59e0b',
+            display: 'inline-block', animation: 'gps-pulse 1.2s ease-in-out infinite',
+          }} />
+          {simLoading
+            ? <><span style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}>Analisando localização...</span></>
+            : <><span style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}>Clique no mapa para simular uma instalação</span></>}
+          <button onClick={cancelSimMode} style={{ color: 'rgba(245,158,11,0.6)', marginLeft: 4 }}>✕</button>
+        </div>
+      )}
+
+      {/* Resultado da simulação */}
+      {simResult && (
+        <SimResultCard
+          result={simResult}
+          isDark={isDark}
+          onClose={cancelSimMode}
+          onNewClick={() => { setSimResult(null); setSimConfirm(false); setSimCliente('') }}
+          onConfirmOpen={() => { setSimConfirm(true); setSimCliente('') }}
+          simConfirm={simConfirm}
+          simCliente={simCliente}
+          setSimCliente={setSimCliente}
+          onConfirmInstall={async () => {
+            if (!simResult?.success) return
+            const { manualProvision } = await import('@/actions/provisioning')
+            try {
+              await manualProvision({
+                serial:  `SIM-${Date.now()}`,
+                cliente: simCliente.trim() || 'Cliente Simulado',
+                ctoId:   simResult.cto_id,
+              })
+              setMovimentacaoEl({ cto_id: simResult.cto_id, nome: simResult.cto_nome })
+              cancelSimMode()
+            } catch (e) {
+              console.error('[Sim confirm]', e.message)
+            }
+          }}
+          onOpenModal={() => {
+            if (simResult?.success) {
+              setMovimentacaoEl({ cto_id: simResult.cto_id, nome: simResult.cto_nome, lat: simResult.cto_lat, lng: simResult.cto_lng })
+              cancelSimMode()
+            }
+          }}
+        />
+      )}
+
       {/* Overlay de edição de rota */}
       {editingRota && (
         <div
@@ -1431,6 +1658,238 @@ export default function MapaFTTH({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SimResultCard — resultado da simulação de instalação
+// ---------------------------------------------------------------------------
+
+function SimResultCard({
+  result, isDark, onClose, onNewClick,
+  onConfirmOpen, simConfirm, simCliente, setSimCliente,
+  onConfirmInstall, onOpenModal,
+}) {
+  const SIG_COLOR = {
+    EXCELENTE: '#22c55e',
+    BOM:       '#4ade80',
+    LIMITE:    '#f59e0b',
+    CRÍTICO:   '#ef4444',
+  }
+
+  const sigColor  = SIG_COLOR[result.signal_quality] ?? '#94a3b8'
+  const bg        = isDark ? 'rgba(6,10,22,0.97)' : 'rgba(255,255,255,0.99)'
+  const border    = isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0'
+  const textMain  = isDark ? '#f1f5f9' : '#0f172a'
+  const textMuted = isDark ? '#94a3b8' : '#64748b'
+
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: 0, left: 0, right: 0,
+      zIndex: 50,
+      borderRadius: '20px 20px 0 0',
+      background: bg,
+      borderTop: `3px solid ${result.success ? sigColor : '#ef4444'}`,
+      boxShadow: isDark ? '0 -8px 40px rgba(0,0,0,0.7)' : '0 -8px 40px rgba(0,0,0,0.15)',
+      maxHeight: '70vh',
+      overflowY: 'auto',
+    }}>
+      {/* Handle */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0' }} />
+      </div>
+
+      <div style={{ padding: '0 16px 20px' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+              <span style={{ fontSize: 16 }}>🔬</span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: textMain }}>
+                Simulação de Instalação
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: textMuted }}>
+              {result.success ? 'CTO selecionada automaticamente pelo sistema' : 'Todas as CTOs sem portas disponíveis'}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: textMuted, fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: 4 }}
+          >✕</button>
+        </div>
+
+        {/* Main result card */}
+        {result.success ? (
+          <>
+            {/* CTO info */}
+            <div style={{
+              borderRadius: 12,
+              border: `1.5px solid ${sigColor}44`,
+              background: `${sigColor}0d`,
+              padding: '12px 14px',
+              marginBottom: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{
+                  width: 10, height: 10, borderRadius: '50%', background: sigColor,
+                  display: 'inline-block', boxShadow: `0 0 8px ${sigColor}`,
+                }} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: textMain }}>{result.cto_nome}</span>
+                <span style={{
+                  marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '2px 8px',
+                  borderRadius: 99, background: `${sigColor}22`, color: sigColor,
+                }}>{result.signal_quality}</span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                {[
+                  ['Distância',  result.distance_fmt],
+                  ['RX estimado', `${result.estimated_rx} dBm`],
+                  ['Porta',      result.port ? `Porta ${result.port}` : '—'],
+                  ['Portas livres', result.livres],
+                  ['OLT',        result.olt_nome ?? '—'],
+                  ['PON',        result.pon ?? '—'],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <span style={{ fontSize: 10, color: textMuted, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: textMain, fontFamily: typeof v === 'number' || String(v).match(/^\d|dBm|—/) ? 'monospace' : 'inherit' }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Diagnostics */}
+            {result.diags?.length > 0 && (
+              <div style={{
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)',
+                borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+              }}>
+                {result.diags.map((d, i) => (
+                  <p key={i} style={{ fontSize: 11, color: '#f59e0b', margin: 0 }}>⚠ {d}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Alternatives */}
+            {result.alternatives?.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: textMuted, marginBottom: 6 }}>
+                  Alternativas
+                </p>
+                {result.alternatives.map(alt => (
+                  <div key={alt.cto_id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '5px 0', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'}`,
+                  }}>
+                    <span style={{
+                      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                      background: SIG_COLOR[alt.signal] ?? '#94a3b8',
+                    }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: textMain, flex: 1 }}>{alt.nome}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: textMuted }}>{alt.distance_fmt}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: SIG_COLOR[alt.signal] ?? textMuted }}>{alt.rx_estimate} dBm</span>
+                    <span style={{ fontSize: 10, color: textMuted }}>{alt.livres} livre{alt.livres !== 1 ? 's' : ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Confirm panel */}
+            {simConfirm ? (
+              <div style={{
+                background: isDark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.04)',
+                border: '1px solid rgba(34,197,94,0.3)',
+                borderRadius: 10, padding: '12px 14px', marginBottom: 10,
+              }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', marginBottom: 10 }}>
+                  Confirmar Instalação em {result.cto_nome}
+                </p>
+                <p style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>
+                  Nome do cliente (será vinculado à CTO e enviado para provisionamento):
+                </p>
+                <input
+                  style={{
+                    width: '100%', padding: '8px 12px', borderRadius: 8,
+                    border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e2e8f0',
+                    background: isDark ? 'rgba(255,255,255,0.05)' : '#f8fafc',
+                    color: textMain, fontSize: 13,
+                    boxSizing: 'border-box', marginBottom: 10, outline: 'none',
+                  }}
+                  placeholder="Ex: João Silva"
+                  value={simCliente}
+                  onChange={e => setSimCliente(e.target.value)}
+                  autoFocus
+                />
+                <p style={{ fontSize: 10, color: textMuted, marginBottom: 10 }}>
+                  Abre o modal de cliente na CTO <strong>{result.cto_nome}</strong> para atribuição final.
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => { setSimCliente(''); /* close confirm */ onNewClick() }}
+                    style={{
+                      flex: 1, padding: '9px 0', borderRadius: 8,
+                      border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e2e8f0',
+                      color: textMuted, background: 'none', cursor: 'pointer', fontSize: 13,
+                    }}
+                  >Voltar</button>
+                  <button
+                    onClick={onOpenModal}
+                    style={{
+                      flex: 2, padding: '9px 0', borderRadius: 8,
+                      background: 'linear-gradient(135deg,#22c55e,#16a34a)',
+                      color: '#052e16', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: 13,
+                    }}
+                  >Abrir CTO e Vincular Cliente</button>
+                </div>
+              </div>
+            ) : (
+              /* Action buttons */
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={onNewClick}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: 10,
+                    border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e2e8f0',
+                    color: textMuted, background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  }}
+                >Nova simulação</button>
+                <button
+                  onClick={onConfirmOpen}
+                  style={{
+                    flex: 2, padding: '10px 0', borderRadius: 10,
+                    background: 'linear-gradient(135deg,#0284c7,#0369a1)',
+                    color: '#fff', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: 13,
+                  }}
+                >Confirmar Instalação →</button>
+              </div>
+            )}
+          </>
+        ) : (
+          /* All CTOs full */
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <p style={{ fontSize: 28, marginBottom: 8 }}>📦</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#ef4444', marginBottom: 4 }}>
+              {result.message ?? 'Nenhuma CTO disponível'}
+            </p>
+            {result.cto_nome && (
+              <p style={{ fontSize: 12, color: textMuted }}>
+                CTO mais próxima: <strong>{result.cto_nome}</strong> ({result.distance_fmt}) — sem portas livres
+              </p>
+            )}
+            <button
+              onClick={onNewClick}
+              style={{
+                marginTop: 14, padding: '10px 24px', borderRadius: 10,
+                border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e2e8f0',
+                color: textMuted, background: 'none', cursor: 'pointer', fontSize: 13,
+              }}
+            >Tentar outro ponto</button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

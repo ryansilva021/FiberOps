@@ -263,8 +263,9 @@ export class HuaweiOltAdapter {
   async getUnconfiguredOnus() {
     if (this.isMock) {
       return [
-        { serial: 'HWTCE1234567A', pon: '0/1/0', pon_port: 0, mock: true },
-        { serial: 'ZTEG9ABCDEF01', pon: '0/1/1', pon_port: 1, mock: true },
+        { serial: 'HWTCE1234567A', pon: '0/1/0', pon_port: 0, board: '0/1', slot: 0, mock: true },
+        { serial: 'ZTEG9ABCDEF01', pon: '0/1/1', pon_port: 1, board: '0/1', slot: 0, mock: true },
+        { serial: 'HWTC8A9B0C1D2', pon: '0/2/0', pon_port: 0, board: '0/2', slot: 0, mock: true },
       ]
     }
 
@@ -460,6 +461,106 @@ export class HuaweiOltAdapter {
   }
 
   /**
+   * Fetches the run-state and last-down cause for a single ONU.
+   * Real: runs `display ont info <slot> <port> <onuId>`.
+   *
+   * @param {number} slot
+   * @param {number} port
+   * @param {number} onuId
+   * @returns {Promise<{ status: string, last_down_cause: string|null, uptime: string|null, mock?: boolean }>}
+   */
+  async getOnuRunStatus(slot, port, onuId) {
+    if (this.isMock) {
+      return { status: 'online', last_down_cause: null, uptime: '5d 3h 14m', mock: true }
+    }
+
+    try {
+      const output = await this.sendCmd(
+        `display ont info ${slot} ${port} ${onuId}`,
+        2000
+      )
+
+      const statusMatch    = output.match(/Run state\s*[:\s]+(\S+)/i)
+      const downMatch      = output.match(/Last down cause\s*[:\s]+(.+)/i)
+      const uptimeMatch    = output.match(/ONT distance\s*[:\s]+(.+)/i)
+
+      return {
+        status:          statusMatch ? statusMatch[1].toLowerCase() : 'unknown',
+        last_down_cause: downMatch   ? downMatch[1].trim()          : null,
+        uptime:          uptimeMatch ? uptimeMatch[1].trim()         : null,
+      }
+    } catch (err) {
+      console.error('[HuaweiAdapter] getOnuRunStatus error:', err.message)
+      return { status: 'error', last_down_cause: null, uptime: null, error: err.message }
+    }
+  }
+
+  /**
+   * Reads optical power (RX/TX) for a single ONU.
+   * Real: runs `display ont optical-info <slot>/<port> <onuId>`.
+   *
+   * @param {number} slot
+   * @param {number} port
+   * @param {number} onuId
+   * @returns {Promise<{ rx: number|null, tx: number|null, mock?: boolean }>}
+   */
+  async getOpticalInfo(slot, port, onuId) {
+    if (this.isMock) {
+      return { rx: -18.5, tx: 2.3, mock: true }
+    }
+
+    try {
+      const output = await this.sendCmd(
+        `display ont optical-info ${slot}/${port} ${onuId}`,
+        2000
+      )
+
+      const rxMatch = output.match(/Rx.*?(-?\d+\.\d+)\s*dBm/i)
+      const txMatch = output.match(/Tx.*?(-?\d+\.\d+)\s*dBm/i)
+
+      return {
+        rx: rxMatch ? parseFloat(rxMatch[1]) : null,
+        tx: txMatch ? parseFloat(txMatch[1]) : null,
+      }
+    } catch (err) {
+      console.error('[HuaweiAdapter] getOpticalInfo error:', err.message)
+      return { rx: null, tx: null, error: err.message }
+    }
+  }
+
+  /**
+   * Returns the state of a GPON PON port and how many ONUs are connected.
+   * Real: runs `display gpon port state <slot>/<port>`.
+   *
+   * @param {number} slot
+   * @param {number} port
+   * @returns {Promise<{ state: string, onu_count: number, mock?: boolean }>}
+   */
+  async getPonStatus(slot, port) {
+    if (this.isMock) {
+      return { state: 'online', onu_count: 8, mock: true }
+    }
+
+    try {
+      const output = await this.sendCmd(
+        `display gpon port state ${slot}/${port}`,
+        2000
+      )
+
+      const stateMatch = output.match(/Port state\s*[:\s]+(\S+)/i)
+      const countMatch = output.match(/ONT number\s*[:\s]+(\d+)/i)
+
+      return {
+        state:     stateMatch ? stateMatch[1].toLowerCase() : 'unknown',
+        onu_count: countMatch ? parseInt(countMatch[1], 10) : 0,
+      }
+    } catch (err) {
+      console.error('[HuaweiAdapter] getPonStatus error:', err.message)
+      return { state: 'error', onu_count: 0, error: err.message }
+    }
+  }
+
+  /**
    * Sends a reset command to an ONU.
    * Real: enters enable → config → interface gpon → ont reset → quit.
    *
@@ -488,6 +589,74 @@ export class HuaweiOltAdapter {
   }
 }
 
+// ─── Failure analysis ─────────────────────────────────────────────────────────
+
+/**
+ * Analyses raw OLT data and returns a structured diagnostic result.
+ *
+ * Rules:
+ *   1. OFFLINE + no RX          → ONU desligada / sem energia
+ *   2. OFFLINE + RX < -30       → Fibra rompida / desconectada
+ *   3. OFFLINE (other)          → ONU offline — verificar cliente
+ *   4. RX between -28 and -25   → Alta atenuação
+ *   5. RX < -28 (online)        → Sinal crítico
+ *   6. TX > 5 dBm               → Saturação / problema de transmissão
+ *   7. Online + RX ok           → Funcionamento normal
+ *
+ * @param {{ status: string, rx: number|null, tx: number|null, last_down_cause?: string }} data
+ * @returns {{ status, problema, rx, tx, rx_raw, tx_raw, recomendacao, nivel, last_down_cause }}
+ */
+export function analyzeFailure({ status, rx, tx, last_down_cause }) {
+  const isOffline = status !== 'online'
+  let problema, recomendacao, nivel
+
+  if (isOffline) {
+    if (rx == null) {
+      problema     = 'ONU desligada ou sem energia'
+      recomendacao = 'Verificar fonte de energia do cliente (tomada, nobreak, adaptador)'
+      nivel        = 'critico'
+    } else if (rx < -30) {
+      problema     = 'Possível fibra rompida ou desconectada'
+      recomendacao = 'Inspecionar trecho de fibra, fusões e conectores da ONU até a CTO'
+      nivel        = 'critico'
+    } else {
+      problema     = 'ONU offline — causa indeterminada'
+      recomendacao = last_down_cause
+        ? `Última causa registrada: ${last_down_cause}. Verificar equipamento no cliente.`
+        : 'Verificar equipamento no cliente e continuidade da fibra'
+      nivel        = 'critico'
+    }
+  } else if (tx != null && tx > 5) {
+    problema     = 'Saturação ou problema de transmissão'
+    recomendacao = 'Verificar nível de potência do laser da ONU — possível defeito no transceptor'
+    nivel        = 'atencao'
+  } else if (rx != null && rx < -28) {
+    problema     = 'Sinal crítico — atenuação muito alta'
+    recomendacao = 'Inspecionar fusão, conector sujo ou splitter danificado na CTO'
+    nivel        = 'critico'
+  } else if (rx != null && rx < -25) {
+    problema     = 'Alta atenuação — cliente no limite operacional'
+    recomendacao = 'Verificar fusão, conector ou atenuação na CTO'
+    nivel        = 'atencao'
+  } else {
+    problema     = 'Funcionamento normal'
+    recomendacao = 'Nenhuma ação necessária'
+    nivel        = 'ok'
+  }
+
+  return {
+    status:          status ?? 'unknown',
+    problema,
+    rx:              rx  != null ? `${rx.toFixed(2)} dBm`  : 'N/D',
+    tx:              tx  != null ? `${tx.toFixed(2)} dBm`  : 'N/D',
+    rx_raw:          rx,
+    tx_raw:          tx,
+    recomendacao,
+    nivel,
+    last_down_cause: last_down_cause ?? null,
+  }
+}
+
 // ─── Auto-Find parser ─────────────────────────────────────────────────────────
 
 /**
@@ -507,11 +676,15 @@ function _parseAutoFind(output) {
     // Matches: F/S/P followed by ONT-ID and SN
     const matchA = line.match(/^\s*(\d+)\s*\/\s*(\d+)\s*\/\s*(\d+)\s+\d+\s+([A-Z0-9]{8,16})\s/i)
     if (matchA) {
-      const pon     = `${matchA[1]}/${matchA[2]}/${matchA[3]}`
+      const frame   = matchA[1]
+      const slot    = matchA[2]
+      const port    = matchA[3]
+      const pon     = `${frame}/${slot}/${port}`
+      const board   = `${frame}/${slot}`
       const serial  = matchA[4].toUpperCase()
       if (!seen.has(serial)) {
         seen.add(serial)
-        results.push({ serial, pon, pon_port: parseInt(matchA[3], 10) })
+        results.push({ serial, pon, pon_port: parseInt(port, 10), board, slot: parseInt(slot, 10) })
       }
       continue
     }
@@ -523,7 +696,7 @@ function _parseAutoFind(output) {
       if (!seen.has(serial)) {
         seen.add(serial)
         // pon resolved on next matching line; add placeholder
-        results.push({ serial, pon: 'unknown', pon_port: null })
+        results.push({ serial, pon: 'unknown', pon_port: null, board: null, slot: null })
       }
     }
 
@@ -531,8 +704,13 @@ function _parseAutoFind(output) {
     if (idxMatch && results.length > 0) {
       const last = results[results.length - 1]
       if (last.pon === 'unknown') {
-        last.pon      = `${idxMatch[1]}/${idxMatch[2]}/${idxMatch[3]}`
-        last.pon_port = parseInt(idxMatch[3], 10)
+        const frame = idxMatch[1]
+        const slot  = idxMatch[2]
+        const port  = idxMatch[3]
+        last.pon      = `${frame}/${slot}/${port}`
+        last.board    = `${frame}/${slot}`
+        last.slot     = parseInt(slot, 10)
+        last.pon_port = parseInt(port, 10)
       }
     }
   }
