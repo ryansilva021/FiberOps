@@ -142,7 +142,7 @@ function barColor(pct) {
 function generateSparkData(base, points = 12) {
   const b = Math.max(base, 1)
   return Array.from({ length: points }, (_, i) =>
-    Math.max(0, Math.round(b + Math.sin(i * 0.8 + b * 0.1) * b * 0.15 + (Math.random() - 0.5) * b * 0.08))
+    Math.max(0, Math.round(b + Math.sin(i * 0.8 + b * 0.1) * b * 0.15))
   )
 }
 
@@ -646,11 +646,11 @@ function StatusBar({ alertas, now, lastUpdate, userRole }) {
           <span style={{ fontSize: 11, fontWeight: 700, color: dotColor, letterSpacing: '0.1em' }}>{netLabel}</span>
         </div>
         <span style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-          {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          {now ? now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Carregado {fmtTime(lastUpdate)}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Carregado {lastUpdate ? fmtTime(lastUpdate) : '--:--:--'}</span>
         {userRole && (
           <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, backgroundColor: '#2D8CFF18', border: '1px solid #2D8CFF44', color: '#2D8CFF', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             {userRole}
@@ -1988,11 +1988,14 @@ export default function NOCClient({ stats, userRole }) {
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false)
   const [logs,             setLogs]             = useState([])
   const [ackedAlerts,      setAckedAlerts]      = useState(new Set())
-  const [lastUpdate]                            = useState(() => new Date())
-  const [now,              setNow]              = useState(() => new Date())
+  const [lastUpdate,       setLastUpdate]       = useState(null)
+  const [now,              setNow]              = useState(null)
   const [isMobile,         setIsMobile]         = useState(false)
 
   useEffect(() => {
+    const mounted = new Date()
+    setNow(mounted)
+    setLastUpdate(mounted)
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])

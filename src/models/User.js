@@ -85,7 +85,6 @@ const UserSchema = new Schema(
       lowercase: true,
       default: null,
       match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "email inválido"],
-      sparse: true, // permite múltiplos nulls no índice único
     },
 
     nome_completo: {
