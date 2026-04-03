@@ -62,8 +62,9 @@ const CDO_BDJ_HDR_H   = 20   // altura do header de cada bandeja
 const CDO_FUSAO_H     = 16   // altura por linha de fusão
 const CDO_WIDTH       = 290
 const SPL_HEADER_H    = 44
+const SPL_ENTRADA_H   = 24   // row de entrada (fibra + ocupação)
 const SPL_PORT_H      = 28
-const SPL_WIDTH       = 155
+const SPL_WIDTH       = 200  // alargado para caber nomes de CTO
 const OLT_WIDTH       = 200
 const OLT_PORT_H      = 18   // height per PON port row in OLT node
 const OLT_HEADER_H    = 74   // OLT header area
@@ -86,7 +87,7 @@ function oltHeight(caixas = []) {
   return OLT_HEADER_H + Math.max(1, caixas.length) * OLT_PORT_H + 8
 }
 function splHeight(ratio) {
-  return SPL_HEADER_H + ratio * SPL_PORT_H + 12
+  return SPL_HEADER_H + SPL_ENTRADA_H + ratio * SPL_PORT_H + 12
 }
 function ctoHeight(bandejas = []) {
   if (!bandejas.length) return CTO_HEIGHT
@@ -128,30 +129,92 @@ function buildGraphData(topologia) {
     edges.push(edge)
   }
 
-  // Mapa plano de todas as caixas para herança CDO→CDO (inclui cascade CDOs)
-  const caixaById = {}
-  // Mapa de CTOs para CTO-em-cascata
-  const ctoById = {}
+  // caixaById   → indexado por caixa.id (campo customizado, ex: "paulo-cesar-thomaz")
+  // caixaByMid  → indexado por caixa._id (MongoDB ObjectId string)
+  //   ↳ Necessário porque DiagramaCDOEditor salva saida.cto_id = caixa._id para tipo='cdo'
+  const caixaById  = {}
+  const caixaByMid = {}
+
+  // ctoById      → indexado por cto.cto_id (campo amigável, ex: "cto-01-pa")
+  // ctoByMongoId → indexado por cto._id (MongoDB ObjectId string)
+  const ctoById      = {}
+  const ctoByMongoId = {}
+
   for (const olt of topologia) {
     // CDOs diretos da OLT
     for (const c of (olt.caixas ?? [])) {
-      const id = c.id ?? c._id
-      if (id) caixaById[String(id)] = c
+      const customId = String(c.id  ?? '')
+      const mongoId  = String(c._id ?? '')
+      if (customId) caixaById[customId]   = c
+      if (mongoId)  caixaByMid[mongoId]   = c
     }
-    // ALL caixas (incluindo cascade CDOs com cdo_pai_id) — só no primeiro OLT
+    // ALL caixas (inclui CDOs em cascata com cdo_pai_id) — só no primeiro OLT
     for (const c of (olt._allCaixas ?? [])) {
-      const id = c.id ?? c._id
-      if (id && !caixaById[String(id)]) caixaById[String(id)] = c
+      const customId = String(c.id  ?? '')
+      const mongoId  = String(c._id ?? '')
+      if (customId && !caixaById[customId])   caixaById[customId]   = c
+      if (mongoId  && !caixaByMid[mongoId])   caixaByMid[mongoId]   = c
     }
     for (const caixa of (olt.caixas ?? [])) {
       for (const cto of (caixa.ctos ?? [])) {
         if (cto.cto_id) ctoById[cto.cto_id] = cto
+        const mongoId = String(cto._id ?? cto.id ?? '')
+        if (mongoId) ctoByMongoId[mongoId] = cto
       }
     }
-    // ALL CTOs (incluindo CTOs destino de cascatas) — só no primeiro OLT
+    // ALL CTOs (inclui CTOs destino de cascatas) — só no primeiro OLT
     for (const cto of (olt._allCTOs ?? [])) {
       if (cto.cto_id && !ctoById[cto.cto_id]) ctoById[cto.cto_id] = cto
+      const mongoId = String(cto._id ?? cto.id ?? '')
+      if (mongoId && !ctoByMongoId[mongoId]) ctoByMongoId[mongoId] = cto
     }
+  }
+
+  /**
+   * Resolve o label amigável de uma saída de splitter.
+   *
+   * Schema do objeto saida (DiagramaCDOEditor):
+   *   tipo='cto'      → cto_id = cto.cto_id amigável OU cto._id (MongoId)
+   *   tipo='cdo'      → cto_id = caixa._id  (MongoDB ObjectId string)
+   *   tipo='pon'      → cto_id vazio, usa pon_placa + pon_porta
+   *   tipo='passagem' → cto_id = string livre
+   *   sem tipo        → assume 'cto'
+   *
+   * ATENÇÃO: caixaById usa caixa.id (campo customizado).
+   *          caixaByMid usa caixa._id (MongoDB ObjectId string).
+   *          Para tipo='cdo', o editor salva caixa._id → usar caixaByMid.
+   */
+  function _resolveSaida(s) {
+    if (!s) return { _label: 'livre', _livre: true }
+
+    const tipo = s.tipo ?? 'cto'
+
+    // ── PON: sem cto_id — monta label a partir das portas ────────────────────
+    if (tipo === 'pon') {
+      const placa = s.pon_placa != null ? `Pl${s.pon_placa} ` : ''
+      const porta = s.pon_porta != null ? `PON${s.pon_porta}` : ''
+      return { ...s, _label: (placa + porta).trim() || 'PON', _livre: false }
+    }
+
+    const destId = String(s.cto_id ?? s.id ?? '').trim()
+    if (!destId) return { ...s, _label: 'livre', _livre: true }
+
+    // ── CE/CDO: editor salva caixa._id → busca em caixaByMid primeiro ────────
+    if (tipo === 'cdo') {
+      const caixa = caixaByMid[destId] ?? caixaById[destId]
+      if (caixa) return { ...s, _label: caixa.nome ?? destId.slice(-6), _livre: false }
+      return { ...s, _label: destId.slice(-6), _livre: false }
+    }
+
+    // ── CTO: tenta cto_id amigável, depois MongoId ────────────────────────────
+    const cto = ctoById[destId] ?? ctoByMongoId[destId]
+    if (cto) return { ...s, _label: cto.nome ?? cto.cto_id ?? destId.slice(-6), _livre: false }
+
+    // ── Fallback genérico: tenta caixa por MongoId ou customId, depois s.nome ─
+    const caixa = caixaByMid[destId] ?? caixaById[destId]
+    if (caixa) return { ...s, _label: caixa.nome ?? destId.slice(-6), _livre: false }
+
+    return { ...s, _label: s.nome ?? destId.slice(-6), _livre: false }
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -227,7 +290,7 @@ function buildGraphData(topologia) {
           id: splNid, type: 'splitterNode', position: { x: 0, y: 0 },
           data: {
             nome: `Splitter ${si + 1}`, tipo: spl.tipo ?? '1x8', ratio, tubeLabel, colorIn: eColor,
-            saidas: spl.saidas ?? [],
+            saidas: (spl.saidas ?? []).map(_resolveSaida),
             pon_placa: spl.pon_placa ?? linkedFusao?.pon_placa ?? null,
             pon_porta: spl.pon_porta ?? linkedFusao?.pon_porta ?? null,
             fo_entrada: spl.entrada?.fibra ?? linkedFusao?.entrada?.fibra ?? null,
@@ -290,7 +353,7 @@ function buildGraphData(topologia) {
             ratio,
             tubeLabel: corNome,
             colorIn:   edgeColor,
-            saidas:    cspl.saidas ?? [],
+            saidas:    (cspl.saidas ?? []).map(_resolveSaida),
           },
         })
       }
@@ -431,7 +494,7 @@ function buildGraphData(topologia) {
           seenNodes.add(splNid)
           nodes.push({
             id: splNid, type: 'splitterNode', position: { x: 0, y: 0 },
-            data: { nome: `Splitter ${si + 1}`, tipo: spl.tipo ?? '1x8', ratio, tubeLabel, colorIn: edgeColor, saidas: spl.saidas ?? [] },
+            data: { nome: `Splitter ${si + 1}`, tipo: spl.tipo ?? '1x8', ratio, tubeLabel, colorIn: edgeColor, saidas: (spl.saidas ?? []).map(_resolveSaida) },
           })
         }
 
@@ -1172,8 +1235,10 @@ CENode.displayName = 'CENode'
 
 // ── Splitter Node ──────────────────────────────────────────────────────────────
 const SplitterNode = memo(({ data }) => {
-  const ratio  = parseSplitterRatio(data.tipo)
-  const totalH = splHeight(ratio)
+  const ratio   = parseSplitterRatio(data.tipo)
+  const totalH  = splHeight(ratio)
+  // Conta saídas usadas para exibir ocupação no row de entrada
+  const ligadas = (data.saidas ?? []).filter(s => !s?._livre && (s?.cto_id ?? s?.id)).length
 
   return (
     <div style={{
@@ -1187,7 +1252,7 @@ const SplitterNode = memo(({ data }) => {
       position:     'relative',
       boxShadow:    '0 0 0 1px rgba(249,115,22,0.12)',
     }}>
-      {/* Handle de entrada */}
+      {/* Handle de entrada — centralizado no header */}
       <Handle type="target" position={Position.Left} id="in"
         style={{ background: data.colorIn ?? '#f97316', border: 'none', width: 9, height: 9, top: SPL_HEADER_H / 2 }} />
 
@@ -1216,12 +1281,38 @@ const SplitterNode = memo(({ data }) => {
         </span>
       </div>
 
+      {/* Row de entrada: fibra + ocupação */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        height: SPL_ENTRADA_H, padding: '0 10px',
+        borderBottom: '1px solid rgba(249,115,22,0.15)',
+        background: 'rgba(249,115,22,0.04)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%',
+            backgroundColor: data.colorIn ?? '#f97316',
+            boxShadow: `0 0 3px ${data.colorIn ?? '#f97316'}88`, flexShrink: 0 }} />
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)', fontFamily: 'monospace' }}>
+            Entrada {data.tubeLabel ?? ''}
+          </span>
+        </div>
+        <span style={{
+          fontSize: 9, fontWeight: 700,
+          color: ligadas >= ratio ? '#f43f5e' : ligadas > 0 ? '#f59e0b' : 'rgba(255,255,255,0.3)',
+        }}>
+          {ligadas}/{ratio}
+        </span>
+      </div>
+
       {/* Portas de saída */}
       {Array.from({ length: ratio }, (_, i) => {
         const saida     = data.saidas?.[i]
         const portNum   = saida?.num ?? saida?.porta ?? (i + 1)
         const portColor = fiberColor(portNum)
-        const yCenter   = SPL_HEADER_H + i * SPL_PORT_H + SPL_PORT_H / 2
+        // Offset vertical: header + entrada row + posição da linha
+        const yCenter   = SPL_HEADER_H + SPL_ENTRADA_H + i * SPL_PORT_H + SPL_PORT_H / 2
+        const label     = saida?._label ?? (saida?.cto_id ? String(saida.cto_id).slice(-6) : 'livre')
+        const isLivre   = saida?._livre ?? !saida?.cto_id
 
         return (
           <div key={i} style={{
@@ -1229,27 +1320,39 @@ const SplitterNode = memo(({ data }) => {
             height: SPL_PORT_H, padding: '0 10px',
             borderBottom: i < ratio - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
           }}>
-            {/* Ponto colorido */}
-            <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: portColor,
-              boxShadow: `0 0 4px ${portColor}88`, marginRight: 6, flexShrink: 0 }} />
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', fontWeight: 600 }}>
+            {/* Indicador: preenchido = usado, anel = livre */}
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0, marginRight: 6,
+              backgroundColor: isLivre ? 'transparent' : portColor,
+              border: isLivre ? `1.5px solid ${portColor}` : 'none',
+              boxShadow: isLivre ? 'none' : `0 0 4px ${portColor}88`,
+            }} />
+
+            {/* Número da porta */}
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace',
+              fontWeight: 600, flexShrink: 0, marginRight: 4 }}>
               S{portNum}
             </span>
 
-            {/* Handle de saída posicionado nesta linha */}
+            {/* Nome do destino ou "livre" */}
+            <span style={{
+              fontSize: 9, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap', textAlign: 'right',
+              color: isLivre ? 'rgba(255,255,255,0.2)' : '#94a3b8',
+              fontStyle: isLivre ? 'italic' : 'normal',
+            }}>
+              {label}
+            </span>
+
+            {/* Handle de saída */}
             <Handle
               type="source"
               position={Position.Right}
               id={`s-out-${i}`}
               style={{
-                position:  'absolute',
-                right:     -5,
-                top:       yCenter,
-                background: portColor,
-                border:    'none',
-                width:     8,
-                height:    8,
-                transform: 'none',
+                position:  'absolute', right: -5, top: yCenter,
+                background: portColor, border: 'none',
+                width: 8, height: 8, transform: 'none',
               }}
             />
           </div>

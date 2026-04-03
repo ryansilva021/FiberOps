@@ -349,8 +349,9 @@ function StepPix({ data, email, onDone }) {
     }
   }, [email])
 
-  // Auto-polling a cada 10s
+  // Verificação imediata + auto-polling a cada 10s
   useEffect(() => {
+    checkStatus()
     pollRef.current = setInterval(checkStatus, 10000)
     return () => clearInterval(pollRef.current)
   }, [checkStatus])
@@ -437,7 +438,9 @@ function StepBoleto({ data, email }) {
     finally { setPolling(false) }
   }, [email])
 
+  // Verificação imediata + auto-polling a cada 15s
   useEffect(() => {
+    checkStatus()
     pollRef.current = setInterval(checkStatus, 15000)
     return () => clearInterval(pollRef.current)
   }, [checkStatus])
@@ -481,11 +484,21 @@ function StepBoleto({ data, email }) {
         </div>
       )}
 
-      {confirmed && (
+      {confirmed ? (
         <Link href="/login" style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 10, background: '#22c55e', color: '#fff', fontWeight: 800, fontSize: 14, textDecoration: 'none' }}>
           Ir para o login →
         </Link>
+      ) : (
+        <button
+          onClick={checkStatus} disabled={polling}
+          style={{ width: '100%', padding: '13px', borderRadius: 10, background: polling ? '#1e293b' : '#f59e0b', color: polling ? '#fff' : '#020817', fontWeight: 700, fontSize: 14, border: 'none', cursor: polling ? 'not-allowed' : 'pointer' }}
+        >
+          {polling ? 'Verificando...' : 'Já paguei — verificar status'}
+        </button>
       )}
+      <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#334155' }}>
+        O status é verificado automaticamente a cada 15 segundos.
+      </div>
     </div>
   )
 }

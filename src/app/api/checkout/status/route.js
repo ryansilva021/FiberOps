@@ -32,7 +32,19 @@ export async function GET(request) {
     return NextResponse.json({ confirmed: true, payment_method: checkout.payment_method })
   }
 
-  // Sem payment_id ainda não dá pra consultar o Asaas
+  // Se payment_id não foi salvo, tenta buscar pela subscription
+  if (!checkout.payment_id && checkout.asaas_subscription_id) {
+    try {
+      const { listSubscriptionPayments } = await import('@/lib/asaas')
+      const result = await listSubscriptionPayments(checkout.asaas_subscription_id, 1)
+      const first  = result?.data?.[0]
+      if (first?.id) {
+        checkout.payment_id = first.id
+        await checkout.save()
+      }
+    } catch { /* segue sem payment_id */ }
+  }
+
   if (!checkout.payment_id) {
     return NextResponse.json({ confirmed: false, payment_method: checkout.payment_method })
   }
