@@ -73,9 +73,10 @@ export const authConfig = {
       // Rotas públicas: sempre permitido
       if (
         pathname.startsWith('/login') ||
-        pathname.startsWith('/cadastro') ||
+        pathname.startsWith('/planos') ||
         pathname.startsWith('/api/auth') ||
         pathname.startsWith('/api/registro') ||
+        pathname.startsWith('/api/checkout') ||
         pathname.startsWith('/empresa/bloqueada')
       ) return true
 
@@ -100,7 +101,7 @@ export const authConfig = {
         '/admin/os':        ['superadmin', 'admin', 'tecnico', 'noc', 'recepcao'],
         '/admin/usuarios':  ['superadmin', 'admin'],
         '/admin/importar':  ['superadmin', 'admin'],
-        '/admin/logs':      ['superadmin', 'admin', 'tecnico', 'noc'],
+        '/admin/logs':      ['superadmin', 'admin'],
         '/admin/olts':      ['superadmin', 'admin', 'noc'],
       }
 

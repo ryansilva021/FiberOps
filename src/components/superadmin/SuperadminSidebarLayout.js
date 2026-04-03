@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
@@ -8,7 +9,6 @@ import { signOut } from 'next-auth/react'
 const NAV_ITEMS = [
   { href: '/superadmin/projetos', label: 'Projetos', icon: '🏢' },
   { href: '/superadmin/registros', label: 'Registros Pendentes', icon: '📋' },
-  { href: '/', label: 'Voltar ao Mapa', icon: '🗺️' },
 ]
 
 export default function SuperadminSidebarLayout({ session, children }) {
@@ -48,12 +48,7 @@ export default function SuperadminSidebarLayout({ session, children }) {
           style={{ borderBottom: '1px solid var(--sidebar-border)' }}
           className="flex items-center gap-3 px-5 py-4"
         >
-          <div
-            style={{ backgroundColor: '#7c3aed' }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-          >
-            S
-          </div>
+          <Image src="/short-logo.svg" alt="FiberOps" width={32} height={32} priority />
           <div>
             <p className="text-white text-sm font-bold">FiberOps</p>
             <p className="text-violet-400 text-xs font-semibold">Superadmin</p>

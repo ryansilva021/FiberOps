@@ -50,6 +50,63 @@ body,
   height: 100%;
 }
 
+/* ── OpenLayers: container ocupa 100% da área disponível ────────────────── */
+.ol-viewport {
+  width:  100% !important;
+  height: 100% !important;
+}
+/* Zoom control reposicionado para não conflitar com sidebar */
+.ol-zoom-ftth {
+  top:   0.5em;
+  right: 0.5em;
+  left:  auto !important;
+}
+.ol-zoom-ftth .ol-zoom-in,
+.ol-zoom-ftth .ol-zoom-out {
+  background: rgba(15, 23, 42, 0.85);
+  color: #f1f5f9;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  line-height: 30px;
+  margin: 1px 0;
+}
+.ol-zoom-ftth .ol-zoom-in:hover,
+.ol-zoom-ftth .ol-zoom-out:hover {
+  background: rgba(99, 102, 241, 0.85);
+}
+/* Scale line */
+.ol-scale-line {
+  background: rgba(15,23,42,0.75);
+  border-radius: 4px;
+  padding: 2px 4px;
+  bottom: 8px;
+  left:   8px;
+}
+.ol-scale-line-inner {
+  color: #94a3b8;
+  border-color: #94a3b8;
+  font-size: 10px;
+}
+/* Attribution */
+.ol-attribution {
+  bottom: 8px;
+  right:  8px;
+  background: rgba(15,23,42,0.7);
+  border-radius: 4px;
+  font-size: 10px;
+}
+.ol-attribution a { color: #6366f1; }
+[data-theme="light"] .ol-zoom-ftth .ol-zoom-in,
+[data-theme="light"] .ol-zoom-ftth .ol-zoom-out {
+  background: rgba(255,255,255,0.9);
+  color: #1e293b;
+  border-color: #e2e8f0;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 /* Inputs e selects seguem a cor do tema */
 input, select, textarea {
   color: var(--foreground);

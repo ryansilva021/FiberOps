@@ -1,17 +1,20 @@
 /**
  * src/app/api/noc/stream/route.js
  * Server-Sent Events endpoint that streams NOCLog entries in real time.
- * Sends the last 20 entries on connect, then polls every 2 s for new entries.
- * A heartbeat comment is sent every 15 s so proxies don't close idle connections.
+ *
+ * Sends the last 20 entries on connect, then uses a MongoDB Change Stream
+ * to push new inserts instantly — zero polling, sub-second latency.
+ *
+ * Requires a MongoDB replica set or Atlas (Change Streams prerequisite).
+ * A heartbeat comment is sent every 30 s so proxies don't close idle connections.
  */
 
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { NOCLog } from '@/models/NOCLog'
 
-const NOC_ALLOWED = ['superadmin', 'admin', 'noc']
-const POLL_MS     = 2000
-const HEARTBEAT_MS = 15000
+const NOC_ALLOWED   = ['superadmin', 'admin', 'noc']
+const HEARTBEAT_MS  = 30_000
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,40 +28,55 @@ export async function GET() {
   }
   const projeto_id = session.user.projeto_id
 
-  let controller
+  await connectDB()
+
+  // ── Initial burst: last 20 entries ─────────────────────────────────────────
+  const initial = await NOCLog
+    .find({ projeto_id })
+    .sort({ ts: -1 })
+    .limit(20)
+    .lean()
+  initial.reverse()
+
+  // ── Change Stream: watch only inserts for this project ─────────────────────
+  const pipeline = [
+    {
+      $match: {
+        operationType: 'insert',
+        'fullDocument.projeto_id': projeto_id,
+      },
+    },
+  ]
+  const changeStream = NOCLog.watch(pipeline, { fullDocument: 'required' })
+
+  // ── SSE stream ─────────────────────────────────────────────────────────────
+  const encoder = new TextEncoder()
+  let hbTimer
+
   const stream = new ReadableStream({
-    async start(ctrl) {
-      controller = ctrl
-
-      const encoder = new TextEncoder()
-
+    start(ctrl) {
       const send = (data) => {
         try {
           ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
         } catch {
-          // client disconnected
+          // client disconnected — cancel() will clean up
         }
       }
 
-      const heartbeat = () => {
-        try {
-          ctrl.enqueue(encoder.encode(': heartbeat\n\n'))
-        } catch {
-          // client disconnected
-        }
+      // Send initial burst (oldest → newest)
+      for (const doc of initial) {
+        send({
+          _id:     doc._id.toString(),
+          ts:      doc.ts?.toISOString() ?? new Date().toISOString(),
+          tag:     doc.tag   ?? 'SYSTEM',
+          message: doc.message,
+          nivel:   doc.nivel ?? 'info',
+        })
       }
 
-      // Connect to DB and load initial burst
-      await connectDB()
-
-      const initial = await NOCLog
-        .find({ projeto_id })
-        .sort({ ts: -1 })
-        .limit(20)
-        .lean()
-
-      // Send oldest first
-      initial.reverse().forEach((doc) => {
+      // Push new inserts in real time
+      changeStream.on('change', (event) => {
+        const doc = event.fullDocument
         send({
           _id:     doc._id.toString(),
           ts:      doc.ts?.toISOString() ?? new Date().toISOString(),
@@ -68,62 +86,33 @@ export async function GET() {
         })
       })
 
-      // Track the most recent _id seen
-      let lastId = initial.length > 0
-        ? initial[initial.length - 1]._id
-        : null
+      changeStream.on('error', (err) => {
+        console.error('[SSE] change stream error:', err.message)
+        // Stream will be closed by the client reconnecting via EventSource
+        try { ctrl.close() } catch {}
+      })
 
-      // Polling loop
-      const pollInterval = setInterval(async () => {
+      // Heartbeat — prevents proxy / load-balancer timeouts on idle connections
+      hbTimer = setInterval(() => {
         try {
-          const query = lastId
-            ? { projeto_id, _id: { $gt: lastId } }
-            : { projeto_id }
-
-          const newDocs = await NOCLog
-            .find(query)
-            .sort({ _id: 1 })
-            .limit(50)
-            .lean()
-
-          for (const doc of newDocs) {
-            send({
-              _id:     doc._id.toString(),
-              ts:      doc.ts?.toISOString() ?? new Date().toISOString(),
-              tag:     doc.tag   ?? 'SYSTEM',
-              message: doc.message,
-              nivel:   doc.nivel ?? 'info',
-            })
-            lastId = doc._id
-          }
+          ctrl.enqueue(encoder.encode(': heartbeat\n\n'))
         } catch {
-          // DB error — continue polling
+          clearInterval(hbTimer)
         }
-      }, POLL_MS)
-
-      // Heartbeat loop
-      const hbInterval = setInterval(heartbeat, HEARTBEAT_MS)
-
-      // Cleanup when client disconnects (stream cancelled)
-      const cleanup = () => {
-        clearInterval(pollInterval)
-        clearInterval(hbInterval)
-      }
-
-      // Store cleanup on controller so cancel() can call it
-      ctrl._cleanup = cleanup
+      }, HEARTBEAT_MS)
     },
 
     cancel() {
-      if (controller?._cleanup) controller._cleanup()
+      clearInterval(hbTimer)
+      changeStream.close().catch(() => {})
     },
   })
 
   return new Response(stream, {
     headers: {
-      'Content-Type':  'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection':    'keep-alive',
+      'Content-Type':      'text/event-stream',
+      'Cache-Control':     'no-cache, no-transform',
+      'Connection':        'keep-alive',
       'X-Accel-Buffering': 'no',
     },
   })

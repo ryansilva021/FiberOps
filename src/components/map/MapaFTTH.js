@@ -1,14 +1,24 @@
 'use client'
 
-import 'maplibre-gl/dist/maplibre-gl.css'
+import 'ol/ol.css'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import maplibregl from 'maplibre-gl'
 import { useRouter } from 'next/navigation'
-import { useMap }        from '@/hooks/useMap'
-import { useMapLayers }  from '@/hooks/useMapLayers'
-import { useMapEvents, LAYER_TYPE_MAP }  from '@/hooks/useMapEvents'
-import { useGPS }        from '@/hooks/useGPS'
+import { useOLMap }    from '@/hooks/useOLMap'
+import { useOLLayers } from '@/hooks/useOLLayers'
+import { useOLEvents } from '@/hooks/useOLEvents'
+import { useOLGPS }    from '@/hooks/useOLGPS'
+
+// OpenLayers primitives usados nos blocos de edição e preview
+import Feature      from 'ol/Feature'
+import Point        from 'ol/geom/Point'
+import LineString   from 'ol/geom/LineString'
+import VectorSource from 'ol/source/Vector'
+import VectorLayer  from 'ol/layer/Vector'
+import { Modify }   from 'ol/interaction'
+import { Style, Circle as OLCircle, Fill, Stroke } from 'ol/style'
+import { fromLonLat, toLonLat } from 'ol/proj'
+import { flyTo as olFlyTo, fitExtent as olFitExtent } from '@/lib/olMap'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import { useModoCampo }  from '@/hooks/useModoCampo'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -145,13 +155,10 @@ export default function MapaFTTH({
   const isDark = theme === 'dark'
 
   // ---- Hooks do mapa ----
-  const { map, mapLoaded } = useMap(containerRef, {
-    center: [-46.633308, -23.55052],
+  const { map, mapLoaded } = useOLMap(containerRef, {
+    center: [-46.633308, -23.55052], // OL: [lng, lat]
     zoom:   14,
-    darkMode: theme === 'dark',
   })
-
-  useMapLayers(map, mapLoaded, { ctos, caixas, rotas, postes, olts }, layerToggles, theme === 'dark', selectedElement)
 
   const addModeRef = useRef(addMode)
   addModeRef.current = addMode
@@ -174,120 +181,104 @@ export default function MapaFTTH({
   const TIPO_ICONE = { cto: '📦', caixa: '🔌', rota: '〰', poste: '🏗', olt: '🖥' }
   const TIPO_COR   = { cto: '#0284c7', caixa: '#7c3aed', rota: '#059669', poste: '#d97706', olt: '#0891b2' }
 
-  const eventCallbacks = {
-    addMode: addMode,
-    onElementClick: useCallback(({ type, data }) => {
-      if (addModeRef.current) return
-      if (reposicionandoRef.current) return
-      setSpreadPanel(null)
-      setSelectedElement({ type, data })
-    }, []),
-    onClusterClick: useCallback((features, lngLat, point) => {
-      if (addModeRef.current || reposicionandoRef.current) return
-      setSelectedElement(null)
-      // De-duplicate by id
-      const seen = new Set()
-      const items = []
-      for (const f of features) {
-        const type = LAYER_TYPE_MAP[f.layer.id] ?? 'unknown'
-        const props = f.properties ?? {}
-        const uid = props.cto_id ?? props.ce_id ?? props.rota_id ?? props.poste_id ?? props.id ?? `${f.layer.id}_${items.length}`
-        if (seen.has(uid)) continue
-        seen.add(uid)
-        const nome = props.cto_id ?? props.ce_id ?? props.rota_id ?? props.poste_id ?? props.id ?? type
-        items.push({ type, data: props, nome, cor: TIPO_COR[type] ?? '#64748b', icone: TIPO_ICONE[type] ?? '?' })
-      }
-      if (items.length < 2) {
-        // Only 1 unique item — select directly
-        setSelectedElement({ type: items[0].type, data: items[0].data })
-        return
-      }
-      setSpreadPanel({ x: point.x, y: point.y, items })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
-    onMapClick: useCallback(async (lngLat, snapInfo) => {
-      // ── Simulation mode: capture click and run analysis ─────────────────
-      if (simModeRef.current) {
-        setSimLoading(true)
-        setSimResult(null)
-        setSimConfirm(false)
-        setSimCliente('')
-        try {
-          const res  = await fetch('/api/simulation/install', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ lat: lngLat.lat, lng: lngLat.lng }),
-          })
-          const data = await res.json()
-          setSimResult(data)
-        } catch (e) {
-          console.error('[Sim]', e.message)
-        } finally {
-          setSimLoading(false)
-        }
-        return
-      }
+  // ---- Callback de clique em elemento (usado por useOLLayers) ----
+  const handleElementClick = useCallback(({ type, data }) => {
+    if (addModeRef.current) return
+    if (reposicionandoRef.current) return
+    setSpreadPanel(null)
+    setSelectedElement({ type, data })
+  }, [])
 
-      const mode = addModeRef.current
-      const repos = reposicionandoRef.current
+  // ---- Layers do OpenLayers — callbacks de clique fluem para o BottomSheet ----
+  useOLLayers(map, mapLoaded, { ctos, caixas, rotas, postes, olts }, layerToggles, {
+    onClickCTO:   (cto)   => handleElementClick({ type: 'cto',   data: cto }),
+    onClickCaixa: (caixa) => handleElementClick({ type: 'caixa', data: caixa }),
+    onClickPoste: (poste) => handleElementClick({ type: 'poste', data: poste }),
+    onClickOLT:   (olt)   => handleElementClick({ type: 'olt',   data: olt }),
+    onClusterClick: (items, pixel) => setSpreadPanel({ x: pixel.x, y: pixel.y, items }),
+  })
 
-      // Reposicionamento: salvar nova posição (online) ou enfileirar (offline)
-      if (repos) {
-        const { type, data } = repos
-        if (!isOnline) {
-          if (type === 'cto') {
-            enqueue({ type: 'reposicionar_cto', payload: { cto_id: data.cto_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng } })
-          } else if (type === 'caixa') {
-            enqueue({ type: 'reposicionar_caixa', payload: { ce_id: data.id ?? data.ce_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng } })
-          } else if (type === 'poste') {
-            enqueue({ type: 'reposicionar_poste', payload: { poste_id: data.poste_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng } })
-          }
-        } else {
-          try {
-            if (type === 'cto') {
-              await upsertCTO({ cto_id: data.cto_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng })
-            } else if (type === 'caixa') {
-              const ce_id = data.id ?? data.ce_id
-              await upsertCaixa({ ce_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng })
-            } else if (type === 'poste') {
-              await upsertPoste({ poste_id: data.poste_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng })
-            } else if (type === 'olt') {
-              const olt_id = data.id ?? data.olt_id
-              await upsertOLT({ olt_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng, nome: data.nome, modelo: data.modelo, ip: data.ip, status: data.status, portas_pon: data.capacidade })
-            }
-            await reloadData()
-          } catch (err) {
-            console.error('[MapaFTTH] Erro ao reposicionar:', err)
-          }
-        }
-        setReposicionandoEl(null)
-        return
+  // ---- Eventos de mapa (click em área vazia, duplo-clique para rota) ----
+  const onMapClick = useCallback(async (lngLat) => {
+    // ── Simulation mode: capture click and run analysis ─────────────────
+    if (simModeRef.current) {
+      setSimLoading(true)
+      setSimResult(null)
+      setSimConfirm(false)
+      setSimCliente('')
+      try {
+        const res  = await fetch('/api/simulation/install', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ lat: lngLat.lat, lng: lngLat.lng }),
+        })
+        const data = await res.json()
+        setSimResult(data)
+      } catch (e) {
+        console.error('[Sim]', e.message)
+      } finally {
+        setSimLoading(false)
       }
+      return
+    }
 
-      if (!mode) {
-        setSpreadPanel(null)
-        setSelectedElement(null)
-        return
-      }
-      if (mode === 'rota') {
-        if (routeFinalizedRef.current) return // não adiciona ponto após finalizar
-        setAddRoutePoints((prev) => [...prev, [lngLat.lng, lngLat.lat]])
-        if (snapInfo) {
-          const idx = addRoutePointsRef.current.length
-          setAddRouteLinks((prev) => [...prev, { pointIndex: idx, ...snapInfo }])
+    const mode  = addModeRef.current
+    const repos = reposicionandoRef.current
+
+    // Reposicionamento: salvar nova posição (online) ou enfileirar (offline)
+    if (repos) {
+      const { type, data } = repos
+      if (!isOnline) {
+        if (type === 'cto') {
+          enqueue({ type: 'reposicionar_cto', payload: { cto_id: data.cto_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng } })
+        } else if (type === 'caixa') {
+          enqueue({ type: 'reposicionar_caixa', payload: { ce_id: data.id ?? data.ce_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng } })
+        } else if (type === 'poste') {
+          enqueue({ type: 'reposicionar_poste', payload: { poste_id: data.poste_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng } })
         }
       } else {
-        setAddCoords(lngLat)
+        try {
+          if (type === 'cto') {
+            await upsertCTO({ cto_id: data.cto_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng })
+          } else if (type === 'caixa') {
+            const ce_id = data.id ?? data.ce_id
+            await upsertCaixa({ ce_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng })
+          } else if (type === 'poste') {
+            await upsertPoste({ poste_id: data.poste_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng })
+          } else if (type === 'olt') {
+            const olt_id = data.id ?? data.olt_id
+            await upsertOLT({ olt_id, projeto_id: projetoId, lat: lngLat.lat, lng: lngLat.lng, nome: data.nome, modelo: data.modelo, ip: data.ip, status: data.status, portas_pon: data.capacidade })
+          }
+          await reloadData()
+        } catch (err) {
+          console.error('[MapaFTTH] Erro ao reposicionar:', err)
+        }
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [projetoId]),
-    onRouteDblClick: useCallback(() => {
-      if (addModeRef.current === 'rota' && addRoutePointsRef.current.length >= 2) {
-        setRouteFinalized(true)
-      }
-    }, []),
-  }
-  useMapEvents(map, mapLoaded, eventCallbacks)
+      setReposicionandoEl(null)
+      return
+    }
+
+    if (!mode) {
+      setSpreadPanel(null)
+      setSelectedElement(null)
+      return
+    }
+    if (mode === 'rota') {
+      if (routeFinalizedRef.current) return
+      setAddRoutePoints((prev) => [...prev, [lngLat.lng, lngLat.lat]])
+    } else {
+      setAddCoords(lngLat)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projetoId])
+
+  const onRouteDblClick = useCallback(() => {
+    if (addModeRef.current === 'rota' && addRoutePointsRef.current.length >= 2) {
+      setRouteFinalized(true)
+    }
+  }, [])
+
+  useOLEvents(map, mapLoaded, { onMapClick, onRouteDblClick })
 
   // ---- GPS ----
   const {
@@ -298,7 +289,7 @@ export default function MapaFTTH({
     setFollowMode,
     startTracking,
     stopTracking,
-  } = useGPS(map)
+  } = useOLGPS(map)
 
   // Centralizar na localização do usuário ao abrir o mapa (uma vez só)
   useEffect(() => {
@@ -306,7 +297,7 @@ export default function MapaFTTH({
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 12, duration: 1500 })
+        olFlyTo([pos.coords.longitude, pos.coords.latitude], 12, 1500)
       },
       () => {}, // permissão negada — mantém posição padrão
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
@@ -352,138 +343,140 @@ export default function MapaFTTH({
   }, [projetoId])
 
   // ---- Edição de rota: marcadores arrastáveis ----
+  // ---- Edit markers de rota (OpenLayers — Modify interaction) ----
   useEffect(() => {
-    // Limpar marcadores anteriores
-    editMarkersRef.current.forEach(m => m.remove())
-    editMarkersRef.current = []
+    // Limpar camada anterior
+    if (editMarkersRef.current?.layer) {
+      try { map?.removeLayer(editMarkersRef.current.layer) } catch (_) {}
+      try { map?.removeInteraction(editMarkersRef.current.modify) } catch (_) {}
+    }
+    editMarkersRef.current = {}
+
     const canEdit = userRoleRef.current === 'admin' || userRoleRef.current === 'superadmin'
     if (!editingRota || !map || !mapLoaded || !canEdit) return
 
+    // Source com um ponto por vértice
+    const editSource = new VectorSource()
     editingRota.coordinates.forEach((coord, i) => {
-      const el = document.createElement('div')
       const isEndpoint = i === 0 || i === editingRota.coordinates.length - 1
-      el.style.cssText = `width:${isEndpoint?16:12}px;height:${isEndpoint?16:12}px;background:${isEndpoint?'#e2e8f0':'#6366f1'};border:2px solid white;border-radius:50%;cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.5);z-index:10`
-      const marker = new maplibregl.Marker({ element: el, draggable: true })
-        .setLngLat(coord)
-        .addTo(map)
-      marker.on('dragend', () => {
-        const { lng, lat } = marker.getLngLat()
-        setEditingRota(prev => {
-          if (!prev) return null
-          const newCoords = [...prev.coordinates]
-          newCoords[i] = [lng, lat]
-          return { ...prev, coordinates: newCoords }
-        })
-      })
-      editMarkersRef.current.push(marker)
+      const f = new Feature({ geometry: new Point(fromLonLat([coord[0], coord[1]])), isEndpoint, coordIndex: i })
+      editSource.addFeature(f)
     })
 
+    const editLayer = new VectorLayer({
+      source: editSource,
+      style: (f) => new Style({
+        image: new OLCircle({
+          radius:  f.get('isEndpoint') ? 8 : 6,
+          fill:    new Fill({ color: f.get('isEndpoint') ? '#e2e8f0' : '#6366f1' }),
+          stroke:  new Stroke({ color: '#ffffff', width: 2 }),
+        }),
+      }),
+      zIndex: 100,
+    })
+    map.addLayer(editLayer)
+
+    // Modify interaction — arrastar vértice
+    const modify = new Modify({ source: editSource, pixelTolerance: 10 })
+    modify.on('modifyend', () => {
+      const features = editSource.getFeatures()
+        .sort((a, b) => a.get('coordIndex') - b.get('coordIndex'))
+      const newCoords = features.map((f) => {
+        const [lng, lat] = toLonLat(f.getGeometry().getCoordinates())
+        return [lng, lat]
+      })
+      setEditingRota(prev => prev ? { ...prev, coordinates: newCoords } : null)
+    })
+    map.addInteraction(modify)
+
+    editMarkersRef.current = { layer: editLayer, modify }
+
     return () => {
-      editMarkersRef.current.forEach(m => m.remove())
-      editMarkersRef.current = []
+      try { map.removeLayer(editLayer) }       catch (_) {}
+      try { map.removeInteraction(modify) }    catch (_) {}
+      editMarkersRef.current = {}
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingRota?.rota_id, map, mapLoaded])
 
-  // ---- Preview da rota em edição ----
+  // ---- Preview da rota em edição (OpenLayers) ----
+  const editPreviewRef = useRef({ layer: null, source: null })
   useEffect(() => {
-    const SRC = 'edit-rota-src', LYR = 'edit-rota-lyr'
     if (!map || !mapLoaded) return
-    if (!editingRota) {
-      if (map.getLayer(LYR)) map.removeLayer(LYR)
-      if (map.getSource(SRC)) map.removeSource(SRC)
-      return
+    // Limpar
+    if (editPreviewRef.current.layer) {
+      try { map.removeLayer(editPreviewRef.current.layer) } catch (_) {}
+      editPreviewRef.current = { layer: null, source: null }
     }
-    const geojson = { type: 'Feature', geometry: { type: 'LineString', coordinates: editingRota.coordinates }, properties: {} }
-    if (map.getSource(SRC)) {
-      map.getSource(SRC).setData(geojson)
-    } else {
-      map.addSource(SRC, { type: 'geojson', data: geojson })
-      map.addLayer({ id: LYR, type: 'line', source: SRC, paint: { 'line-color': '#6366f1', 'line-width': 3, 'line-dasharray': [5, 3] } })
+    if (!editingRota || editingRota.coordinates.length < 2) return
+
+    const src = new VectorSource()
+    src.addFeature(new Feature({
+      geometry: new LineString(editingRota.coordinates.map(([lng, lat]) => fromLonLat([lng, lat]))),
+    }))
+    const lyr = new VectorLayer({
+      source: src,
+      style: new Style({ stroke: new Stroke({ color: '#6366f1', width: 3, lineDash: [5, 3] }) }),
+      zIndex: 99,
+    })
+    map.addLayer(lyr)
+    editPreviewRef.current = { layer: lyr, source: src }
+
+    return () => {
+      try { map.removeLayer(lyr) } catch (_) {}
+      editPreviewRef.current = { layer: null, source: null }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingRota, map, mapLoaded])
 
-  // ---- Simulação: camadas MapLibre (ponto cliente + linha até CTO) ----
+  // ---- Simulação: preview OpenLayers (linha + ponto do cliente) ----
+  const simPreviewRef = useRef({ layer: null, source: null })
   useEffect(() => {
-    const SRC   = 'sim-preview'
-    const LLINE = 'sim-line'
-    const LCIRC = 'sim-point'
-
     if (!map || !mapLoaded) return
 
     const cleanup = () => {
-      try {
-        if (map.getLayer(LLINE)) map.removeLayer(LLINE)
-        if (map.getLayer(LCIRC)) map.removeLayer(LCIRC)
-        if (map.getSource(SRC))  map.removeSource(SRC)
-      } catch {}
+      if (simPreviewRef.current.layer) {
+        try { map.removeLayer(simPreviewRef.current.layer) } catch (_) {}
+        simPreviewRef.current = { layer: null, source: null }
+      }
     }
+    cleanup()
 
-    if (!simResult?.success || !simResult.client_lat || !simResult.cto_lat) {
-      cleanup()
-      return
-    }
+    if (!simResult?.success || !simResult.client_lat || !simResult.cto_lat) return
 
-    const clientCoord = [simResult.client_lng, simResult.client_lat]
-    const ctoCoord    = [simResult.cto_lng,    simResult.cto_lat]
+    const clientCoord = fromLonLat([simResult.client_lng, simResult.client_lat])
+    const ctoCoord    = fromLonLat([simResult.cto_lng,    simResult.cto_lat])
 
     const sigColor =
       simResult.signal_quality === 'EXCELENTE' ? '#22c55e' :
       simResult.signal_quality === 'BOM'        ? '#4ade80' :
       simResult.signal_quality === 'LIMITE'     ? '#f59e0b' : '#ef4444'
 
-    const geojson = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          geometry: { type: 'LineString', coordinates: [clientCoord, ctoCoord] },
-          properties: {},
-        },
-        {
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: clientCoord },
-          properties: {},
-        },
-      ],
-    }
+    const src = new VectorSource()
+    const lineF = new Feature({ geometry: new LineString([clientCoord, ctoCoord]) })
+    lineF.setStyle(new Style({ stroke: new Stroke({ color: sigColor, width: 2.5, lineDash: [5, 3] }) }))
 
-    if (map.getSource(SRC)) {
-      map.getSource(SRC).setData(geojson)
-      if (map.getPaintProperty(LLINE, 'line-color') !== sigColor) {
-        map.setPaintProperty(LLINE, 'line-color', sigColor)
-      }
-    } else {
-      map.addSource(SRC, { type: 'geojson', data: geojson })
-      map.addLayer({
-        id: LLINE, type: 'line', source: SRC,
-        filter: ['==', ['geometry-type'], 'LineString'],
-        paint: {
-          'line-color':      sigColor,
-          'line-width':      2.5,
-          'line-dasharray':  [5, 3],
-          'line-opacity':    0.9,
-        },
-      })
-      map.addLayer({
-        id: LCIRC, type: 'circle', source: SRC,
-        filter: ['==', ['geometry-type'], 'Point'],
-        paint: {
-          'circle-radius':       10,
-          'circle-color':        '#f59e0b',
-          'circle-stroke-width': 2.5,
-          'circle-stroke-color': '#ffffff',
-        },
-      })
-    }
+    const dotF = new Feature({ geometry: new Point(clientCoord) })
+    dotF.setStyle(new Style({
+      image: new OLCircle({
+        radius: 10,
+        fill:   new Fill({ color: '#f59e0b' }),
+        stroke: new Stroke({ color: '#ffffff', width: 2.5 }),
+      }),
+    }))
 
-    // Fit both points in view
-    const minLng = Math.min(clientCoord[0], ctoCoord[0])
-    const maxLng = Math.max(clientCoord[0], ctoCoord[0])
-    const minLat = Math.min(clientCoord[1], ctoCoord[1])
-    const maxLat = Math.max(clientCoord[1], ctoCoord[1])
-    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 120, duration: 800 })
+    src.addFeatures([lineF, dotF])
+    const lyr = new VectorLayer({ source: src, zIndex: 98 })
+    map.addLayer(lyr)
+    simPreviewRef.current = { layer: lyr, source: src }
+
+    // Encaixa ambos no viewport
+    olFitExtent([
+      Math.min(simResult.client_lng, simResult.cto_lng),
+      Math.min(simResult.client_lat, simResult.cto_lat),
+      Math.max(simResult.client_lng, simResult.cto_lng),
+      Math.max(simResult.client_lat, simResult.cto_lat),
+    ], 120)
 
     return cleanup
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -598,7 +591,7 @@ export default function MapaFTTH({
     function handleFlyTo(e) {
       const { lat, lng } = e.detail ?? {}
       if (lat == null || lng == null || !map) return
-      map.flyTo({ center: [lng, lat], zoom: 17, duration: 1200 })
+      olFlyTo([lng, lat], 17, 1200)
     }
     window.addEventListener('fiberops:fly-to', handleFlyTo)
     return () => window.removeEventListener('fiberops:fly-to', handleFlyTo)
@@ -606,84 +599,65 @@ export default function MapaFTTH({
 
   // ---- Cursor crosshair durante add mode, reposicionamento ou simulação ----
   useEffect(() => {
-    if (!containerRef.current) return
-    containerRef.current.style.cursor = (addMode || reposicionandoEl || simMode) ? 'crosshair' : ''
-  }, [addMode, reposicionandoEl, simMode])
+    // OL renderiza num viewport interno; o containerRef é o wrapper
+    const viewport = map?.getViewport?.() ?? containerRef.current
+    if (!viewport) return
+    viewport.style.cursor = (addMode || reposicionandoEl || simMode) ? 'crosshair' : ''
+  }, [addMode, reposicionandoEl, simMode, map])
 
-  // ---- Preview de rota em tempo real ----
+  // ---- Preview de rota em tempo real (OpenLayers) ----
+  const drawPreviewRef = useRef({ layer: null, source: null })
   useEffect(() => {
     if (!map || !mapLoaded) return
-    const SOURCE = 'draw-preview-route'
-    const LAYER_LINE = 'draw-preview-line'
-    const LAYER_DOTS = 'draw-preview-dots'
 
-    if (addMode !== 'rota' || addRoutePoints.length < 1) {
-      // Remove preview sources/layers quando não está em modo rota
-      if (map.getLayer(LAYER_LINE)) map.removeLayer(LAYER_LINE)
-      if (map.getLayer(LAYER_DOTS)) map.removeLayer(LAYER_DOTS)
-      if (map.getSource(SOURCE)) map.removeSource(SOURCE)
-      return
-    }
-
-    const snappedIndices = new Set(addRouteLinksRef.current.map(l => l.pointIndex))
-    const geojson = {
-      type: 'FeatureCollection',
-      features: [
-        ...(addRoutePoints.length >= 2 ? [{
-          type: 'Feature',
-          geometry: { type: 'LineString', coordinates: addRoutePoints },
-          properties: {},
-        }] : []),
-        ...addRoutePoints.map((pt, i) => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: pt },
-          properties: { snapped: snappedIndices.has(i) ? 1 : 0 },
-        })),
-      ],
-    }
-
-    const tipoRota = addForm.tipoRota || 'RAMAL'
-    const routeColor = tipoRota === 'BACKBONE' ? '#6366f1' : tipoRota === 'DROP' ? '#22c55e' : '#000000'
-
-    if (map.getSource(SOURCE)) {
-      map.getSource(SOURCE).setData(geojson)
-      if (map.getLayer(LAYER_LINE)) {
-        map.setPaintProperty(LAYER_LINE, 'line-color', routeColor)
+    const cleanupDraw = () => {
+      if (drawPreviewRef.current.layer) {
+        try { map.removeLayer(drawPreviewRef.current.layer) } catch (_) {}
+        drawPreviewRef.current = { layer: null, source: null }
       }
-    } else {
-      map.addSource(SOURCE, { type: 'geojson', data: geojson })
-      map.addLayer({
-        id: LAYER_LINE,
-        type: 'line',
-        source: SOURCE,
-        filter: ['==', ['geometry-type'], 'LineString'],
-        paint: {
-          'line-color': routeColor,
-          'line-width': 3,
-          'line-dasharray': [4, 2],
-          'line-opacity': 0.9,
-        },
+    }
+    cleanupDraw()
+
+    if (addMode !== 'rota' || addRoutePoints.length < 1) return
+
+    const tipoRota   = addForm.tipoRota || 'RAMAL'
+    const routeColor = tipoRota === 'BACKBONE' ? '#6366f1' : tipoRota === 'DROP' ? '#22c55e' : '#000000'
+    const snappedIdx = new Set(addRouteLinksRef.current.map(l => l.pointIndex))
+
+    const src      = new VectorSource()
+    const features = []
+
+    // Linha de preview
+    if (addRoutePoints.length >= 2) {
+      const lineF = new Feature({
+        geometry: new LineString(addRoutePoints.map(([lng, lat]) => fromLonLat([lng, lat]))),
       })
-      map.addLayer({
-        id: LAYER_DOTS,
-        type: 'circle',
-        source: SOURCE,
-        filter: ['==', ['geometry-type'], 'Point'],
-        paint: {
-          'circle-radius': ['case', ['==', ['get', 'snapped'], 1], 7, 5],
-          'circle-color': ['case', ['==', ['get', 'snapped'], 1], '#86efac', routeColor],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
-        },
-      })
+      lineF.setStyle(new Style({
+        stroke: new Stroke({ color: routeColor, width: 3, lineDash: [4, 2] }),
+      }))
+      features.push(lineF)
     }
 
-    return () => {
-      // Cleanup ao desmontar
-      if (map.getLayer(LAYER_LINE)) map.removeLayer(LAYER_LINE)
-      if (map.getLayer(LAYER_DOTS)) map.removeLayer(LAYER_DOTS)
-      if (map.getSource(SOURCE)) map.removeSource(SOURCE)
-    }
+    // Pontos de vértice
+    addRoutePoints.forEach(([lng, lat], i) => {
+      const isSnapped = snappedIdx.has(i)
+      const dotF = new Feature({ geometry: new Point(fromLonLat([lng, lat])) })
+      dotF.setStyle(new Style({
+        image: new OLCircle({
+          radius:  isSnapped ? 7 : 5,
+          fill:    new Fill({ color: isSnapped ? '#86efac' : routeColor }),
+          stroke:  new Stroke({ color: '#ffffff', width: 2 }),
+        }),
+      }))
+      features.push(dotF)
+    })
+
+    src.addFeatures(features)
+    const lyr = new VectorLayer({ source: src, zIndex: 97 })
+    map.addLayer(lyr)
+    drawPreviewRef.current = { layer: lyr, source: src }
+
+    return cleanupDraw
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, mapLoaded, addMode, addRoutePoints, addForm.tipoRota])
 

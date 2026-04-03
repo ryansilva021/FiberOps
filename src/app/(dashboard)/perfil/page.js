@@ -239,51 +239,29 @@ export default function PerfilPage() {
           </div>
         </div>
 
-        {/* Pagamentos */}
-        <div style={S.card}>
-          <p style={S.title}>Pagamentos</p>
-          <div style={{
-            border: '2px dashed var(--border-color)', borderRadius: 12,
-            padding: '28px 20px', textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 36, marginBottom: 10 }}>💳</div>
-            <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
-              Meios de pagamento
-            </p>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6 }}>
-              Gateway de pagamento em implementação.
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
-              {['Cartão de crédito', 'PIX', 'Boleto'].map(m => (
-                <span key={m} style={{
-                  fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 20,
-                  background: 'var(--background)', border: '1px solid var(--border-color)',
-                  color: 'var(--text-muted)',
-                }}>
-                  {m}
+        {/* Assinatura — visível apenas para admin */}
+        {(user.role === 'admin') && (
+          <div style={{ ...S.card, background: isDark ? 'rgba(2,132,199,0.06)' : '#f0f9ff', borderColor: '#0284c730' }}>
+            <p style={S.title}>Assinatura</p>
+            <div style={S.row}>
+              <div>
+                <span style={{ ...S.label, display: 'block' }}>Plano e cobrança</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Faturas, método de pagamento e status da licença
                 </span>
-              ))}
+              </div>
+              <Link href="/admin/assinatura" style={{
+                fontSize: 13, fontWeight: 600, color: '#0284c7',
+                textDecoration: 'none', padding: '7px 16px',
+                background: isDark ? 'rgba(2,132,199,0.12)' : '#e0f2fe',
+                borderRadius: 8, border: '1px solid #0284c740',
+                whiteSpace: 'nowrap',
+              }}>
+                Gerenciar 💳
+              </Link>
             </div>
           </div>
-        </div>
-
-        {/* Plano atual */}
-        <div style={{ ...S.card, background: isDark ? 'rgba(2,132,199,0.08)' : '#f0f9ff', borderColor: '#0284c740' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0284c7', margin: 0 }}>Plano atual</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--foreground)', margin: '4px 0 0' }}>FiberOps Profissional</p>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Licença ativa · Renovação automática</p>
-            </div>
-            <button disabled style={{
-              padding: '10px 20px', borderRadius: 10, border: 'none',
-              background: 'linear-gradient(135deg,#0284c7,#0369a1)',
-              color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'not-allowed', opacity: 0.7,
-            }}>
-              Gerenciar plano
-            </button>
-          </div>
-        </div>
+        )}
 
       </div>
     </div>
