@@ -58,6 +58,26 @@ const OLTSchema = new Schema(
       },
     },
 
+    // Credenciais SSH de gerência
+    ssh_user: {
+      type:    String,
+      trim:    true,
+      default: 'admin',
+    },
+
+    ssh_pass: {
+      type:    String,
+      default: '',
+    },
+
+    // Porta SSH (padrão 22; simulador usa 2222)
+    ssh_port: {
+      type:    Number,
+      default: 22,
+      min:     [1, "ssh_port deve ser >= 1"],
+      max:     [65535, "ssh_port deve ser <= 65535"],
+    },
+
     // Número total de portas PON disponíveis
     capacidade: {
       type:    Number,
