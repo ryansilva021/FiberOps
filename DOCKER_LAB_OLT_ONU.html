@@ -1,0 +1,3082 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docker Lab — Simulação OLT/ONU para ISP | FiberOps</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: '#2D8CFF',
+            success: '#00C853',
+            warn: '#FFD600',
+            danger: '#FF3D00',
+            purple: '#7c3aed',
+          },
+          fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'monospace'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #0b1220; color: #e2e8f0; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; letter-spacing: .05em; }
+    pre, code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    pre { background: #0d1117; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 12px; line-height: 1.7; }
+    .section { padding: 48px 0; border-bottom: 1px solid #1f2937; }
+    .section-number { width: 36px; height: 36px; border-radius: 50%; background: #2D8CFF22; border: 1px solid #2D8CFF44; color: #2D8CFF; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #1f2937; color: #9ca3af; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 10px 14px; text-align: left; }
+    td { padding: 10px 14px; border-bottom: 1px solid #1f2937; color: #d1d5db; }
+    tr:hover td { background: #ffffff06; }
+    .toc-link { color: #9ca3af; text-decoration: none; font-size: 13px; padding: 4px 0; display: block; transition: color .15s; }
+    .toc-link:hover { color: #2D8CFF; }
+    .step { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: #2D8CFF; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="sticky top-0 z-50 border-b border-gray-800" style="background:#0b1220ee;backdrop-filter:blur(12px)">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="font-black text-white text-lg">🔷 FiberOps</span>
+      <span class="badge" style="background:#2D8CFF18;border:1px solid #2D8CFF44;color:#2D8CFF">Docker Lab</span>
+      <span class="badge" style="background:#00C85318;border:1px solid #00C85344;color:#00C853">OLT/ONU Simulator</span>
+    </div>
+    <div class="flex gap-4 text-xs text-gray-400">
+      <a href="#visao" class="hover:text-white transition-colors">Visão Geral</a>
+      <a href="#rede" class="hover:text-white transition-colors">Rede</a>
+      <a href="#polt" class="hover:text-white transition-colors">pOLT</a>
+      <a href="#onu" class="hover:text-white transition-colors">ONU Sim</a>
+      <a href="#cenarios" class="hover:text-white transition-colors">Cenários</a>
+      <a href="#fiberops" class="hover:text-white transition-colors">FiberOps</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="max-w-7xl mx-auto px-6 py-16">
+  <div class="text-center mb-16">
+    <div class="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full text-sm font-semibold" style="background:#2D8CFF12;border:1px solid #2D8CFF33;color:#2D8CFF">
+      🧪 Laboratório Docker Completo para Redes FTTH
+    </div>
+    <h1 class="text-4xl font-black text-white mb-4">
+      Simulação Docker de OLT e ONU
+    </h1>
+    <p class="text-lg text-gray-400 max-w-3xl mx-auto">
+      Mapa completo para criar um laboratório Docker que simula uma rede FTTH real de provedor —
+      pOLT, ONU simulada, GenieACS TR-069, GPON virtual e integração total com o FiberOps.
+    </p>
+    <div class="flex flex-wrap justify-center gap-4 mt-8">
+      <div class="card px-5 py-3 text-center">
+        <div class="text-2xl font-black" style="color:#2D8CFF">pOLT</div>
+        <div class="text-xs text-gray-400 mt-1">OLT programável BBF</div>
+      </div>
+      <div class="card px-5 py-3 text-center">
+        <div class="text-2xl font-black" style="color:#00C853">ONU Sim</div>
+        <div class="text-xs text-gray-400 mt-1">Simulador de CPE GPON</div>
+      </div>
+      <div class="card px-5 py-3 text-center">
+        <div class="text-2xl font-black" style="color:#FFD600">GenieACS</div>
+        <div class="text-xs text-gray-400 mt-1">ACS TR-069</div>
+      </div>
+      <div class="card px-5 py-3 text-center">
+        <div class="text-2xl font-black" style="color:#7c3aed">Docker</div>
+        <div class="text-xs text-gray-400 mt-1">Rede virtual ISP</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO 1: VISÃO GERAL DA ARQUITETURA -->
+  <section id="visao" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">1</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Visão Geral da Arquitetura de Simulação</h2>
+        <p class="text-gray-400 text-sm mt-1">Como montar um lab virtual idêntico a uma rede ISP real</p>
+      </div>
+    </div>
+
+    <p class="text-gray-300 mb-6 leading-relaxed">
+      Uma rede FTTH real de provedor tem: <strong class="text-white">OLT</strong> (equipamento central que gerencia as fibras),
+      <strong class="text-white">ONUs/ONTs</strong> (equipamentos na casa do cliente) e um <strong class="text-white">ACS</strong>
+      para gerenciamento TR-069. Em Docker, replicamos toda essa pilha com containers especializados
+      conectados numa rede virtual isolada — sem precisar de hardware físico.
+    </p>
+
+    <div class="card p-6 mb-8">
+      <h3 class="font-bold text-white mb-4">Diagrama da Rede Simulada</h3>
+      <pre class="text-green-400 text-xs leading-6">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    REDE DOCKER: rede-isp (172.20.0.0/24)                    │
+│                                                                             │
+│  ┌──────────────┐    GPON     ┌──────────────┐   TR-069   ┌─────────────┐  │
+│  │   pOLT       │◄──────────►│  ONU Sim #1  │◄──────────►│  GenieACS   │  │
+│  │ 172.20.0.10  │    REST     │ 172.20.0.20  │            │ 172.20.0.30 │  │
+│  │  :3002       │◄────────────┤              │            │  :7547 ACS  │  │
+│  │  :7547 CWMP  │            └──────────────┘            │  :7557 NBI  │  │
+│  └──────┬───────┘                                        └─────────────┘  │
+│         │ REST API                ┌──────────────┐                         │
+│         │ /polt/polt_actions      │  ONU Sim #2  │                         │
+│         ▼                        │ 172.20.0.21  │                         │
+│  ┌──────────────┐                └──────────────┘                         │
+│  │   FiberOps   │◄─────────────────────────────────────────────────────── │
+│  │ 172.20.0.5   │    Server Actions chamam pOLT + GenieACS NBI             │
+│  │  :3000       │                                                          │
+│  └──────────────┘                                                          │
+│                                                                             │
+│  ┌──────────────┐    ┌──────────────┐                                      │
+│  │   MongoDB    │    │    Redis     │                                       │
+│  │ 172.20.0.2   │    │ 172.20.0.3   │                                      │
+│  └──────────────┘    └──────────────┘                                      │
+└─────────────────────────────────────────────────────────────────────────────┘</pre>
+    </div>
+
+    <h3 class="text-lg font-bold text-white mb-4">Componentes e Funções</h3>
+    <div class="overflow-x-auto rounded-xl mb-8">
+      <table>
+        <thead>
+          <tr><th>Componente</th><th>Equivalente Real</th><th>Imagem Docker</th><th>IP no Lab</th><th>Portas</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="font-bold text-blue-400">pOLT</td>
+            <td>Huawei MA5800, ZTE C300</td>
+            <td><code class="tag" style="background:#2D8CFF22;color:#2D8CFF">broadbandforum/obbaa-polt</code></td>
+            <td class="font-mono">172.20.0.10</td>
+            <td>3002 (REST), 7547 (CWMP)</td>
+          </tr>
+          <tr>
+            <td class="font-bold text-green-400">ONU Sim</td>
+            <td>ONU na casa do cliente</td>
+            <td><code class="tag" style="background:#00C85322;color:#00C853">broadbandforum/obbaa-onu-sim</code></td>
+            <td class="font-mono">172.20.0.20–29</td>
+            <td>50000 (OMCI sim)</td>
+          </tr>
+          <tr>
+            <td class="font-bold text-yellow-400">GenieACS</td>
+            <td>ACS para CPEs TR-069</td>
+            <td><code class="tag" style="background:#FFD60022;color:#FFD600">genieacs/genieacs:1.2</code></td>
+            <td class="font-mono">172.20.0.30</td>
+            <td>7547, 7557, 7567, 3000</td>
+          </tr>
+          <tr>
+            <td class="font-bold text-purple-400">FiberOps</td>
+            <td>Sistema de gestão NOC</td>
+            <td><code class="tag" style="background:#7c3aed22;color:#a78bfa">build local</code></td>
+            <td class="font-mono">172.20.0.5</td>
+            <td>3000 (HTTP)</td>
+          </tr>
+          <tr>
+            <td class="font-bold text-gray-400">MongoDB</td>
+            <td>Banco de dados</td>
+            <td><code class="tag" style="background:#ffffff10;color:#9ca3af">mongo:7.0</code></td>
+            <td class="font-mono">172.20.0.2</td>
+            <td>27017</td>
+          </tr>
+          <tr>
+            <td class="font-bold text-gray-400">Redis</td>
+            <td>Cache / filas</td>
+            <td><code class="tag" style="background:#ffffff10;color:#9ca3af">redis:7.2</code></td>
+            <td class="font-mono">172.20.0.3</td>
+            <td>6379</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="card p-4" style="border-left:3px solid #2D8CFF">
+        <div class="font-bold text-white mb-2 text-sm">O que o lab simula</div>
+        <ul class="text-xs text-gray-400 space-y-1">
+          <li>✓ Provisionamento GPON (ADDONU/REMOVEONU)</li>
+          <li>✓ Sinal óptico (RX/TX power simulados)</li>
+          <li>✓ ONUs oscilando (online/offline)</li>
+          <li>✓ Gerenciamento TR-069 de CPEs</li>
+          <li>✓ Alarmes e eventos NOC em tempo real</li>
+          <li>✓ Multi-ONU (até 64 por PON virtual)</li>
+        </ul>
+      </div>
+      <div class="card p-4" style="border-left:3px solid #00C853">
+        <div class="font-bold text-white mb-2 text-sm">Pré-requisitos</div>
+        <ul class="text-xs text-gray-400 space-y-1">
+          <li>✓ Docker Engine 24+</li>
+          <li>✓ Docker Compose v2.20+</li>
+          <li>✓ 8 GB RAM disponível</li>
+          <li>✓ 20 GB disco livre</li>
+          <li>✓ FiberOps rodando (npm run dev ou Docker)</li>
+          <li>✓ Porta 3002 liberada no host</li>
+        </ul>
+      </div>
+      <div class="card p-4" style="border-left:3px solid #FFD600">
+        <div class="font-bold text-white mb-2 text-sm">O que NÃO simula</div>
+        <ul class="text-xs text-gray-400 space-y-1">
+          <li>✗ Latência óptica real (fibra física)</li>
+          <li>✗ Degradação de sinal por distância</li>
+          <li>✗ ONUs de fornecedores específicos</li>
+          <li>✗ QoS / policiamento de banda real</li>
+          <li>✗ Comandos SSH Huawei proprietários</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 2: CONFIGURAÇÃO DA REDE DOCKER -->
+  <section id="rede" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">2</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Criando a Rede Docker para o Lab ISP</h2>
+        <p class="text-gray-400 text-sm mt-1">Subnet isolada que simula a rede interna do provedor</p>
+      </div>
+    </div>
+
+    <p class="text-gray-300 mb-6">
+      Toda a comunicação entre OLT, ONUs, ACS e FiberOps acontece dentro de uma rede Docker dedicada
+      com IPs fixos. Isso garante que os containers se encontrem pelos mesmos endereços sempre que o lab subir.
+    </p>
+
+    <h3 class="text-base font-bold text-white mb-3">Criar a rede manualmente (opção 1)</h3>
+    <pre><code class="text-green-300"># Cria a rede isolada para o lab ISP
+docker network create \
+  --driver bridge \
+  --subnet 172.20.0.0/24 \
+  --gateway 172.20.0.1 \
+  --opt com.docker.network.bridge.name=br-isp-lab \
+  rede-isp
+
+# Verificar
+docker network inspect rede-isp | grep -E '"Subnet"|"Gateway"'</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Via docker-compose.lab.yml (opção 2 — recomendada)</h3>
+    <pre><code class="text-blue-300">networks:
+  rede-isp:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Verificar conectividade entre containers</h3>
+    <pre><code class="text-green-300"># Teste de ping entre FiberOps e pOLT
+docker run --rm --network rede-isp alpine ping -c 3 172.20.0.10
+
+# Ver todos os containers na rede
+docker network inspect rede-isp --format '{{range .Containers}}{{.Name}} → {{.IPv4Address}}{{"\n"}}{{end}}'</code></pre>
+
+    <div class="card p-5 mt-6" style="border:1px solid #FFD60033;background:#FFD60008">
+      <div class="font-bold mb-2" style="color:#FFD600">⚠ Atenção: Conflito de subnet</div>
+      <p class="text-sm text-gray-400">Se a subnet <code class="text-yellow-300">172.20.0.0/24</code> já for usada em outra rede Docker,
+      mude para <code class="text-yellow-300">192.168.100.0/24</code> ou qualquer /24 disponível. Use
+      <code class="text-yellow-300">docker network ls && docker network inspect &lt;nome&gt;</code> para verificar.</p>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 3: pOLT — CONFIGURAÇÃO DETALHADA -->
+  <section id="polt" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">3</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">pOLT — OLT Programável (Broadband Forum OB-BAA)</h2>
+        <p class="text-gray-400 text-sm mt-1">Container que simula uma OLT GPON com API REST para provisão</p>
+      </div>
+    </div>
+
+    <p class="text-gray-300 mb-6 leading-relaxed">
+      A <strong class="text-white">pOLT (programmable OLT)</strong> é parte do projeto open-source
+      <strong class="text-white">OB-BAA (OpenBroadband Access Abstraction)</strong> da Broadband Forum.
+      Ela expõe a API REST <code class="text-blue-300">POST /polt/polt_actions</code> que o FiberOps usa
+      para provisionar e remover ONUs — exatamente como uma OLT Huawei real, mas sem hardware.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div>
+        <h3 class="text-base font-bold text-white mb-3">Subir a pOLT com Docker</h3>
+        <pre><code class="text-green-300">docker run -d \
+  --name polt-sim \
+  --network rede-isp \
+  --ip 172.20.0.10 \
+  -p 3002:3002 \
+  -p 7547:7547 \
+  -e POLT_NAME="OLT-LAB-01" \
+  -e POLT_GPON_PORTS=4 \
+  -e POLT_ONUS_PER_PORT=8 \
+  broadbandforum/obbaa-polt:latest
+
+# Verificar se subiu
+curl -s http://localhost:3002/polt/status | python3 -m json.tool</code></pre>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-white mb-3">Variáveis de ambiente</h3>
+        <div class="overflow-x-auto rounded-lg">
+          <table>
+            <thead><tr><th>Variável</th><th>Padrão</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr><td class="font-mono text-xs text-blue-300">POLT_NAME</td><td class="font-mono text-xs">polt-1</td><td class="text-xs">Nome da OLT simulada</td></tr>
+              <tr><td class="font-mono text-xs text-blue-300">POLT_GPON_PORTS</td><td class="font-mono text-xs">4</td><td class="text-xs">Nº de portas PON (channel terminations)</td></tr>
+              <tr><td class="font-mono text-xs text-blue-300">POLT_ONUS_PER_PORT</td><td class="font-mono text-xs">8</td><td class="text-xs">Máx ONUs por porta (até 64 real)</td></tr>
+              <tr><td class="font-mono text-xs text-blue-300">POLT_REST_PORT</td><td class="font-mono text-xs">3002</td><td class="text-xs">Porta da API REST</td></tr>
+              <tr><td class="font-mono text-xs text-blue-300">POLT_CWMP_PORT</td><td class="font-mono text-xs">7547</td><td class="text-xs">Porta CWMP para GenieACS</td></tr>
+              <tr><td class="font-mono text-xs text-blue-300">POLT_LOG_LEVEL</td><td class="font-mono text-xs">info</td><td class="text-xs">debug / info / warn</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="text-base font-bold text-white mb-3">Testar a API REST da pOLT</h3>
+    <pre><code class="text-yellow-300"># 1. Configurar modo RX (aceitar conexões de ONU simulada)
+curl -s -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requests": [{
+      "mode": "onu_sim",
+      "action": "RxMODE",
+      "onu_sim_ip": "172.20.0.20",
+      "onu_sim_port": 50000
+    }]
+  }' | python3 -m json.tool
+
+# 2. Provisionar primeira ONU
+curl -s -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requests": [{
+      "channel_term": 1,
+      "action": "ADDONU",
+      "onu_id": 1,
+      "serial_vendor_id": "HWTC",
+      "serial_vendor_specific": "AABBCCDD",
+      "flags": "present+in_o5",
+      "management_state": "relying-on-vomci",
+      "loid": "cliente001",
+      "v_ani": "vani-c001"
+    }]
+  }' | python3 -m json.tool</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Resposta esperada da pOLT</h3>
+    <pre><code class="text-green-300">{
+  "responses": [
+    {
+      "channel_term": 1,
+      "action": "ADDONU",
+      "onu_id": 1,
+      "serial_vendor_id": "HWTC",
+      "serial_vendor_specific": "AABBCCDD",
+      "status": 0,
+      "message": "OK"
+    }
+  ]
+}</code></pre>
+
+    <div class="grid grid-cols-3 gap-4 mt-6">
+      <div class="card p-4 text-center">
+        <div class="text-2xl font-black mb-1" style="color:#2D8CFF">status: 0</div>
+        <div class="text-xs text-gray-400">Sucesso</div>
+      </div>
+      <div class="card p-4 text-center">
+        <div class="text-2xl font-black mb-1" style="color:#FF3D00">status: 1</div>
+        <div class="text-xs text-gray-400">ONU ID já existe</div>
+      </div>
+      <div class="card p-4 text-center">
+        <div class="text-2xl font-black mb-1" style="color:#FFD600">status: 2</div>
+        <div class="text-xs text-gray-400">Porta inválida</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 4: ONU SIMULADA -->
+  <section id="onu" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">4</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">ONU Simulada — Simulador de CPE GPON</h2>
+        <p class="text-gray-400 text-sm mt-1">Container que imita o comportamento de uma ONU na ponta do cliente</p>
+      </div>
+    </div>
+
+    <p class="text-gray-300 mb-6 leading-relaxed">
+      O simulador de ONU (<code class="text-green-300">obbaa-onu-sim</code>) recebe comandos OMCI
+      simulados da pOLT e responde como uma ONU real faria. Ele também pode expor uma interface
+      TR-069 para o GenieACS gerenciar como um CPE.
+    </p>
+
+    <h3 class="text-base font-bold text-white mb-3">Subir uma ONU simulada</h3>
+    <pre><code class="text-green-300">docker run -d \
+  --name onu-sim-01 \
+  --network rede-isp \
+  --ip 172.20.0.20 \
+  -p 50000:50000 \
+  -e ONU_SERIAL="HWTCAABBCCDD" \
+  -e ONU_VENDOR_ID="HWTC" \
+  -e ONU_POLT_IP="172.20.0.10" \
+  -e ONU_POLT_PORT="3002" \
+  -e ONU_SIM_PORT="50000" \
+  -e ONU_RX_POWER="-21.5" \
+  -e ONU_TX_POWER="2.1" \
+  broadbandforum/obbaa-onu-sim:latest</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Subir múltiplas ONUs (script bash)</h3>
+    <pre><code class="text-yellow-300">#!/bin/bash
+# Sobe 5 ONUs simuladas com seriais sequenciais
+
+SERIALS=("HWTCAABB0001" "HWTCAABB0002" "HWTCAABB0003" "HWTCAABB0004" "HWTCAABB0005")
+BASE_IP="172.20.0"
+BASE_PORT=50000
+
+for i in "${!SERIALS[@]}"; do
+  ONU_NUM=$((i + 1))
+  IP="${BASE_IP}.$((20 + i))"
+  PORT=$((BASE_PORT + i))
+  SERIAL="${SERIALS[$i]}"
+
+  docker run -d \
+    --name "onu-sim-0${ONU_NUM}" \
+    --network rede-isp \
+    --ip "$IP" \
+    -p "${PORT}:${PORT}" \
+    -e ONU_SERIAL="$SERIAL" \
+    -e ONU_VENDOR_ID="HWTC" \
+    -e ONU_POLT_IP="172.20.0.10" \
+    -e ONU_SIM_PORT="$PORT" \
+    -e ONU_RX_POWER="-$((18 + i * 2)).${RANDOM:0:1}" \
+    broadbandforum/obbaa-onu-sim:latest
+
+  echo "✓ ONU $ONU_NUM | IP: $IP | Serial: $SERIAL | Port: $PORT"
+done
+
+echo "
+5 ONUs simuladas ativas."</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Simular ONU oscilando (offline/online)</h3>
+    <pre><code class="text-purple-300">#!/bin/bash
+# Simula uma ONU oscilando a cada 30 segundos
+# Útil para testar os alertas NOC do FiberOps
+
+ONU_CONTAINER="onu-sim-01"
+
+echo "Iniciando simulação de oscilação para $ONU_CONTAINER..."
+while true; do
+  echo "$(date '+%H:%M:%S') → ONU OFFLINE (docker pause)"
+  docker pause $ONU_CONTAINER
+
+  sleep 15
+
+  echo "$(date '+%H:%M:%S') → ONU ONLINE (docker unpause)"
+  docker unpause $ONU_CONTAINER
+
+  sleep 30
+done</code></pre>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+      <div class="card p-5">
+        <div class="font-bold text-white mb-3 text-sm">Parâmetros de sinal simulado</div>
+        <div class="space-y-2">
+          <div class="flex justify-between items-center text-xs p-2 rounded" style="background:#00C85315">
+            <span class="text-gray-300">ONU_RX_POWER</span>
+            <span class="font-mono text-green-400">-21.5 dBm (bom)</span>
+          </div>
+          <div class="flex justify-between items-center text-xs p-2 rounded" style="background:#FFD60015">
+            <span class="text-gray-300">ONU_RX_POWER</span>
+            <span class="font-mono text-yellow-400">-26.0 dBm (limite)</span>
+          </div>
+          <div class="flex justify-between items-center text-xs p-2 rounded" style="background:#FF3D0015">
+            <span class="text-gray-300">ONU_RX_POWER</span>
+            <span class="font-mono text-red-400">-29.5 dBm (crítico)</span>
+          </div>
+          <div class="flex justify-between items-center text-xs p-2 rounded" style="background:#2D8CFF15">
+            <span class="text-gray-300">ONU_TX_POWER</span>
+            <span class="font-mono text-blue-400">2.1 dBm (OK)</span>
+          </div>
+        </div>
+      </div>
+      <div class="card p-5">
+        <div class="font-bold text-white mb-3 text-sm">Verificar ONUs ativas</div>
+        <pre class="text-xs"><code class="text-green-300"># Listar containers ONU
+docker ps --filter "name=onu-sim"
+
+# Ver logs de uma ONU
+docker logs onu-sim-01 --tail 20
+
+# Ver IPs de todas as ONUs
+docker inspect \
+  $(docker ps -q --filter "name=onu-sim") \
+  --format '{{.Name}} → {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 5: docker-compose.lab.yml COMPLETO -->
+  <section id="compose" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">5</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">docker-compose.lab.yml — Stack Completa do Lab</h2>
+        <p class="text-gray-400 text-sm mt-1">Um único arquivo para subir todo o ambiente de simulação</p>
+      </div>
+    </div>
+
+    <pre><code class="text-blue-200">name: fiberops-lab
+
+# Sobe com: docker compose -f docker-compose.lab.yml up -d
+# Para tudo: docker compose -f docker-compose.lab.yml down
+
+services:
+
+  # ── MongoDB compartilhado ─────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: lab-mongodb
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.2
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: fiberops
+      MONGO_INITDB_ROOT_PASSWORD: fiberops123
+    volumes:
+      - lab_mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: lab-redis
+    command: redis-server --requirepass redis123
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.3
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
+      interval: 10s
+      retries: 5
+
+  # ── FiberOps ──────────────────────────────────────────────────────────────
+  fiberops:
+    build:
+      context: .
+      target: dev
+    container_name: lab-fiberops
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.5
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://fiberops:fiberops123@172.20.0.2:27017/ftth?authSource=admin
+      NEXTAUTH_SECRET: lab-secret-2026
+      NEXTAUTH_URL: http://localhost:3000
+      JWT_SECRET: lab-jwt-2026
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      INTERNAL_API_SECRET: lab-internal-2026
+      REDIS_URL: redis://:redis123@172.20.0.3:6379
+      GENIEACS_NBI_URL: http://172.20.0.30:7557
+      POLT_URL: http://172.20.0.10:3002   # ← URL da pOLT no lab
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── pOLT (OLT Simulada) ───────────────────────────────────────────────────
+  polt:
+    image: broadbandforum/obbaa-polt:latest
+    container_name: lab-polt
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "3002:3002"
+      - "7547:7547"
+    environment:
+      POLT_NAME: OLT-LAB-01
+      POLT_GPON_PORTS: 4
+      POLT_ONUS_PER_PORT: 8
+
+  # ── ONU Simulada #1 ───────────────────────────────────────────────────────
+  onu-sim-01:
+    image: broadbandforum/obbaa-onu-sim:latest
+    container_name: lab-onu-01
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.20
+    ports:
+      - "50000:50000"
+    environment:
+      ONU_SERIAL: HWTCAABB0001
+      ONU_VENDOR_ID: HWTC
+      ONU_POLT_IP: 172.20.0.10
+      ONU_POLT_PORT: "3002"
+      ONU_SIM_PORT: "50000"
+      ONU_RX_POWER: "-21.5"
+      ONU_TX_POWER: "2.1"
+    depends_on:
+      - polt
+
+  # ── ONU Simulada #2 ───────────────────────────────────────────────────────
+  onu-sim-02:
+    image: broadbandforum/obbaa-onu-sim:latest
+    container_name: lab-onu-02
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.21
+    ports:
+      - "50001:50001"
+    environment:
+      ONU_SERIAL: HWTCAABB0002
+      ONU_VENDOR_ID: HWTC
+      ONU_POLT_IP: 172.20.0.10
+      ONU_SIM_PORT: "50001"
+      ONU_RX_POWER: "-24.0"
+      ONU_TX_POWER: "1.8"
+    depends_on:
+      - polt
+
+  # ── GenieACS CWMP ─────────────────────────────────────────────────────────
+  genieacs-cwmp:
+    image: genieacs/genieacs:1.2
+    container_name: lab-genieacs-cwmp
+    command: genieacs-cwmp
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.30
+    ports:
+      - "7548:7547"   # mapeado em porta diferente para evitar conflito
+    environment:
+      GENIEACS_CWMP_INTERFACE: 0.0.0.0
+      GENIEACS_MONGODB_CONNECTION_URL: mongodb://fiberops:fiberops123@172.20.0.2:27017/genieacs?authSource=admin
+      GENIEACS_REDIS_URL: redis://:redis123@172.20.0.3:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # ── GenieACS NBI (API) ────────────────────────────────────────────────────
+  genieacs-nbi:
+    image: genieacs/genieacs:1.2
+    container_name: lab-genieacs-nbi
+    command: genieacs-nbi
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.31
+    ports:
+      - "7557:7557"
+    environment:
+      GENIEACS_NBI_INTERFACE: 0.0.0.0
+      GENIEACS_MONGODB_CONNECTION_URL: mongodb://fiberops:fiberops123@172.20.0.2:27017/genieacs?authSource=admin
+      GENIEACS_REDIS_URL: redis://:redis123@172.20.0.3:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  lab_mongo:
+
+networks:
+  rede-isp:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1</code></pre>
+
+    <div class="mt-6 card p-5" style="border:1px solid #00C85333">
+      <div class="font-bold mb-2 text-white">Subir o lab completo</div>
+      <pre class="mt-2"><code class="text-green-300">docker compose -f docker-compose.lab.yml up -d
+
+# Verificar status
+docker compose -f docker-compose.lab.yml ps
+
+# Ver logs da pOLT
+docker compose -f docker-compose.lab.yml logs -f polt</code></pre>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 6: CENÁRIOS DE TESTE -->
+  <section id="cenarios" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">6</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Cenários de Teste — Simulando uma Rede Real</h2>
+        <p class="text-gray-400 text-sm mt-1">Roteiros passo a passo para validar cada funcionalidade do FiberOps</p>
+      </div>
+    </div>
+
+    <!-- Cenário 1 -->
+    <div class="card p-6 mb-6" style="border-left:3px solid #00C853">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="badge" style="background:#00C85322;border:1px solid #00C85544;color:#00C853">CENÁRIO 1</span>
+        <h3 class="font-bold text-white text-lg">Provisionar nova ONU → ver no NOC</h3>
+      </div>
+      <p class="text-gray-400 text-sm mb-4">Simula a ativação de um novo cliente no provedor.</p>
+
+      <div class="space-y-4">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Garantir que a pOLT está no modo ONU sim</div>
+            <pre class="mt-2 text-xs"><code class="text-yellow-300">curl -s -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"action":"RxMODE","mode":"onu_sim","onu_sim_ip":"172.20.0.20","onu_sim_port":50000}]}'</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Provisionar ONU via FiberOps NOC</div>
+            <p class="text-xs text-gray-400 mt-1">Acesse <code class="text-blue-300">http://localhost:3000/admin/noc</code> → pOLT Test Console → ADDONU</p>
+            <pre class="mt-2 text-xs"><code class="text-green-300">channel_term: 1
+onu_id: 1
+serial_vendor_id: HWTC
+serial_vendor_specific: AABB0001
+loid: cliente-joao-silva</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Verificar no feed NOC em tempo real</div>
+            <p class="text-xs text-gray-400 mt-1">O feed deve mostrar: <code class="text-green-300">[POLT] ADDONU → ch=1 onu_id=1 serial=HWTCAABB0001 ✓</code></p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Confirmar na pOLT</div>
+            <pre class="mt-2 text-xs"><code class="text-yellow-300">curl -s http://localhost:3002/polt/status | python3 -m json.tool
+# Deve listar onu_id: 1 como "active"</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cenário 2 -->
+    <div class="card p-6 mb-6" style="border-left:3px solid #FF3D00">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="badge" style="background:#FF3D0022;border:1px solid #FF3D0044;color:#FF3D00">CENÁRIO 2</span>
+        <h3 class="font-bold text-white text-lg">Simular queda de ONU → alerta NOC → recuperação</h3>
+      </div>
+      <p class="text-gray-400 text-sm mb-4">Testa o fluxo de detecção de falha e recuperação do monitoramento.</p>
+
+      <div class="space-y-4">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Pausar container da ONU (simula queda física de energia)</div>
+            <pre class="mt-2 text-xs"><code class="text-red-300">docker pause lab-onu-01
+# O container fica parado — simula ONU sem energia/fibra cortada</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Aguardar detecção pelo Auto-Find (1 minuto)</div>
+            <p class="text-xs text-gray-400 mt-1">O cron de Auto-Find roda a cada 1 minuto. O NOC deve mostrar o alerta automaticamente.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Recuperar a ONU</div>
+            <pre class="mt-2 text-xs"><code class="text-green-300">docker unpause lab-onu-01
+# NOC deve mostrar o evento de recuperação</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Verificar MTTR no NOC</div>
+            <p class="text-xs text-gray-400 mt-1">O tempo entre o alerta e a recuperação deve aparecer nos logs do NOC com timestamps.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cenário 3 -->
+    <div class="card p-6 mb-6" style="border-left:3px solid #FFD600">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="badge" style="background:#FFD60022;border:1px solid #FFD60044;color:#FFD600">CENÁRIO 3</span>
+        <h3 class="font-bold text-white text-lg">Sinal crítico → alerta de potência óptica</h3>
+      </div>
+      <p class="text-gray-400 text-sm mb-4">Simula degradação de fibra (conector sujo, emenda ruim) com sinal caindo abaixo do limite.</p>
+      <div class="space-y-4">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Subir ONU com sinal crítico</div>
+            <pre class="mt-2 text-xs"><code class="text-yellow-300">docker run -d \
+  --name onu-sinal-critico \
+  --network rede-isp \
+  --ip 172.20.0.25 \
+  -e ONU_SERIAL="HWTCFFFF0001" \
+  -e ONU_POLT_IP="172.20.0.10" \
+  -e ONU_RX_POWER="-29.8" \
+  -e ONU_TX_POWER="0.5" \
+  broadbandforum/obbaa-onu-sim:latest</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Provisionar na pOLT e cadastrar no FiberOps</div>
+            <pre class="mt-2 text-xs"><code class="text-yellow-300">curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"channel_term":1,"action":"ADDONU","onu_id":5,
+       "serial_vendor_id":"HWTC","serial_vendor_specific":"FFFF0001",
+       "flags":"present+in_o5","management_state":"relying-on-vomci"}]}'</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <div class="font-semibold text-white text-sm">Verificar alerta de sinal crítico no NOC</div>
+            <p class="text-xs text-gray-400 mt-1">RX de -29.8 dBm está abaixo do limiar de -28 dBm → FiberOps deve mostrar <span style="color:#FF3D00">CRÍTICO</span> no diagnóstico de sinal.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cenário 4 -->
+    <div class="card p-6 mb-6" style="border-left:3px solid #7c3aed">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="badge" style="background:#7c3aed22;border:1px solid #7c3aed44;color:#a78bfa">CENÁRIO 4</span>
+        <h3 class="font-bold text-white text-lg">Teste de carga — 20 ONUs simultâneas</h3>
+      </div>
+      <p class="text-gray-400 text-sm mb-4">Simula uma PON com alta utilização para testar performance do FiberOps.</p>
+      <pre><code class="text-purple-300">#!/bin/bash
+# Provisiona 20 ONUs sequencialmente e mede o tempo
+
+START=$(date +%s)
+
+for i in $(seq 1 20); do
+  SERIAL=$(printf "HWTCLOAD%04d" $i)
+  VENDOR_SPECIFIC=$(printf "LOAD%04d" $i)
+
+  curl -s -X POST http://localhost:3002/polt/polt_actions \
+    -H "Content-Type: application/json" \
+    -d "{\"requests\":[{
+      \"channel_term\": $(( (i-1) / 8 + 1 )),
+      \"action\": \"ADDONU\",
+      \"onu_id\": $i,
+      \"serial_vendor_id\": \"HWTC\",
+      \"serial_vendor_specific\": \"$VENDOR_SPECIFIC\",
+      \"flags\": \"present+in_o5\",
+      \"management_state\": \"relying-on-vomci\"
+    }]}" > /dev/null
+
+  echo "Provisionada ONU $i/$i → serial: $SERIAL"
+done
+
+END=$(date +%s)
+echo "
+✓ 20 ONUs provisionadas em $((END - START)) segundos"</code></pre>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 7: INTEGRAÇÃO FIBEROPS + LAB -->
+  <section id="fiberops" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">7</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Integrando o Lab com o FiberOps</h2>
+        <p class="text-gray-400 text-sm mt-1">Cadastrar OLT simulada e ONUs no sistema para teste end-to-end</p>
+      </div>
+    </div>
+
+    <h3 class="text-base font-bold text-white mb-3">Passo 1 — Cadastrar a pOLT como OLT no FiberOps</h3>
+    <p class="text-gray-400 text-sm mb-4">No FiberOps, acesse <code class="text-blue-300">/admin/olts</code> e cadastre:</p>
+    <div class="overflow-x-auto rounded-xl mb-6">
+      <table>
+        <thead><tr><th>Campo</th><th>Valor (lab Docker)</th><th>Equivalente Produção</th></tr></thead>
+        <tbody>
+          <tr><td>Nome</td><td class="font-mono text-blue-300">OLT-LAB-01</td><td class="font-mono">OLT-CENTRO-SP</td></tr>
+          <tr><td>IP / Host</td><td class="font-mono text-blue-300">172.20.0.10</td><td class="font-mono">10.0.1.1</td></tr>
+          <tr><td>Porta SSH</td><td class="font-mono text-yellow-300">mock</td><td class="font-mono">22</td></tr>
+          <tr><td>Usuário SSH</td><td class="font-mono text-yellow-300">mock</td><td class="font-mono">admin</td></tr>
+          <tr><td>Senha SSH</td><td class="font-mono text-yellow-300">mock</td><td class="font-mono">senha_real</td></tr>
+          <tr><td>Modelo</td><td class="font-mono text-blue-300">pOLT Simulator</td><td class="font-mono">Huawei MA5800-X7</td></tr>
+          <tr><td>Capacidade</td><td class="font-mono text-blue-300">32</td><td class="font-mono">128</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card p-4 mb-6" style="border:1px solid #FFD60033">
+      <p class="text-sm text-gray-300">
+        <span style="color:#FFD600">⚠</span> Defina o IP como <code class="text-yellow-300">mock</code> no campo SSH para que o Auto-Find não tente conectar via SSH.
+        A pOLT é controlada exclusivamente via REST API pelo painel pOLT Test Console no NOC.
+      </p>
+    </div>
+
+    <h3 class="text-base font-bold text-white mb-3">Passo 2 — Inserir ONUs via script no MongoDB</h3>
+    <pre><code class="text-green-300"># Entrar no shell do MongoDB do lab
+docker compose -f docker-compose.lab.yml exec mongodb \
+  mongosh -u fiberops -p fiberops123 --authenticationDatabase admin ftth
+
+# Inserir ONUs simuladas no banco do FiberOps
+db.onus.insertMany([
+  {
+    projeto_id: "default",
+    serial: "HWTCAABB0001",
+    mac: null,
+    nome: "João Silva — Rua A, 123",
+    status: "active",
+    olt_id: "olt-lab-01",
+    pon_slot: 1,
+    pon_port: 1,
+    onu_id: 1,
+    rx_power: -21.5,
+    tx_power: 2.1,
+    loid: "cliente-joao-silva",
+    lat: -23.5505,
+    lng: -46.6333,
+    created_at: new Date(),
+    updated_at: new Date()
+  },
+  {
+    projeto_id: "default",
+    serial: "HWTCAABB0002",
+    nome: "Maria Santos — Rua B, 456",
+    status: "active",
+    olt_id: "olt-lab-01",
+    pon_slot: 1,
+    pon_port: 1,
+    onu_id: 2,
+    rx_power: -24.0,
+    tx_power: 1.8,
+    loid: "cliente-maria-santos",
+    lat: -23.5510,
+    lng: -46.6340,
+    created_at: new Date(),
+    updated_at: new Date()
+  }
+])</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Passo 3 — Verificar no Dashboard NOC</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="card p-4 text-center">
+        <div class="text-3xl mb-2">🖥️</div>
+        <div class="font-bold text-white text-sm mb-1">Feed NOC</div>
+        <div class="text-xs text-gray-400">localhost:3000/admin/noc</div>
+        <div class="text-xs text-gray-400 mt-1">Logs em tempo real via SSE</div>
+      </div>
+      <div class="card p-4 text-center">
+        <div class="text-3xl mb-2">📡</div>
+        <div class="font-bold text-white text-sm mb-1">ONUs Detectadas</div>
+        <div class="text-xs text-gray-400">Tab "Auto-Find" no NOC</div>
+        <div class="text-xs text-gray-400 mt-1">Scan a cada 1 minuto</div>
+      </div>
+      <div class="card p-4 text-center">
+        <div class="text-3xl mb-2">🗺️</div>
+        <div class="font-bold text-white text-sm mb-1">Mapa</div>
+        <div class="text-xs text-gray-400">localhost:3000/admin/mapa</div>
+        <div class="text-xs text-gray-400 mt-1">Pins nas coordenadas das ONUs</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 8: GENIEACS TR-069 -->
+  <section id="genieacs" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">8</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">GenieACS + TR-069 — Gerenciamento de CPEs</h2>
+        <p class="text-gray-400 text-sm mt-1">Como simular ONUs com TR-069 e gerenciar via GenieACS</p>
+      </div>
+    </div>
+
+    <p class="text-gray-300 mb-6 leading-relaxed">
+      O protocolo <strong class="text-white">TR-069</strong> permite que o ACS (GenieACS) gerencie remotamente
+      CPEs (roteadores, ONUs com gestão embarcada). No lab, usamos um simulador de CPE TR-069 para
+      testar sem hardware real.
+    </p>
+
+    <h3 class="text-base font-bold text-white mb-3">Subir simulador de CPE TR-069</h3>
+    <pre><code class="text-green-300">docker run -d \
+  --name cpe-sim-01 \
+  --network rede-isp \
+  --ip 172.20.0.40 \
+  -e ACS_URL="http://172.20.0.30:7547" \
+  -e CPE_SERIAL="CPE000001" \
+  -e CPE_OUI="AABBCC" \
+  -e CPE_PRODUCT_CLASS="HG8240" \
+  -e CPE_MANUFACTURER="Huawei" \
+  -e CPE_SW_VERSION="V300R016C10" \
+  oznu/acs-client:latest   # imagem de CPE TR-069 simulado</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Verificar dispositivos no GenieACS</h3>
+    <pre><code class="text-yellow-300"># Listar CPEs registrados no GenieACS via NBI
+curl -s "http://localhost:7557/devices" | python3 -m json.tool
+
+# Buscar CPE específico por serial
+curl -s "http://localhost:7557/devices?query=%7B%22DeviceID.SerialNumber%22%3A%22CPE000001%22%7D" \
+  | python3 -m json.tool
+
+# Enviar tarefa de reboot para CPE
+curl -s -X POST "http://localhost:7557/devices/AABBCC-HG8240-CPE000001/tasks?timeout=3000" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "reboot"}' | python3 -m json.tool</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Acessar UI do GenieACS</h3>
+    <div class="card p-4 mb-4">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl">🌐</span>
+        <div>
+          <div class="font-bold text-white">GenieACS UI</div>
+          <code class="text-blue-300 text-sm">http://localhost:3001</code>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <div class="text-gray-400 text-xs uppercase font-bold mb-1">Credenciais padrão</div>
+          <div class="font-mono text-white">admin / admin</div>
+        </div>
+        <div>
+          <div class="text-gray-400 text-xs uppercase font-bold mb-1">Endpoints importantes</div>
+          <div class="font-mono text-xs text-gray-300">:7547 — CWMP (CPEs conectam aqui)</div>
+          <div class="font-mono text-xs text-gray-300">:7557 — NBI (REST API)</div>
+          <div class="font-mono text-xs text-gray-300">:7567 — File server</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="text-base font-bold text-white mb-3">Integração FiberOps → GenieACS</h3>
+    <p class="text-gray-400 text-sm mb-3">O FiberOps pode consultar o GenieACS NBI para cruzar dados de ONUs com CPEs TR-069:</p>
+    <pre><code class="text-purple-300">// Exemplo: buscar info de CPE pelo serial da ONU
+// src/lib/genieacs-client.js
+
+export async function getDeviceBySerial(serial) {
+  const GENIEACS_NBI = process.env.GENIEACS_NBI_URL ?? 'http://localhost:7557'
+  const query = encodeURIComponent(JSON.stringify({
+    "DeviceID.SerialNumber": serial
+  }))
+  const res = await fetch(`${GENIEACS_NBI}/devices?query=${query}`)
+  if (!res.ok) throw new Error(`GenieACS NBI error: ${res.status}`)
+  return res.json()
+}</code></pre>
+  </section>
+
+  <!-- SEÇÃO 9: MONITORAMENTO E TROUBLESHOOTING -->
+  <section id="troubleshooting" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">9</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Monitoramento e Troubleshooting do Lab</h2>
+        <p class="text-gray-400 text-sm mt-1">Comandos essenciais para depurar problemas no ambiente simulado</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-base font-bold text-white mb-3">Verificar estado geral do lab</h3>
+        <pre class="text-xs"><code class="text-green-300"># Ver todos os containers do lab
+docker compose -f docker-compose.lab.yml ps
+
+# Health check de todos os serviços
+docker compose -f docker-compose.lab.yml ps --format json \
+  | python3 -c "import sys,json; [print(f'{s[\"Service\"]}: {s[\"State\"]}') for s in json.load(sys.stdin)]"
+
+# Ver uso de recursos
+docker stats --no-stream \
+  lab-polt lab-onu-01 lab-onu-02 lab-fiberops lab-mongodb</code></pre>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-white mb-3">Problemas comuns</h3>
+        <div class="space-y-2">
+          <div class="card p-3" style="border:1px solid #FF3D0033">
+            <div class="text-xs font-bold text-red-400 mb-1">pOLT não responde na :3002</div>
+            <pre class="text-xs"><code class="text-gray-300">docker logs lab-polt --tail 30
+# Verificar se a porta está livre no host:
+ss -tlnp | grep 3002</code></pre>
+          </div>
+          <div class="card p-3" style="border:1px solid #FFD60033">
+            <div class="text-xs font-bold text-yellow-400 mb-1">ONU não aparece no Auto-Find</div>
+            <pre class="text-xs"><code class="text-gray-300"># OLT no FiberOps precisa ter ip = 'mock'
+# pOLT não usa SSH — use o painel REST no NOC</code></pre>
+          </div>
+          <div class="card p-3" style="border:1px solid #2D8CFF33">
+            <div class="text-xs font-bold text-blue-400 mb-1">Containers não se comunicam</div>
+            <pre class="text-xs"><code class="text-gray-300">docker network inspect rede-isp
+# Todos devem estar na subnet 172.20.0.0/24</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="text-base font-bold text-white mb-3">Reiniciar apenas a pOLT sem derrubar as ONUs</h3>
+    <pre><code class="text-yellow-300">docker compose -f docker-compose.lab.yml restart polt
+sleep 5
+# Re-configurar o modo RX após restart
+curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"action":"RxMODE","mode":"onu_sim","onu_sim_ip":"172.20.0.20","onu_sim_port":50000}]}'</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Script de health check completo</h3>
+    <pre><code class="text-green-300">#!/bin/bash
+echo "=== FiberOps Lab Health Check ==="
+
+echo -n "FiberOps  (localhost:3000): "
+curl -sf http://localhost:3000/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✓ {d[\"status\"]}' if d['status']=='ok' else f'✗ {d[\"status\"]}')" 2>/dev/null || echo "✗ offline"
+
+echo -n "pOLT      (localhost:3002): "
+curl -sf http://localhost:3002/polt/status > /dev/null && echo "✓ online" || echo "✗ offline"
+
+echo -n "GenieACS  (localhost:7557): "
+curl -sf http://localhost:7557/devices?limit=0 > /dev/null && echo "✓ online" || echo "✗ offline"
+
+echo -n "MongoDB   (localhost:27017): "
+docker exec lab-mongodb mongosh --quiet --eval "db.adminCommand('ping').ok" 2>/dev/null | grep -q 1 && echo "✓ online" || echo "✗ offline"
+
+echo -n "Redis     (localhost:6379): "
+docker exec lab-redis redis-cli -a redis123 ping 2>/dev/null | grep -q PONG && echo "✓ online" || echo "✗ offline"
+
+echo ""
+echo "ONUs simuladas ativas:"
+docker ps --filter "name=onu-sim" --format "  {{.Names}}: {{.Status}}"</code></pre>
+  </section>
+
+  <!-- SEÇÃO 10: MAKEFILE DO LAB -->
+  <section id="makefile" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">10</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Makefile do Lab — Comandos em Um Só Lugar</h2>
+        <p class="text-gray-400 text-sm mt-1">Automatize as operações mais comuns do laboratório</p>
+      </div>
+    </div>
+    <pre><code class="text-blue-200"># Makefile.lab — salve na raiz do projeto
+# Uso: make -f Makefile.lab &lt;comando&gt;
+
+.PHONY: lab-up lab-down lab-status lab-polt-status lab-provision lab-remove lab-rxmode lab-oscillate lab-clean
+
+COMPOSE = docker compose -f docker-compose.lab.yml
+POLT    = http://localhost:3002/polt/polt_actions
+
+# ── Ciclo de vida do lab ───────────────────────────────────────────────────────
+
+lab-up: ## Sobe o lab completo
+	$(COMPOSE) up -d
+	@echo "Aguardando serviços..."
+	@sleep 5
+	@make -f Makefile.lab lab-rxmode
+
+lab-down: ## Para o lab
+	$(COMPOSE) down
+
+lab-status: ## Status de todos os containers do lab
+	$(COMPOSE) ps
+	@echo ""
+	@echo "=== Conectividade ==="
+	@curl -sf http://localhost:3002/polt/status > /dev/null && echo "pOLT: ✓ online" || echo "pOLT: ✗ offline"
+	@curl -sf http://localhost:3000/api/health > /dev/null && echo "FiberOps: ✓ online" || echo "FiberOps: ✗ offline"
+
+# ── Operações pOLT ────────────────────────────────────────────────────────────
+
+lab-polt-status: ## Ver status das ONUs na pOLT
+	curl -s http://localhost:3002/polt/status | python3 -m json.tool
+
+lab-rxmode: ## Configurar pOLT para aceitar ONU simulada
+	curl -s -X POST $(POLT) \
+	  -H "Content-Type: application/json" \
+	  -d '{"requests":[{"action":"RxMODE","mode":"onu_sim","onu_sim_ip":"172.20.0.20","onu_sim_port":50000}]}' \
+	  | python3 -m json.tool
+	@echo "✓ RxMODE configurado"
+
+lab-provision: ## Provisionar ONU de teste (ONU_ID=1 serial=HWTCTEST0001)
+	curl -s -X POST $(POLT) \
+	  -H "Content-Type: application/json" \
+	  -d '{"requests":[{"channel_term":1,"action":"ADDONU","onu_id":1,"serial_vendor_id":"HWTC","serial_vendor_specific":"TEST0001","flags":"present+in_o5","management_state":"relying-on-vomci","loid":"test-cliente-01","v_ani":"vani-t01"}]}' \
+	  | python3 -m json.tool
+
+lab-remove: ## Remover ONU de teste
+	curl -s -X POST $(POLT) \
+	  -H "Content-Type: application/json" \
+	  -d '{"requests":[{"channel_term":1,"action":"REMOVEONU","onu_id":1,"serial_vendor_id":"HWTC","serial_vendor_specific":"TEST0001","flags":"present+in_o5","management_state":"relying-on-vomci"}]}' \
+	  | python3 -m json.tool
+
+# ── Simulações ────────────────────────────────────────────────────────────────
+
+lab-oscillate: ## Fazer ONU #1 oscilar (offline/online) por 5 minutos
+	@echo "Iniciando oscilação da onu-sim-01 por 5 minutos..."
+	@for i in $$(seq 1 5); do \
+	  echo "$$(date '+%H:%M:%S') ONU → OFFLINE"; \
+	  docker pause lab-onu-01 2>/dev/null; \
+	  sleep 20; \
+	  echo "$$(date '+%H:%M:%S') ONU → ONLINE"; \
+	  docker unpause lab-onu-01 2>/dev/null; \
+	  sleep 40; \
+	done
+	@echo "Simulação concluída."
+
+lab-signal-test: ## Subir ONU com sinal crítico para teste
+	docker run -d \
+	  --name onu-sinal-critico \
+	  --network rede-isp \
+	  --ip 172.20.0.25 \
+	  -e ONU_SERIAL="HWTCFFFF0099" \
+	  -e ONU_POLT_IP="172.20.0.10" \
+	  -e ONU_RX_POWER="-29.8" \
+	  broadbandforum/obbaa-onu-sim:latest
+	@echo "✓ ONU de sinal crítico ativa em 172.20.0.25"
+
+lab-clean: ## Remove tudo do lab (containers + volumes)
+	$(COMPOSE) down -v --remove-orphans
+	docker rm -f onu-sinal-critico 2>/dev/null || true
+	@echo "✓ Lab limpo"</code></pre>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-3">Como usar</h3>
+    <pre><code class="text-green-300"># Subir o lab completo e configurar RxMODE automaticamente
+make -f Makefile.lab lab-up
+
+# Provisionar uma ONU de teste
+make -f Makefile.lab lab-provision
+
+# Simular oscilação
+make -f Makefile.lab lab-oscillate
+
+# Parar tudo
+make -f Makefile.lab lab-down</code></pre>
+  </section>
+
+  <!-- SEÇÃO 11: FLUXO COMPLETO DE ATIVAÇÃO COMO ISP REAL -->
+  <section id="fluxo-isp" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">11</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Fluxo Completo de Ativação — Como um ISP Real</h2>
+        <p class="text-gray-400 text-sm mt-1">Simulando o processo completo do cadastro ao cliente conectado</p>
+      </div>
+    </div>
+
+    <p class="text-gray-300 mb-6">O processo de ativação de um cliente FTTH em um ISP real segue estas etapas. O lab simula cada uma delas:</p>
+
+    <div class="space-y-4">
+      <div class="card p-5" style="border-left:3px solid #2D8CFF">
+        <div class="flex gap-4 items-start">
+          <div class="step-num" style="background:#2D8CFF">1</div>
+          <div class="flex-1">
+            <div class="font-bold text-white mb-1">Cadastro do cliente no ERP (SGP/Voalle)</div>
+            <p class="text-sm text-gray-400 mb-2">No lab: inserir manualmente na collection <code class="text-blue-300">clientes</code> do MongoDB ou simular via FiberOps.</p>
+            <pre class="text-xs"><code class="text-green-300">db.clientes.insertOne({
+  projeto_id: "default",
+  nome: "José Oliveira",
+  cpf: "111.222.333-44",
+  endereco: "Rua das Flores, 100",
+  plano: "200Mbps",
+  status: "ativo",
+  created_at: new Date()
+})</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-5" style="border-left:3px solid #00C853">
+        <div class="flex gap-4 items-start">
+          <div class="step-num" style="background:#00C853">2</div>
+          <div class="flex-1">
+            <div class="font-bold text-white mb-1">Técnico vai ao campo — identifica serial da ONU</div>
+            <p class="text-sm text-gray-400 mb-2">No lab: o serial é definido na variável de ambiente da ONU simulada.</p>
+            <div class="flex gap-3 mt-2">
+              <div class="card p-3 flex-1 text-center text-xs">
+                <div class="text-gray-400">Serial real</div>
+                <div class="font-mono text-white mt-1">HWTCAABB0001</div>
+                <div class="text-gray-500 mt-1">(etiqueta na ONU física)</div>
+              </div>
+              <div class="card p-3 flex-1 text-center text-xs">
+                <div class="text-gray-400">No lab</div>
+                <div class="font-mono text-white mt-1">ONU_SERIAL env var</div>
+                <div class="text-gray-500 mt-1">(docker-compose.lab.yml)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-5" style="border-left:3px solid #FFD600">
+        <div class="flex gap-4 items-start">
+          <div class="step-num" style="background:#FFD600" style="color:#000">3</div>
+          <div class="flex-1">
+            <div class="font-bold text-white mb-1">Provisionar ONU na OLT</div>
+            <p class="text-sm text-gray-400 mb-2">No lab: usar o painel pOLT Test Console em <code class="text-blue-300">/admin/noc</code> → ADDONU.</p>
+            <pre class="text-xs"><code class="text-yellow-300"># Real: comando SSH para Huawei MA5800
+# interface gpon 0/1
+# onu add 0 1 sn-auth HWTCAABB0001 omci ont-lineprofile-id 1
+
+# Lab: API REST para pOLT simulada
+POST /polt/polt_actions → ADDONU (no NOC panel)</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-5" style="border-left:3px solid #E040FB">
+        <div class="flex gap-4 items-start">
+          <div class="step-num" style="background:#E040FB">4</div>
+          <div class="flex-1">
+            <div class="font-bold text-white mb-1">ONU aparece no NOC — verificar sinal</div>
+            <p class="text-sm text-gray-400 mb-2">FiberOps mostra a ONU como "active" com os valores de RX/TX da ONU simulada.</p>
+            <div class="grid grid-cols-3 gap-2 mt-2">
+              <div class="card p-2 text-center text-xs"><div style="color:#00C853">-21.5 dBm</div><div class="text-gray-500">RX Excelente</div></div>
+              <div class="card p-2 text-center text-xs"><div style="color:#FFD600">-26.0 dBm</div><div class="text-gray-500">RX Limite</div></div>
+              <div class="card p-2 text-center text-xs"><div style="color:#FF3D00">-29.8 dBm</div><div class="text-gray-500">RX Crítico</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-5" style="border-left:3px solid #00C853">
+        <div class="flex gap-4 items-start">
+          <div class="step-num" style="background:#00C853">5</div>
+          <div class="flex-1">
+            <div class="font-bold text-white mb-1">GenieACS detecta CPE TR-069 — provisão automática</div>
+            <p class="text-sm text-gray-400 mb-2">No lab: CPE simulado conecta ao GenieACS em :7547. GenieACS aplica perfis de configuração.</p>
+            <pre class="text-xs"><code class="text-green-300"># Ver CPE registrado no GenieACS
+curl -s http://localhost:7557/devices | python3 -m json.tool | head -30</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-5" style="border-left:3px solid #2D8CFF">
+        <div class="flex gap-4 items-start">
+          <div class="step-num" style="background:#2D8CFF">6</div>
+          <div class="flex-1">
+            <div class="font-bold text-white mb-1">Cliente conectado — monitoramento contínuo</div>
+            <p class="text-sm text-gray-400 mb-2">FiberOps monitora via Auto-Find e logs NOC. Alertas automáticos se a ONU cair.</p>
+            <div class="flex gap-2 flex-wrap mt-2">
+              <span class="badge" style="background:#00C85322;border:1px solid #00C85544;color:#00C853">✓ Ativo</span>
+              <span class="badge" style="background:#2D8CFF22;border:1px solid #2D8CFF44;color:#2D8CFF">Feed NOC</span>
+              <span class="badge" style="background:#7c3aed22;border:1px solid #7c3aed44;color:#a78bfa">Auto-Find</span>
+              <span class="badge" style="background:#FFD60022;border:1px solid #FFD60044;color:#FFD600">Alertas</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 12: TOPOLOGIA DE REDE SIMULADA DETALHADA -->
+  <section id="topologia" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">12</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Topologia Detalhada — Mapeando a Rede ISP no Docker</h2>
+        <p class="text-gray-400 text-sm mt-1">Equivalência entre componentes físicos e containers</p>
+      </div>
+    </div>
+
+    <div class="card p-6 mb-8">
+      <h3 class="font-bold text-white mb-4">Topologia GPON Física vs Docker Lab</h3>
+      <pre class="text-xs leading-6">
+<span style="color:#9ca3af">══ REDE FÍSICA (ISP REAL) ══════════════════════ ══ DOCKER LAB (SIMULADO) ═════════════</span>
+
+<span style="color:#2D8CFF">Internet (upstream)</span>                             <span style="color:#7c3aed">rede-isp (172.20.0.0/24)</span>
+        │                                              │
+<span style="color:#2D8CFF">OLT Huawei MA5800</span>                          <span style="color:#2D8CFF">pOLT Container (172.20.0.10:3002)</span>
+  ├── Slot 0, PON 1 ─────────────────────── channel_term: 1
+  │     ├── ONU ID 1: HWTCAABB0001 ───────── onu-sim-01 (172.20.0.20)
+  │     ├── ONU ID 2: HWTCAABB0002 ───────── onu-sim-02 (172.20.0.21)
+  │     └── ONU ID 3: HWTCAABB0003 ───────── onu-sim-03 (172.20.0.22)
+  │
+  ├── Slot 0, PON 2 ─────────────────────── channel_term: 2
+  │     ├── ONU ID 1: HWTCCCDD0001 ───────── onu-sim-04 (172.20.0.23)
+  │     └── ONU ID 2: HWTCCCDD0002 ───────── onu-sim-05 (172.20.0.24)
+  │
+<span style="color:#FFD600">ACS (GenieACS)</span>                              <span style="color:#FFD600">GenieACS CWMP (172.20.0.30:7547)</span>
+  └── CPE TR-069 gerenciados ────────────── cpe-sim-01 (172.20.0.40)
+
+<span style="color:#00C853">Sistema de Gestão NOC</span>                       <span style="color:#00C853">FiberOps (172.20.0.5:3000)</span>
+  └── Monitora OLT + ONUs + CPEs ─────────── → pOLT REST + GenieACS NBI</pre>
+    </div>
+
+    <h3 class="text-base font-bold text-white mb-4">Mapeamento de Portas — Host ↔ Docker</h3>
+    <div class="overflow-x-auto rounded-xl mb-6">
+      <table>
+        <thead><tr><th>Serviço</th><th>Porta Host</th><th>Porta Container</th><th>Protocolo</th><th>Acesso de</th></tr></thead>
+        <tbody>
+          <tr><td class="text-blue-400 font-bold">FiberOps</td><td class="font-mono">3000</td><td class="font-mono">3000</td><td>HTTP</td><td>Browser, App principal</td></tr>
+          <tr><td class="text-blue-400 font-bold">pOLT REST</td><td class="font-mono">3002</td><td class="font-mono">3002</td><td>HTTP REST</td><td>FiberOps (server action), curl</td></tr>
+          <tr><td class="text-blue-400 font-bold">pOLT CWMP</td><td class="font-mono">7547</td><td class="font-mono">7547</td><td>HTTP SOAP</td><td>CPEs (TR-069)</td></tr>
+          <tr><td class="text-yellow-400 font-bold">GenieACS CWMP</td><td class="font-mono">7548</td><td class="font-mono">7547</td><td>HTTP SOAP</td><td>CPEs simulados</td></tr>
+          <tr><td class="text-yellow-400 font-bold">GenieACS NBI</td><td class="font-mono">7557</td><td class="font-mono">7557</td><td>HTTP REST</td><td>FiberOps, admin</td></tr>
+          <tr><td class="text-yellow-400 font-bold">GenieACS UI</td><td class="font-mono">3001</td><td class="font-mono">3000</td><td>HTTP</td><td>Browser (admin)</td></tr>
+          <tr><td class="text-green-400 font-bold">ONU Sim #1</td><td class="font-mono">50000</td><td class="font-mono">50000</td><td>OMCI sim</td><td>pOLT (interno)</td></tr>
+          <tr><td class="text-green-400 font-bold">ONU Sim #2</td><td class="font-mono">50001</td><td class="font-mono">50001</td><td>OMCI sim</td><td>pOLT (interno)</td></tr>
+          <tr><td class="text-gray-400 font-bold">MongoDB</td><td class="font-mono">27017</td><td class="font-mono">27017</td><td>MongoDB wire</td><td>FiberOps, Compass</td></tr>
+          <tr><td class="text-gray-400 font-bold">Redis</td><td class="font-mono">6379</td><td class="font-mono">6379</td><td>RESP</td><td>FiberOps</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="text-base font-bold text-white mb-4">Diferenças Chave: Lab vs Produção</h3>
+    <div class="overflow-x-auto rounded-xl">
+      <table>
+        <thead><tr><th>Aspecto</th><th>Lab Docker</th><th>Produção Real</th><th>Impacto nos Testes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="font-bold">Protocolo OLT</td>
+            <td class="text-green-400">REST API (/polt/polt_actions)</td>
+            <td class="text-blue-400">SSH CLI (Huawei MA5800)</td>
+            <td class="text-xs text-gray-400">Lógica de negócio igual; adapter diferente</td>
+          </tr>
+          <tr>
+            <td class="font-bold">Sinal óptico</td>
+            <td class="text-green-400">Valor fixo por variável de env</td>
+            <td class="text-blue-400">Medido em tempo real via SSH/SNMP</td>
+            <td class="text-xs text-gray-400">Alertas funcionam; valores são estáticos</td>
+          </tr>
+          <tr>
+            <td class="font-bold">Latência</td>
+            <td class="text-green-400">&lt;1ms (loopback Docker)</td>
+            <td class="text-blue-400">1–50ms (SSH real)</td>
+            <td class="text-xs text-gray-400">Testes de timeout podem diferir</td>
+          </tr>
+          <tr>
+            <td class="font-bold">ONUs offline</td>
+            <td class="text-green-400">docker pause/unpause</td>
+            <td class="text-blue-400">Corte de energia/fibra física</td>
+            <td class="text-xs text-gray-400">Comportamento idêntico no NOC</td>
+          </tr>
+          <tr>
+            <td class="font-bold">Autenticação ONU</td>
+            <td class="text-green-400">Serial definido manualmente</td>
+            <td class="text-blue-400">SN descoberto automaticamente</td>
+            <td class="text-xs text-gray-400">Auto-Find funciona com serial fixo</td>
+          </tr>
+          <tr>
+            <td class="font-bold">CPE TR-069</td>
+            <td class="text-green-400">Simulador oznu/acs-client</td>
+            <td class="text-blue-400">ONU/roteador real do cliente</td>
+            <td class="text-xs text-gray-400">GenieACS se comporta igual</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SEÇÃO 13: CENÁRIOS AVANÇADOS -->
+  <section id="avancado" class="section">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="section-number">13</div>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Cenários Avançados de Simulação</h2>
+        <p class="text-gray-400 text-sm mt-1">Testes mais próximos de situações reais de ISP</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="card p-5">
+        <div class="font-bold text-white mb-3 flex items-center gap-2">
+          <span style="color:#FF3D00">⚡</span> Simulação de falha massiva (OLT down)
+        </div>
+        <pre class="text-xs"><code class="text-red-300">#!/bin/bash
+# Simula queda total da OLT (ex: falta de energia no datacenter)
+echo "$(date) SIMULANDO QUEDA DA pOLT..."
+
+# Para o container da pOLT
+docker pause lab-polt
+
+# Aguarda 2 minutos (NOC deve detectar e alertar)
+echo "Aguardando detecção pelo Auto-Find..."
+sleep 120
+
+# Restaura a pOLT
+docker unpause lab-polt
+echo "$(date) pOLT RESTAURADA"
+
+# Reconfigura RxMODE
+sleep 5
+curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"action":"RxMODE","mode":"onu_sim",
+       "onu_sim_ip":"172.20.0.20","onu_sim_port":50000}]}'
+
+echo "✓ Lab restaurado"</code></pre>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-bold text-white mb-3 flex items-center gap-2">
+          <span style="color:#7c3aed">📊</span> Teste de sinal degradando progressivamente
+        </div>
+        <pre class="text-xs"><code class="text-purple-300">#!/bin/bash
+# Substitui ONU por versões com sinal cada vez pior
+# Simula fibra se degradando ao longo do tempo
+
+SERIALS=("HWTCDEG0001")
+POWERS=("-20.0" "-23.0" "-26.0" "-28.5" "-30.0")
+
+for POWER in "${POWERS[@]}"; do
+  echo "$(date) Sinal degradando para ${POWER} dBm"
+
+  # Para ONU atual
+  docker stop lab-onu-degrading 2>/dev/null
+  docker rm lab-onu-degrading 2>/dev/null
+
+  # Sobe nova ONU com sinal menor
+  docker run -d \
+    --name lab-onu-degrading \
+    --network rede-isp \
+    --ip 172.20.0.26 \
+    -e ONU_SERIAL="HWTCDEG0001" \
+    -e ONU_POLT_IP="172.20.0.10" \
+    -e "ONU_RX_POWER=${POWER}" \
+    broadbandforum/obbaa-onu-sim:latest
+
+  echo "   RX Power: ${POWER} dBm → verificar NOC"
+  sleep 60  # Aguarda 1 minuto para NOC detectar
+done
+
+echo "Teste de degradação concluído."
+echo "Verifique o histórico de alertas no NOC."</code></pre>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-bold text-white mb-3 flex items-center gap-2">
+          <span style="color:#00C853">🔄</span> Teste de auto-provisão via SGP sync
+        </div>
+        <pre class="text-xs"><code class="text-green-300">#!/bin/bash
+# Simula chegada de dados do SGP ERP
+# O FiberOps sync detecta ONU nova e provisiona automaticamente
+
+# 1. Inserir cliente "novo" simulando sync SGP
+docker exec lab-mongodb mongosh \
+  -u fiberops -p fiberops123 \
+  --authenticationDatabase admin ftth \
+  --eval '
+db.clientes.insertOne({
+  projeto_id: "default",
+  nome: "Cliente Auto-Provisionado",
+  status: "pendente_ativacao",
+  onu_serial: "HWTCAUTO0001",
+  plano_id: "300mbps",
+  created_at: new Date()
+})'
+
+# 2. Aguardar o cron de SGP Sync (roda a cada 5 min)
+echo "Aguardando SGP Sync... (até 5 min)"
+echo "Monitore o NOC em localhost:3000/admin/noc"
+
+# 3. Verificar no NOC se apareceu o log de provisão
+# Procure por [SGP] ou [PROVISION] no feed</code></pre>
+      </div>
+
+      <div class="card p-5">
+        <div class="font-bold text-white mb-3 flex items-center gap-2">
+          <span style="color:#FFD600">📡</span> Múltiplas PONs simultâneas
+        </div>
+        <pre class="text-xs"><code class="text-yellow-300">#!/bin/bash
+# Provisiona 3 ONUs em PONs diferentes para testar separação de channel_terms
+
+echo "Configurando RxMODE para múltiplas ONUs..."
+
+# ONU na PON 1 (172.20.0.20)
+curl -s -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[
+    {"action":"RxMODE","mode":"onu_sim","onu_sim_ip":"172.20.0.20","onu_sim_port":50000},
+    {"channel_term":1,"action":"ADDONU","onu_id":1,"serial_vendor_id":"HWTC","serial_vendor_specific":"PON10001","flags":"present+in_o5","management_state":"relying-on-vomci"}
+  ]}' > /dev/null
+
+# ONU na PON 2 (172.20.0.21)
+curl -s -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[
+    {"action":"RxMODE","mode":"onu_sim","onu_sim_ip":"172.20.0.21","onu_sim_port":50001},
+    {"channel_term":2,"action":"ADDONU","onu_id":1,"serial_vendor_id":"HWTC","serial_vendor_specific":"PON20001","flags":"present+in_o5","management_state":"relying-on-vomci"}
+  ]}' > /dev/null
+
+echo "✓ ONUs em PONs diferentes configuradas"
+echo "Verifique o NOC para ver ambas as ONUs"</code></pre>
+      </div>
+    </div>
+  </section>
+
+<!-- CHUNK 8 END -->
+
+<!-- CHUNK 9: VLAN e Segmentação de Rede no Lab -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-bold text-sm">14</div>
+      <h2 class="text-2xl font-bold text-white">VLAN e Segmentação de Rede no Lab</h2>
+    </div>
+    <p class="text-slate-400 mb-6">Em uma rede FTTH real, VLANs separam tráfego de gerência, dados e voz. No lab Docker, simulamos esse comportamento com sub-redes e configurações de ambiente.</p>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-base font-semibold text-cyan-400 mb-3">Mapeamento VLAN → Sub-rede Docker</h3>
+        <table class="w-full text-xs">
+          <thead><tr class="text-slate-500 border-b border-slate-700"><th class="pb-2 text-left">VLAN</th><th class="pb-2 text-left">Função</th><th class="pb-2 text-left">Sub-rede Lab</th></tr></thead>
+          <tbody class="text-slate-300">
+            <tr class="border-b border-slate-800"><td class="py-1.5">10</td><td>Gerência OLT</td><td>172.20.0.0/28</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-1.5">20</td><td>Dados ONU</td><td>172.20.0.16/28</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-1.5">30</td><td>GenieACS TR-069</td><td>172.20.0.32/28</td></tr>
+            <tr class="border-b border-slate-800"><td class="py-1.5">40</td><td>FiberOps App</td><td>172.20.0.48/28</td></tr>
+            <tr><td class="py-1.5">99</td><td>MongoDB/Redis</td><td>172.20.0.64/28</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-base font-semibold text-purple-400 mb-3">Redes Docker Múltiplas</h3>
+        <p class="text-slate-400 text-sm mb-3">Para isolar ainda mais, crie redes Docker separadas por função:</p>
+        <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>networks:
+  rede-gestao:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/28
+
+  rede-dados:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.16/28
+
+  rede-tr069:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.32/28</code></pre>
+      </div>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-yellow-400 mb-3">Configurar Múltiplas Redes por Serviço</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>services:
+  polt:
+    image: broadbandforum/obbaa-polt-simulator:latest
+    networks:
+      rede-gestao:
+        ipv4_address: 172.20.0.10   # VLAN 10 - gestão
+      rede-dados:
+        ipv4_address: 172.20.0.20   # VLAN 20 - dados ONU
+
+  fiberops:
+    build: .
+    networks:
+      rede-gestao:
+        ipv4_address: 172.20.0.5    # acessa pOLT
+      rede-tr069:
+        ipv4_address: 172.20.0.35   # acessa GenieACS
+      rede-dados:
+        ipv4_address: 172.20.0.50   # acessa app
+
+  genieacs-cwmp:
+    image: drumsergio/genieacs:1.2.9
+    networks:
+      rede-tr069:
+        ipv4_address: 172.20.0.33
+      rede-dados:
+        ipv4_address: 172.20.0.18   # ONUs alcançam CWMP</code></pre>
+    </div>
+
+    <div class="bg-blue-900/20 border border-blue-500/30 rounded-xl p-5">
+      <h3 class="text-sm font-semibold text-blue-300 mb-2">Por que isso importa no lab?</h3>
+      <p class="text-slate-400 text-sm">Ao separar redes, você valida que sua aplicação está usando os endpoints corretos para cada função — exatamente como em produção onde tráfego de gerência nunca deve sair pela mesma interface que tráfego de cliente.</p>
+    </div>
+  </section>
+<!-- CHUNK 9 END -->
+
+<!-- CHUNK 10: Monitoramento com SNMP Simulado -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold text-sm">15</div>
+      <h2 class="text-2xl font-bold text-white">Monitoramento com SNMP Simulado</h2>
+    </div>
+    <p class="text-slate-400 mb-6">OLTs reais exportam métricas via SNMP. No lab, usamos o <code class="text-orange-300 bg-slate-800 px-1 rounded">snmpsim</code> para simular MIBs GPON e testar integrações de NMS (Network Management System).</p>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-orange-400 mb-3">Adicionar snmpsim ao docker-compose.lab.yml</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>  snmpsim:
+    image: tandrup/snmpsim:latest
+    container_name: snmpsim
+    ports:
+      - "1161:1161/udp"
+    volumes:
+      - ./snmp-data:/usr/local/snmpsim/data
+    environment:
+      - SNMPSIM_LISTEN_IP=0.0.0.0
+      - SNMPSIM_LISTEN_PORT=1161
+    networks:
+      rede-isp:
+        ipv4_address: 172.20.0.25</code></pre>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-white mb-3">Criar arquivo MIB simulado para OLT GPON</h3>
+      <p class="text-slate-400 text-sm mb-3">Crie <code class="text-yellow-300 bg-slate-800 px-1 rounded">snmp-data/public.snmprec</code>:</p>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># OID: sysDescr
+1.3.6.1.2.1.1.1.0|4|pOLT Simulator v1.0 - FiberOps Lab
+
+# OID: sysUpTime
+1.3.6.1.2.1.1.3.0|67|12345600
+
+# OID: ifNumber (4 interfaces)
+1.3.6.1.2.1.2.1.0|2|4
+
+# PON Port 1 - Status
+1.3.6.1.4.1.99999.1.1.1.0|2|1
+
+# PON Port 1 - RxPower (dBm * 100, -200 = -2.0 dBm)
+1.3.6.1.4.1.99999.1.1.2.0|2|-1580
+
+# ONU Count em PON 1
+1.3.6.1.4.1.99999.1.2.1.0|2|3
+
+# ONU 1 - Status (1=online, 2=offline)
+1.3.6.1.4.1.99999.1.3.1.1.0|2|1
+
+# ONU 1 - Serial
+1.3.6.1.4.1.99999.1.3.1.2.0|4|HWTC12345678
+
+# ONU 1 - RxPower
+1.3.6.1.4.1.99999.1.3.1.3.0|2|-1820</code></pre>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-white mb-3">Testar coleta SNMP do lab</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># Instalar snmp-utils no host
+sudo apt install snmp -y
+
+# Walk completo
+snmpwalk -v2c -c public 127.0.0.1:1161
+
+# OID específico (RxPower)
+snmpget -v2c -c public 127.0.0.1:1161 1.3.6.1.4.1.99999.1.1.2.0
+
+# Simular polling a cada 30s
+watch -n 30 "snmpget -v2c -c public 127.0.0.1:1161 \
+  1.3.6.1.4.1.99999.1.3.1.3.0"</code></pre>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-sm font-semibold text-cyan-400 mb-3">Script: Variar métricas SNMP dinamicamente</h3>
+        <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>#!/bin/bash
+# simulate-snmp-degradation.sh
+# Atualiza o .snmprec dinamicamente
+
+SNMPREC="./snmp-data/public.snmprec"
+
+for rxpower in -1820 -1900 -1980 -2100 -2300 -2500; do
+  echo "RxPower: ${rxpower} ($(echo "scale=2; $rxpower/100" | bc) dBm)"
+
+  # Atualiza OID de RxPower
+  sed -i "s|1.3.6.1.4.1.99999.1.3.1.3.0|2|.*|1.3.6.1.4.1.99999.1.3.1.3.0|2|${rxpower}|" \
+    $SNMPREC
+
+  # Reinicia snmpsim para recarregar
+  docker compose -f docker-compose.lab.yml restart snmpsim
+  sleep 30
+done
+
+echo "✓ Degradação simulada completa"</code></pre>
+      </div>
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-sm font-semibold text-purple-400 mb-3">Integrar FiberOps com SNMP Polling</h3>
+        <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>// src/lib/snmp-poller.js
+import snmp from 'net-snmp'
+
+export async function pollOltMetrics(ip, oids) {
+  return new Promise((resolve, reject) => {
+    const session = snmp.createSession(ip, 'public')
+    session.get(oids, (err, varbinds) => {
+      session.close()
+      if (err) return reject(err)
+      resolve(varbinds.map(v => ({
+        oid: v.oid,
+        value: v.value,
+      })))
+    })
+  })
+}
+
+// Uso no cron:
+// const metrics = await pollOltMetrics(
+//   '172.20.0.25',
+//   ['1.3.6.1.4.1.99999.1.1.2.0']
+// )</code></pre>
+      </div>
+    </div>
+  </section>
+<!-- CHUNK 10 END -->
+
+<!-- CHUNK 11: Benchmarks e Testes de Carga -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 font-bold text-sm">16</div>
+      <h2 class="text-2xl font-bold text-white">Benchmarks e Testes de Carga</h2>
+    </div>
+    <p class="text-slate-400 mb-6">Medir o desempenho do FiberOps sob carga realista de provisão FTTH — quantas ONUs por segundo, latência do NOC feed, throughput da API interna.</p>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-red-400 mb-3">Script: Provisão em Massa (Benchmark ADDONU)</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>#!/bin/bash
+# benchmark-provision.sh
+# Provisiona N ONUs e mede o tempo total
+
+POLT_URL="http://localhost:3002"
+N=${1:-50}   # quantidade de ONUs (padrão: 50)
+START=$(date +%s%N)
+OK=0
+FAIL=0
+
+echo "▶ Provisionando $N ONUs na pOLT..."
+
+for i in $(seq 1 $N); do
+  HEX=$(printf '%08X' $i)
+  RESPONSE=$(curl -s -X POST "$POLT_URL/polt/polt_actions" \
+    -H "Content-Type: application/json" \
+    -d "{\"requests\":[{
+      \"channel_term\":1,
+      \"action\":\"ADDONU\",
+      \"onu_id\":$i,
+      \"serial_vendor_id\":\"BCHM\",
+      \"serial_vendor_specific\":\"$HEX\",
+      \"flags\":\"present+in_o5\",
+      \"management_state\":\"relying-on-vomci\"
+    }]}")
+
+  STATUS=$(echo "$RESPONSE" | python3 -c \
+    "import sys,json; d=json.load(sys.stdin); \
+     print(d['responses'][0]['status'])" 2>/dev/null)
+
+  if [ "$STATUS" = "0" ]; then
+    ((OK++))
+  else
+    ((FAIL++))
+  fi
+
+  # Mostrar progresso a cada 10
+  if (( i % 10 == 0 )); then
+    echo "  → $i/$N (ok=$OK fail=$FAIL)"
+  fi
+done
+
+END=$(date +%s%N)
+ELAPSED=$(( (END - START) / 1000000 ))
+OPS=$(echo "scale=2; $N * 1000 / $ELAPSED" | bc)
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✓ Concluído em ${ELAPSED}ms"
+echo "  ONUs OK:   $OK"
+echo "  ONUs FAIL: $FAIL"
+echo "  Throughput: $OPS ONUs/s"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"</code></pre>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-sm font-semibold text-yellow-400 mb-3">Benchmark: NOC SSE Feed Latência</h3>
+        <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>#!/bin/bash
+# Mede latência entre provisionamento
+# e aparição no NOC feed
+
+COOKIE="$(cat .noc-session)"
+
+# Abre SSE em background, captura timestamps
+curl -s -N \
+  -H "Cookie: $COOKIE" \
+  "http://localhost:3000/api/noc/stream" \
+  | while read line; do
+    if echo "$line" | grep -q "ADDONU"; then
+      echo "NOC recebeu: $(date +%s%3N)ms"
+    fi
+  done &
+
+SSE_PID=$!
+
+# Aguarda SSE estabilizar
+sleep 1
+
+echo "Provisão em: $(date +%s%3N)ms"
+curl -s -X POST \
+  "http://localhost:3002/polt/polt_actions" \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"channel_term":1,"action":"ADDONU",
+    "onu_id":99,"serial_vendor_id":"TEST",
+    "serial_vendor_specific":"LATTEST1",
+    "flags":"present+in_o5",
+    "management_state":"relying-on-vomci"}]}' \
+  > /dev/null
+
+sleep 3
+kill $SSE_PID 2>/dev/null</code></pre>
+      </div>
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-sm font-semibold text-cyan-400 mb-3">Resultados Típicos Esperados</h3>
+        <div class="space-y-3 text-sm">
+          <div class="flex justify-between items-center py-2 border-b border-slate-700">
+            <span class="text-slate-300">ADDONU throughput</span>
+            <span class="text-green-400 font-mono">8–15 ONUs/s</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-slate-700">
+            <span class="text-slate-300">Latência NOC feed</span>
+            <span class="text-green-400 font-mono">&lt;200ms</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-slate-700">
+            <span class="text-slate-300">API interna /onus</span>
+            <span class="text-green-400 font-mono">&lt;50ms</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-slate-700">
+            <span class="text-slate-300">MongoDB insert ONU</span>
+            <span class="text-green-400 font-mono">&lt;10ms</span>
+          </div>
+          <div class="flex justify-between items-center py-2">
+            <span class="text-slate-300">GenieACS CWMP reg.</span>
+            <span class="text-yellow-400 font-mono">2–5s (TR-069)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+      <h3 class="text-base font-semibold text-white mb-3">Teste de Carga com k6</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>// k6-polt-load.js — instale k6: https://k6.io/docs/getting-started/installation/
+import http from 'k6/http'
+import { check, sleep } from 'k6'
+
+export const options = {
+  stages: [
+    { duration: '30s', target: 5  },   // rampa para 5 VUs
+    { duration: '60s', target: 10 },   // mantém 10 VUs por 1min
+    { duration: '30s', target: 0  },   // rampa down
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<500'],   // 95% abaixo de 500ms
+    http_req_failed:   ['rate<0.01'],   // menos de 1% de erros
+  },
+}
+
+let onu_counter = 0
+
+export default function () {
+  const onu_id = ++onu_counter
+  const serial  = onu_id.toString(16).padStart(8, '0').toUpperCase()
+
+  const res = http.post(
+    'http://localhost:3002/polt/polt_actions',
+    JSON.stringify({ requests: [{
+      channel_term: 1,
+      action: 'ADDONU',
+      onu_id,
+      serial_vendor_id: 'K6LD',
+      serial_vendor_specific: serial,
+      flags: 'present+in_o5',
+      management_state: 'relying-on-vomci',
+    }]}),
+    { headers: { 'Content-Type': 'application/json' } }
+  )
+
+  check(res, {
+    'status 200': (r) => r.status === 200,
+    'response ok': (r) => {
+      const body = JSON.parse(r.body)
+      return body?.responses?.[0]?.status === 0
+    },
+  })
+  sleep(0.1)
+}
+// Executar: k6 run k6-polt-load.js</code></pre>
+    </div>
+  </section>
+<!-- CHUNK 11 END -->
+
+<!-- CHUNK 12: Scripts de Automação e CI/CD do Lab -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400 font-bold text-sm">17</div>
+      <h2 class="text-2xl font-bold text-white">Scripts de Automação e CI/CD do Lab</h2>
+    </div>
+    <p class="text-slate-400 mb-6">Automatize o ciclo completo do lab — subir, testar, derrubar — e integre com GitHub Actions para rodar testes de integração a cada PR.</p>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-green-400 mb-3">Script: lab-test-suite.sh — Suite Completa</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>#!/bin/bash
+# lab-test-suite.sh — Roda todos os testes do lab em sequência
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+NC='\033[0m'; BOLD='\033[1m'
+
+PASS=0; FAIL=0
+
+assert_ok() {
+  local test_name="$1"
+  local cmd="$2"
+  local expected="${3:-0}"
+  echo -n "  Testing: $test_name... "
+  if eval "$cmd" > /dev/null 2>&1; then
+    echo -e "${GREEN}PASS${NC}"
+    ((PASS++))
+  else
+    echo -e "${RED}FAIL${NC}"
+    ((FAIL++))
+  fi
+}
+
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}  FiberOps Lab Test Suite${NC}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+echo -e "\n${YELLOW}[1/5] Infraestrutura${NC}"
+assert_ok "pOLT acessível" \
+  "curl -sf http://localhost:3002/polt/polt_actions -X POST \
+   -H 'Content-Type: application/json' \
+   -d '{\"requests\":[]}' | grep -q responses"
+
+assert_ok "FiberOps respondendo" \
+  "curl -sf http://localhost:3000/api/health | grep -q ok"
+
+assert_ok "MongoDB conectado" \
+  "docker compose -f docker-compose.lab.yml exec -T mongodb \
+   mongosh --quiet --eval 'db.runCommand({ping:1}).ok'"
+
+assert_ok "Redis conectado" \
+  "docker compose -f docker-compose.lab.yml exec -T redis \
+   redis-cli ping | grep -q PONG"
+
+echo -e "\n${YELLOW}[2/5] Provisão de ONU${NC}"
+assert_ok "RxMODE configurado" \
+  "curl -sf -X POST http://localhost:3002/polt/polt_actions \
+   -H 'Content-Type: application/json' \
+   -d '{\"requests\":[{\"action\":\"RxMODE\",\"mode\":\"onu_sim\",
+   \"onu_sim_ip\":\"172.20.0.20\",\"onu_sim_port\":50000}]}' \
+   | python3 -c 'import sys,json; \
+   d=json.load(sys.stdin); \
+   assert d[\"responses\"][0][\"status\"]==0'"
+
+assert_ok "ADDONU sucesso" \
+  "curl -sf -X POST http://localhost:3002/polt/polt_actions \
+   -H 'Content-Type: application/json' \
+   -d '{\"requests\":[{\"channel_term\":1,\"action\":\"ADDONU\",
+   \"onu_id\":1,\"serial_vendor_id\":\"TEST\",
+   \"serial_vendor_specific\":\"SUITE001\",
+   \"flags\":\"present+in_o5\",
+   \"management_state\":\"relying-on-vomci\"}]}' \
+   | python3 -c 'import sys,json; \
+   d=json.load(sys.stdin); \
+   assert d[\"responses\"][0][\"status\"]==0'"
+
+assert_ok "REMOVEONU sucesso" \
+  "curl -sf -X POST http://localhost:3002/polt/polt_actions \
+   -H 'Content-Type: application/json' \
+   -d '{\"requests\":[{\"channel_term\":1,\"action\":\"REMOVEONU\",
+   \"onu_id\":1,\"serial_vendor_id\":\"TEST\",
+   \"serial_vendor_specific\":\"SUITE001\",
+   \"flags\":\"present+in_o5\",
+   \"management_state\":\"relying-on-vomci\"}]}' \
+   | python3 -c 'import sys,json; \
+   d=json.load(sys.stdin); \
+   assert d[\"responses\"][0][\"status\"]==0'"
+
+echo -e "\n${YELLOW}[3/5] API Interna FiberOps${NC}"
+SECRET="${INTERNAL_API_SECRET:-dev-internal-secret}"
+assert_ok "GET /api/internal" \
+  "curl -sf http://localhost:3000/api/internal \
+   -H 'x-internal-secret: $SECRET' | grep -q service"
+
+assert_ok "GET /api/internal/onus" \
+  "curl -sf http://localhost:3000/api/internal/onus \
+   -H 'x-internal-secret: $SECRET' \
+   -H 'x-projeto-id: test' | grep -q onus"
+
+echo -e "\n${YELLOW}[4/5] ONU Simuladores${NC}"
+assert_ok "onu-sim-01 rodando" \
+  "docker compose -f docker-compose.lab.yml ps onu-sim-01 | grep -q Up"
+
+assert_ok "onu-sim-02 rodando" \
+  "docker compose -f docker-compose.lab.yml ps onu-sim-02 | grep -q Up"
+
+echo -e "\n${YELLOW}[5/5] Limpeza${NC}"
+assert_ok "REMOVEONU limpeza" \
+  "curl -sf -X POST http://localhost:3002/polt/polt_actions \
+   -H 'Content-Type: application/json' \
+   -d '{\"requests\":[{\"channel_term\":1,\"action\":\"REMOVEONU\",
+   \"onu_id\":99,\"serial_vendor_id\":\"TEST\",
+   \"serial_vendor_specific\":\"LATTEST1\",
+   \"flags\":\"present+in_o5\",
+   \"management_state\":\"relying-on-vomci\"}]}' 2>/dev/null; true"
+
+echo -e "\n${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+TOTAL=$((PASS + FAIL))
+echo -e "  Resultado: ${GREEN}$PASS PASS${NC} / ${RED}$FAIL FAIL${NC} (total: $TOTAL)"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+[ $FAIL -eq 0 ] && exit 0 || exit 1</code></pre>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-yellow-400 mb-3">GitHub Actions — CI com Lab</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># .github/workflows/lab-integration.yml
+name: Lab Integration Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lab-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start Lab
+        run: |
+          docker compose -f docker-compose.lab.yml up -d
+          echo "Aguardando serviços..."
+          sleep 20
+
+      - name: Wait for pOLT
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3002/polt/polt_actions \
+               -X POST -H 'Content-Type: application/json' \
+               -d '{"requests":[]}' > /dev/null 2>&1; then
+              echo "pOLT pronto!"
+              break
+            fi
+            echo "Aguardando pOLT... ($i/30)"
+            sleep 2
+          done
+
+      - name: Configure pOLT RxMode
+        run: |
+          curl -f -X POST http://localhost:3002/polt/polt_actions \
+            -H "Content-Type: application/json" \
+            -d '{"requests":[{"action":"RxMODE","mode":"onu_sim",
+              "onu_sim_ip":"172.20.0.20","onu_sim_port":50000}]}'
+
+      - name: Run Test Suite
+        run: |
+          chmod +x lab-test-suite.sh
+          ./lab-test-suite.sh
+        env:
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+
+      - name: Show Logs on Failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.lab.yml logs --tail=50
+
+      - name: Teardown Lab
+        if: always()
+        run: docker compose -f docker-compose.lab.yml down -v</code></pre>
+    </div>
+  </section>
+<!-- CHUNK 12 END -->
+
+<!-- CHUNK 13: Simulação de Qualidade de Sinal (RSSI/RxPower) -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-violet-400 font-bold text-sm">18</div>
+      <h2 class="text-2xl font-bold text-white">Simulação de Qualidade de Sinal (RSSI / RxPower)</h2>
+    </div>
+    <p class="text-slate-400 mb-6">Um dos problemas mais comuns em FTTH é degradação gradual do sinal óptico. Esta seção mostra como simular diferentes cenários de qualidade de sinal no lab e como o FiberOps deve reagir.</p>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-violet-400 mb-3">Faixas de Qualidade de Sinal GPON</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-slate-500 border-b border-slate-700">
+              <th class="pb-2 text-left pr-4">RxPower (dBm)</th>
+              <th class="pb-2 text-left pr-4">Status</th>
+              <th class="pb-2 text-left pr-4">Causa Típica</th>
+              <th class="pb-2 text-left">Ação</th>
+            </tr>
+          </thead>
+          <tbody class="text-slate-300">
+            <tr class="border-b border-slate-800">
+              <td class="py-2 pr-4 font-mono text-green-400">-14 a -8 dBm</td>
+              <td class="pr-4"><span class="bg-green-900/40 text-green-400 text-xs px-2 py-0.5 rounded">Ótimo</span></td>
+              <td class="pr-4">ONU próxima, cabo limpo</td>
+              <td class="text-slate-400 text-xs">Nenhuma</td>
+            </tr>
+            <tr class="border-b border-slate-800">
+              <td class="py-2 pr-4 font-mono text-yellow-400">-20 a -14 dBm</td>
+              <td class="pr-4"><span class="bg-yellow-900/40 text-yellow-400 text-xs px-2 py-0.5 rounded">Normal</span></td>
+              <td class="pr-4">Operação padrão</td>
+              <td class="text-slate-400 text-xs">Monitorar</td>
+            </tr>
+            <tr class="border-b border-slate-800">
+              <td class="py-2 pr-4 font-mono text-orange-400">-25 a -20 dBm</td>
+              <td class="pr-4"><span class="bg-orange-900/40 text-orange-400 text-xs px-2 py-0.5 rounded">Alerta</span></td>
+              <td class="pr-4">Conector sujo, curva excessiva</td>
+              <td class="text-slate-400 text-xs">Agendar vistoria</td>
+            </tr>
+            <tr class="border-b border-slate-800">
+              <td class="py-2 pr-4 font-mono text-red-400">-28 a -25 dBm</td>
+              <td class="pr-4"><span class="bg-red-900/40 text-red-400 text-xs px-2 py-0.5 rounded">Crítico</span></td>
+              <td class="pr-4">Splitter danificado, emenda ruim</td>
+              <td class="text-slate-400 text-xs">Despachar técnico</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-4 font-mono text-slate-500">&lt; -28 dBm</td>
+              <td class="pr-4"><span class="bg-slate-800 text-slate-500 text-xs px-2 py-0.5 rounded">Offline</span></td>
+              <td class="pr-4">Fibra cortada, ONU sem luz</td>
+              <td class="text-slate-400 text-xs">Emergência</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-white mb-3">Script: Simular Degradação Progressiva via NOC</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>#!/bin/bash
+# simulate-signal-degradation.sh
+# Injeta eventos de degradação diretamente no NOC
+# (simula o que um coletor de métricas SNMP faria)
+
+PROJETO_ID="${1:-default}"
+FIBEROPS_URL="${2:-http://localhost:3000}"
+COOKIE="${3}"
+
+# Função para inserir log no NOC via API interna
+noc_log() {
+  local level="$1"
+  local msg="$2"
+  local source="${3:-OLT-01}"
+
+  curl -sf -X POST "$FIBEROPS_URL/api/internal/noc" \
+    -H "Content-Type: application/json" \
+    -H "x-internal-secret: dev-internal-secret" \
+    -H "x-projeto-id: $PROJETO_ID" \
+    -d "{\"source\":\"$source\",\"message\":\"$msg\",\"level\":\"$level\"}" \
+    > /dev/null
+}
+
+echo "▶ Iniciando simulação de degradação de sinal"
+echo "  Projeto: $PROJETO_ID"
+echo ""
+
+SERIAIS=("HWTC12345678" "HWTC87654321" "ZTEGABCDEF01")
+RXPOWERS=("-14.5" "-17.2" "-20.8" "-23.1" "-25.4" "-27.0" "-28.9")
+
+for i in "${!RXPOWERS[@]}"; do
+  POWER="${RXPOWERS[$i]}"
+
+  for SERIAL in "${SERIAIS[@]}"; do
+    if (( $(echo "$POWER > -20" | bc -l) )); then
+      LEVEL="info"
+      STATUS="normal"
+    elif (( $(echo "$POWER > -25" | bc -l) )); then
+      LEVEL="warn"
+      STATUS="alerta"
+    else
+      LEVEL="error"
+      STATUS="crítico"
+    fi
+
+    MSG="[OPT] ONU $SERIAL | RxPower: ${POWER} dBm | Status: $STATUS"
+    noc_log "$LEVEL" "$MSG"
+    echo "  → $MSG"
+  done
+
+  sleep 5
+done
+
+echo ""
+echo "✓ Simulação de degradação concluída"
+echo "  Verifique o NOC em $FIBEROPS_URL/admin/noc"</code></pre>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-sm font-semibold text-cyan-400 mb-3">Alertas automáticos no FiberOps</h3>
+        <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>// src/lib/signal-monitor.js
+// Exemplo de como processar métricas de sinal
+
+const THRESHOLDS = {
+  ok:       { min: -20,  level: 'info'    },
+  alert:    { min: -25,  level: 'warn'    },
+  critical: { min: -28,  level: 'error'   },
+  offline:  { min: -999, level: 'error'   },
+}
+
+export function classifySignal(rxPowerDbm) {
+  if (rxPowerDbm >= -20) return { status: 'ok',       ...THRESHOLDS.ok       }
+  if (rxPowerDbm >= -25) return { status: 'alert',    ...THRESHOLDS.alert    }
+  if (rxPowerDbm >= -28) return { status: 'critical', ...THRESHOLDS.critical }
+  return { status: 'offline', ...THRESHOLDS.offline }
+}
+
+export function shouldAlert(rxPower, previousRx) {
+  const current  = classifySignal(rxPower)
+  const previous = classifySignal(previousRx)
+  return current.status !== previous.status
+}</code></pre>
+      </div>
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-sm font-semibold text-yellow-400 mb-3">Dashboard de Sinal no Lab</h3>
+        <p class="text-slate-400 text-sm mb-3">Após rodar o script de degradação, o NOC mostrará a evolução temporal do sinal:</p>
+        <div class="space-y-2 font-mono text-xs">
+          <div class="flex gap-2 items-center">
+            <span class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>
+            <span class="text-green-400">[OPT] HWTC12345678 | -14.5 dBm | normal</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>
+            <span class="text-green-400">[OPT] HWTC12345678 | -17.2 dBm | normal</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0"></span>
+            <span class="text-yellow-400">[OPT] HWTC12345678 | -23.1 dBm | alerta</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="w-2 h-2 rounded-full bg-red-400 flex-shrink-0"></span>
+            <span class="text-red-400">[OPT] HWTC12345678 | -27.0 dBm | crítico</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="w-2 h-2 rounded-full bg-slate-500 flex-shrink-0"></span>
+            <span class="text-slate-500">[OPT] HWTC12345678 | -28.9 dBm | offline</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+<!-- CHUNK 13 END -->
+
+<!-- CHUNK 14: Integração com Banco de Dados — ONUs no MongoDB -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400 font-bold text-sm">19</div>
+      <h2 class="text-2xl font-bold text-white">Integração com Banco de Dados — ONUs no MongoDB</h2>
+    </div>
+    <p class="text-slate-400 mb-6">O FiberOps armazena ONUs no MongoDB. Esta seção mostra como popular o banco com dados de teste e como sincronizar com o estado da pOLT.</p>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-teal-400 mb-3">Estrutura do Documento ONU no MongoDB</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>// Collection: onus
+{
+  _id: ObjectId("..."),
+  projeto_id: "meu-provedor",
+  olt_id: ObjectId("..."),          // referência à OLT
+  serial: "HWTC12345678",           // serial_vendor_id + serial_vendor_specific
+  serial_vendor_id: "HWTC",
+  serial_vendor_specific: "12345678",
+  pon_port: 1,                      // channel_term
+  onu_id_polt: 2,                   // onu_id na pOLT
+  nome: "Cliente João Silva",
+  contrato: "FTTH-100M",
+  endereco: "Rua das Flores, 123",
+  status: "ativo",                  // ativo, inativo, suspenso
+  polt_status: "online",            // online, offline, provisionando
+  rx_power: -18.5,                  // dBm
+  ultima_sincronizacao: ISODate("2024-01-15T10:30:00Z"),
+  provisionado_em: ISODate("2024-01-10T08:00:00Z"),
+  vani: "vani-user1",
+  loid: "joao.silva",
+  management_state: "relying-on-vomci",
+  flags: "present+in_o5",
+  genieacs_device_id: "HWTC-HWTC12345678",  // ID no GenieACS
+  metadata: {
+    mac: "AA:BB:CC:DD:EE:FF",
+    modelo: "HG8310M",
+    firmware: "V3R017C10S168",
+  }
+}</code></pre>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-white mb-3">Script: Seed de ONUs de Teste no MongoDB</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>// scripts/seed-lab-onus.mjs
+// Uso: node scripts/seed-lab-onus.mjs [quantidade]
+// Ou dentro do Docker:
+//   docker compose exec fiberops node scripts/seed-lab-onus.mjs 20
+
+import { MongoClient, ObjectId } from 'mongodb'
+
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fiberops'
+const PROJETO_ID = process.env.PROJETO_ID || 'lab-provedor'
+const N = parseInt(process.argv[2] || '10')
+
+const CLIENTES = [
+  'Ana Souza', 'Carlos Lima', 'Maria Oliveira', 'João Santos',
+  'Pedro Costa', 'Luísa Ferreira', 'Roberto Alves', 'Fernanda Rocha',
+  'Marcos Dias', 'Juliana Carvalho',
+]
+
+const CONTRATOS = ['FTTH-100M', 'FTTH-200M', 'FTTH-500M', 'FTTH-1G']
+
+async function main() {
+  const client = new MongoClient(MONGO_URI)
+  await client.connect()
+  const db = client.db()
+
+  // Busca a OLT de lab
+  let olt = await db.collection('olts').findOne({
+    projeto_id: PROJETO_ID,
+    nome: { $regex: /lab|polt|simulad/i },
+  })
+
+  if (!olt) {
+    // Cria OLT de lab se não existir
+    const result = await db.collection('olts').insertOne({
+      projeto_id: PROJETO_ID,
+      nome: 'pOLT Lab Simulator',
+      ip: 'mock',
+      fabricante: 'Broadband Forum',
+      modelo: 'obbaa-polt-simulator',
+      portas_pon: 4,
+      status: 'ativo',
+      polt_url: 'http://polt:3002',
+      criado_em: new Date(),
+    })
+    olt = { _id: result.insertedId }
+    console.log('✓ OLT de lab criada')
+  }
+
+  const onus = []
+  for (let i = 1; i <= N; i++) {
+    const serial_specific = i.toString(16).padStart(8, '0').toUpperCase()
+    const cliente = CLIENTES[i % CLIENTES.length]
+    const contrato = CONTRATOS[i % CONTRATOS.length]
+    const pon = Math.ceil(i / 32)    // 32 ONUs por PON
+    const onu_id = ((i - 1) % 32) + 1
+
+    onus.push({
+      projeto_id: PROJETO_ID,
+      olt_id: olt._id,
+      serial: `HWTC${serial_specific}`,
+      serial_vendor_id: 'HWTC',
+      serial_vendor_specific: serial_specific,
+      pon_port: pon,
+      onu_id_polt: onu_id,
+      nome: `${cliente} #${i}`,
+      contrato,
+      endereco: `Rua Teste, ${i * 10}`,
+      status: 'ativo',
+      polt_status: 'offline',
+      rx_power: null,
+      provisionado_em: new Date(),
+      ultima_sincronizacao: new Date(),
+      vani: `vani-user${i}`,
+      loid: `cliente${i}`,
+      management_state: 'relying-on-vomci',
+      flags: 'present+in_o5',
+    })
+  }
+
+  await db.collection('onus').deleteMany({ projeto_id: PROJETO_ID })
+  await db.collection('onus').insertMany(onus)
+
+  console.log(`✓ ${N} ONUs inseridas no MongoDB (projeto: ${PROJETO_ID})`)
+  await client.close()
+}
+
+main().catch(console.error)</code></pre>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+      <h3 class="text-base font-semibold text-white mb-3">Sincronizar Estado da pOLT → MongoDB</h3>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code>#!/bin/bash
+# sync-polt-to-mongodb.sh
+# Provisiona todas as ONUs do MongoDB na pOLT e atualiza status
+
+POLT_URL="http://localhost:3002"
+MONGO_HOST="localhost"
+MONGO_DB="fiberops"
+PROJETO_ID="lab-provedor"
+
+echo "▶ Buscando ONUs do MongoDB..."
+
+# Busca ONUs via mongosh e converte para JSON
+ONUS=$(docker compose exec -T mongodb mongosh \
+  --quiet "$MONGO_DB" \
+  --eval "JSON.stringify(db.onus.find(
+    {projeto_id:'$PROJETO_ID',status:'ativo'},
+    {serial_vendor_id:1,serial_vendor_specific:1,pon_port:1,onu_id_polt:1,flags:1,management_state:1,vani:1,loid:1}
+  ).toArray())")
+
+echo "$ONUS" | python3 -c "
+import sys, json, subprocess
+
+onus = json.load(sys.stdin)
+print(f'Provisionando {len(onus)} ONUs na pOLT...')
+
+# Configura RxMODE primeiro
+import urllib.request
+req = urllib.request.Request(
+  '${POLT_URL}/polt/polt_actions',
+  data=json.dumps({'requests':[{
+    'action':'RxMODE','mode':'onu_sim',
+    'onu_sim_ip':'172.20.0.20','onu_sim_port':50000
+  }]}).encode(),
+  headers={'Content-Type':'application/json'},
+  method='POST'
+)
+urllib.request.urlopen(req)
+
+# Provisiona em batch
+BATCH = 10
+for i in range(0, len(onus), BATCH):
+  batch = onus[i:i+BATCH]
+  requests = [{
+    'channel_term': o.get('pon_port', 1),
+    'action': 'ADDONU',
+    'onu_id': o.get('onu_id_polt', j+1),
+    'serial_vendor_id': o.get('serial_vendor_id','HWTC'),
+    'serial_vendor_specific': o.get('serial_vendor_specific','00000000'),
+    'flags': o.get('flags','present+in_o5'),
+    'management_state': o.get('management_state','relying-on-vomci'),
+    'loid': o.get('loid',''),
+    'v_ani': o.get('vani',''),
+  } for j,o in enumerate(batch)]
+
+  req = urllib.request.Request(
+    '${POLT_URL}/polt/polt_actions',
+    data=json.dumps({'requests':requests}).encode(),
+    headers={'Content-Type':'application/json'},
+    method='POST'
+  )
+  resp = json.load(urllib.request.urlopen(req))
+  ok = sum(1 for r in resp.get('responses',[]) if r.get('status')==0)
+  print(f'  Batch {i//BATCH+1}: {ok}/{len(batch)} OK')
+
+print('✓ Sincronização concluída')
+"</code></pre>
+    </div>
+  </section>
+<!-- CHUNK 14 END -->
+
+<!-- CHUNK 15: Glossário FTTH e Referências -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-slate-500/20 border border-slate-500/40 flex items-center justify-center text-slate-400 font-bold text-sm">20</div>
+      <h2 class="text-2xl font-bold text-white">Glossário FTTH e Referências</h2>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-base font-semibold text-cyan-400 mb-4">Terminologia GPON / FTTH</h3>
+        <dl class="space-y-3 text-sm">
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">OLT (Optical Line Terminal)</dt>
+            <dd class="text-slate-400 mt-0.5">Equipamento central da rede FTTH, instalado no NOC/Data Center do provedor. Concentra múltiplas PONs.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">ONU / ONT (Optical Network Unit/Terminal)</dt>
+            <dd class="text-slate-400 mt-0.5">Equipamento instalado na residência do cliente. Converte sinal óptico em sinal elétrico (Ethernet, WiFi, etc.).</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">PON (Passive Optical Network)</dt>
+            <dd class="text-slate-400 mt-0.5">Rede óptica passiva — usa splitters ópticos para dividir o sinal entre múltiplos clientes sem equipamentos ativos.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">GPON (Gigabit PON)</dt>
+            <dd class="text-slate-400 mt-0.5">Padrão ITU-T G.984. Download 2.5 Gbps, upload 1.25 Gbps. Até 128 ONUs por PON port. Mais comum no Brasil.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">XGS-PON (10G-PON)</dt>
+            <dd class="text-slate-400 mt-0.5">Padrão ITU-T G.9807. Download e upload simétricos de 10 Gbps. Evolução natural do GPON.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">Splitter óptico</dt>
+            <dd class="text-slate-400 mt-0.5">Dispositivo passivo que divide o sinal óptico (ex: 1:8, 1:16, 1:32). Cada divisão implica perda de ~3.5 dB.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">Channel Termination (channel_term)</dt>
+            <dd class="text-slate-400 mt-0.5">Identificador da porta PON na OLT. Cada porta PON conecta a um tronco de fibra que vai para o splitter.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">ONU ID (onu_id)</dt>
+            <dd class="text-slate-400 mt-0.5">Identificador único da ONU dentro de um channel_term (0–127). Atribuído durante o processo de ranging.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">Serial Number (FSID)</dt>
+            <dd class="text-slate-400 mt-0.5">Identificador único físico da ONU. Composto por serial_vendor_id (4 chars) + serial_vendor_specific (8 chars hex).</dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-white">RxPower (dBm)</dt>
+            <dd class="text-slate-400 mt-0.5">Potência do sinal óptico recebido. Faixa típica GPON: -8 a -28 dBm. Abaixo de -28 dBm = sem sinal.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <h3 class="text-base font-semibold text-purple-400 mb-4">Terminologia do Lab Docker</h3>
+        <dl class="space-y-3 text-sm">
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">pOLT (programmable OLT)</dt>
+            <dd class="text-slate-400 mt-0.5">OLT programável do projeto OB-BAA da Broadband Forum. Suporte a YANG models e API REST para automação.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">ONU Simulator (obbaa-onu-sim)</dt>
+            <dd class="text-slate-400 mt-0.5">Simulador de ONU GPON em Docker. Responde ao ranging da pOLT como se fosse uma ONU física real.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">OB-BAA (OLT Broadband Access Abstraction)</dt>
+            <dd class="text-slate-400 mt-0.5">Framework open-source da Broadband Forum para abstração de OLTs heterogêneas. Base do pOLT simulator.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">vOMCI</dt>
+            <dd class="text-slate-400 mt-0.5">Virtualized OMCI — protocolo de gerência de ONU virtualizado. management_state: "relying-on-vomci" indica uso do vOMCI.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">OMCI (ONU Management and Control Interface)</dt>
+            <dd class="text-slate-400 mt-0.5">Protocolo G.988 para gerência de ONU através da fibra óptica. Configura serviços, VLANs, QoS na ONU.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">vANI (virtual ANI)</dt>
+            <dd class="text-slate-400 mt-0.5">Interface de rede virtual na OLT que representa uma ONU. Configurada com YANG models para cada cliente.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">LOID (Line ID)</dt>
+            <dd class="text-slate-400 mt-0.5">Identificador de linha do cliente. Usado para autenticação via LOID+LOID Password no OMCI.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">GenieACS</dt>
+            <dd class="text-slate-400 mt-0.5">Auto Configuration Server (ACS) open-source para TR-069/CWMP. Gerencia roteadores e CPEs dos clientes.</dd>
+          </div>
+          <div class="border-b border-slate-700 pb-2">
+            <dt class="font-semibold text-white">TR-069 / CWMP</dt>
+            <dd class="text-slate-400 mt-0.5">CPE WAN Management Protocol. Protocolo para gerência remota de equipamentos de cliente (roteadores, modems).</dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-white">NOC (Network Operations Center)</dt>
+            <dd class="text-slate-400 mt-0.5">Centro de Operações de Rede. No FiberOps, é a tela de monitoramento em tempo real com SSE feed.</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
+      <h3 class="text-base font-semibold text-yellow-400 mb-4">Referências e Documentações</h3>
+      <div class="grid md:grid-cols-2 gap-4 text-sm">
+        <div>
+          <h4 class="text-white font-semibold mb-2">Padrões e Protocolos</h4>
+          <ul class="space-y-1 text-slate-400">
+            <li>• ITU-T G.984 — GPON Standard</li>
+            <li>• ITU-T G.9807 — XGS-PON Standard</li>
+            <li>• ITU-T G.988 — ONU Management (OMCI)</li>
+            <li>• BBF TR-069 — CPE Management Protocol</li>
+            <li>• BBF TR-385 — YANG Data Model for PON</li>
+            <li>• BBF TR-451 — vOMCI Framework</li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-2">Projetos Open-Source</h4>
+          <ul class="space-y-1 text-slate-400">
+            <li>• broadbandforum/obbaa-polt-simulator (GitHub)</li>
+            <li>• broadbandforum/obbaa-onu-sim (GitHub)</li>
+            <li>• broadbandforum/obbaa (OB-BAA Framework)</li>
+            <li>• GenieACS — genieacs.com</li>
+            <li>• Docker Hub: broadbandforum/*</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+      <h3 class="text-base font-semibold text-white mb-3">Comandos Docker Rápidos — Cheat Sheet</h3>
+      <div class="grid md:grid-cols-2 gap-4">
+        <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># ── Lab Management ───────────────────
+# Subir lab completo
+docker compose -f docker-compose.lab.yml up -d
+
+# Verificar status
+docker compose -f docker-compose.lab.yml ps
+
+# Logs da pOLT
+docker compose -f docker-compose.lab.yml logs -f polt
+
+# Logs do ONU-SIM
+docker compose -f docker-compose.lab.yml logs -f onu-sim-01
+
+# Derrubar e limpar volumes
+docker compose -f docker-compose.lab.yml down -v
+
+# Reiniciar apenas a pOLT
+docker compose -f docker-compose.lab.yml restart polt</code></pre>
+        <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># ── pOLT REST API ────────────────────
+# RxMODE (sempre primeiro)
+curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"action":"RxMODE",
+    "mode":"onu_sim","onu_sim_ip":"172.20.0.20",
+    "onu_sim_port":50000}]}'
+
+# ADDONU
+curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"channel_term":1,
+    "action":"ADDONU","onu_id":1,
+    "serial_vendor_id":"HWTC",
+    "serial_vendor_specific":"12345678",
+    "flags":"present+in_o5",
+    "management_state":"relying-on-vomci"}]}'
+
+# REMOVEONU
+curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{"requests":[{"channel_term":1,
+    "action":"REMOVEONU","onu_id":1,
+    "serial_vendor_id":"HWTC",
+    "serial_vendor_specific":"12345678",
+    "flags":"present+in_o5",
+    "management_state":"relying-on-vomci"}]}'</code></pre>
+      </div>
+    </div>
+  </section>
+<!-- CHUNK 15 END -->
+
+<!-- CHUNK 16: Roteiro Completo de Uso do Lab — Do Zero ao Primeiro Cliente Online -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-sm">21</div>
+      <h2 class="text-2xl font-bold text-white">Roteiro Completo — Do Zero ao Primeiro Cliente Online</h2>
+    </div>
+    <p class="text-slate-400 mb-6">Um roteiro passo a passo reproduzível para configurar o lab do zero, provisionar a primeira ONU e verificar tudo funcionando no FiberOps.</p>
+
+    <div class="space-y-4">
+
+      <!-- Passo 1 -->
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-3 bg-slate-700/50 border-b border-slate-700">
+          <span class="w-7 h-7 rounded-full bg-emerald-500/30 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+          <span class="font-semibold text-white">Clonar e subir o ambiente</span>
+          <span class="ml-auto text-xs text-slate-500 font-mono">~2 min</span>
+        </div>
+        <div class="p-5">
+          <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># Clone o projeto
+git clone https://github.com/seu-usuario/nextjs-ftth.git
+cd nextjs-ftth
+
+# Suba o dev environment (FiberOps + MongoDB + Redis)
+docker compose up -d
+
+# Em outra aba: suba o lab FTTH (pOLT + ONU sims + GenieACS)
+docker compose -f docker-compose.lab.yml up -d
+
+# Aguarde ~30s e verifique
+docker compose ps
+docker compose -f docker-compose.lab.yml ps</code></pre>
+        </div>
+      </div>
+
+      <!-- Passo 2 -->
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-3 bg-slate-700/50 border-b border-slate-700">
+          <span class="w-7 h-7 rounded-full bg-emerald-500/30 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-xs font-bold">2</span>
+          <span class="font-semibold text-white">Criar superadmin e fazer login</span>
+          <span class="ml-auto text-xs text-slate-500 font-mono">~1 min</span>
+        </div>
+        <div class="p-5">
+          <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># Criar superadmin via container
+docker compose exec fiberops node scripts/create-superadmin.mjs \
+  --email admin@lab.local \
+  --senha MinhaSenh@123 \
+  --nome "Admin Lab"
+
+# Abrir no browser
+open http://localhost:3000
+# Login: admin@lab.local / MinhaSenh@123
+
+# Criar Projeto no painel admin
+# Painel → Projetos → Novo → "Lab Provedor"</code></pre>
+          <div class="mt-3 bg-blue-900/20 border border-blue-500/30 rounded p-3 text-xs text-blue-300">
+            Após criar o Projeto, anote o <strong>projeto_id</strong> — será usado nos próximos passos.
+          </div>
+        </div>
+      </div>
+
+      <!-- Passo 3 -->
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-3 bg-slate-700/50 border-b border-slate-700">
+          <span class="w-7 h-7 rounded-full bg-emerald-500/30 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-xs font-bold">3</span>
+          <span class="font-semibold text-white">Registrar a pOLT como OLT no sistema</span>
+          <span class="ml-auto text-xs text-slate-500 font-mono">~2 min</span>
+        </div>
+        <div class="p-5">
+          <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># Via MongoDB (script direto)
+docker compose exec mongodb mongosh fiberops --eval "
+db.olts.insertOne({
+  projeto_id: 'lab-provedor',
+  nome: 'pOLT Lab Simulator',
+  ip: 'mock',
+  fabricante: 'Broadband Forum',
+  modelo: 'obbaa-polt-simulator',
+  portas_pon: 4,
+  status: 'ativo',
+  polt_url: 'http://polt:3002',
+  criado_em: new Date()
+})
+"
+
+# Ou: Via interface FiberOps
+# Admin → OLTs → Nova OLT
+# Nome: pOLT Lab Simulator
+# IP: mock (para não tentar SSH)
+# pOLT URL: http://polt:3002</code></pre>
+        </div>
+      </div>
+
+      <!-- Passo 4 -->
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-3 bg-slate-700/50 border-b border-slate-700">
+          <span class="w-7 h-7 rounded-full bg-emerald-500/30 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-xs font-bold">4</span>
+          <span class="font-semibold text-white">Configurar RxMODE na pOLT</span>
+          <span class="ml-auto text-xs text-slate-500 font-mono">~30s</span>
+        </div>
+        <div class="p-5">
+          <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># Configurar pOLT para aceitar ONU simulada
+curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requests": [{
+      "action": "RxMODE",
+      "mode": "onu_sim",
+      "onu_sim_ip": "172.20.0.20",
+      "onu_sim_port": 50000
+    }]
+  }'
+
+# Resposta esperada:
+# {"responses":[{"status":0,"message":"OK"}]}
+
+# Ou via FiberOps NOC:
+# Admin → NOC → pOLT Test Console → Aba RxMODE
+# Mode: onu_sim
+# ONU Sim IP: 172.20.0.20
+# ONU Sim Port: 50000
+# → Enviar RxMODE</code></pre>
+        </div>
+      </div>
+
+      <!-- Passo 5 -->
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-3 bg-slate-700/50 border-b border-slate-700">
+          <span class="w-7 h-7 rounded-full bg-emerald-500/30 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-xs font-bold">5</span>
+          <span class="font-semibold text-white">Provisionar primeira ONU</span>
+          <span class="ml-auto text-xs text-slate-500 font-mono">~30s</span>
+        </div>
+        <div class="p-5">
+          <pre class="bg-slate-900 rounded p-3 text-xs text-green-300 overflow-x-auto"><code># Via pOLT REST API direta
+curl -X POST http://localhost:3002/polt/polt_actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requests": [{
+      "channel_term": 1,
+      "action": "ADDONU",
+      "onu_id": 1,
+      "serial_vendor_id": "HWTC",
+      "serial_vendor_specific": "00000001",
+      "flags": "present+in_o5",
+      "management_state": "relying-on-vomci",
+      "loid": "joao.silva",
+      "v_ani": "vani-user1"
+    }]
+  }'
+
+# Ou via FiberOps NOC:
+# Admin → NOC → pOLT Test Console → Aba ADDONU
+# channel_term: 1, onu_id: 1
+# serial_vendor_id: HWTC, serial_vendor_specific: 00000001
+# → Enviar ADDONU
+
+# Verificar no NOC feed: deve aparecer
+# [pOLT] ADDONU → ch=1 onu_id=1 serial=HWTC00000001 ✓</code></pre>
+        </div>
+      </div>
+
+      <!-- Passo 6 -->
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-3 bg-slate-700/50 border-b border-slate-700">
+          <span class="w-7 h-7 rounded-full bg-emerald-500/30 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-xs font-bold">6</span>
+          <span class="font-semibold text-white">Verificar e monitorar no NOC</span>
+          <span class="ml-auto text-xs text-slate-500 font-mono">contínuo</span>
+        </div>
+        <div class="p-5">
+          <div class="grid md:grid-cols-2 gap-4">
+            <div>
+              <p class="text-slate-400 text-sm mb-3">Abra <code class="text-green-300">http://localhost:3000/admin/noc</code> e observe:</p>
+              <ul class="space-y-2 text-sm text-slate-300">
+                <li class="flex gap-2">
+                  <span class="text-green-400">✓</span>
+                  Feed ao vivo com eventos da pOLT
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-green-400">✓</span>
+                  Badge "AO VIVO" piscando
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-green-400">✓</span>
+                  Contador de eventos atualizado
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-green-400">✓</span>
+                  pOLT Test Console disponível
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-slate-400 text-sm mb-3">Logs esperados no NOC feed:</p>
+              <div class="font-mono text-xs space-y-1">
+                <div class="text-green-400">● [pOLT] RxMODE → onu_sim ✓</div>
+                <div class="text-green-400">● [pOLT] ADDONU → ch=1 onu=1 ✓</div>
+                <div class="text-cyan-400">● [ONU] HWTC00000001 ranging OK</div>
+                <div class="text-cyan-400">● [ONU] HWTC00000001 O5 state</div>
+                <div class="text-slate-400">● [SYS] NOC feed initialized</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+<!-- CHUNK 16 END -->
+
+<!-- CHUNK 17: Seção Final — Próximos Passos e Footer -->
+  <section class="mb-16">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 font-bold text-sm">22</div>
+      <h2 class="text-2xl font-bold text-white">Próximos Passos — Evoluindo o Lab</h2>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6 mb-10">
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <div class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-2">Hardware Real</h3>
+        <p class="text-slate-400 text-sm">Quando estiver pronto para hardware real, substitua a pOLT simulada pela OLT física. A POLTAdapter no FiberOps continua funcionando — só mude a URL.</p>
+        <ul class="mt-3 space-y-1 text-xs text-slate-500">
+          <li>• Huawei MA5800, Fiberhome AN6000</li>
+          <li>• Nokia 7360 ISAM FX, Calix E7</li>
+          <li>• ZTE ZXA10 C320/C600</li>
+        </ul>
+      </div>
+
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <div class="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-2">Auto-Provisionamento</h3>
+        <p class="text-slate-400 text-sm">Implemente detecção automática de ONUs não autorizadas (rogue detection) e provisionamento automático baseado em whitelist de seriais.</p>
+        <ul class="mt-3 space-y-1 text-xs text-slate-500">
+          <li>• Webhook da pOLT para FiberOps</li>
+          <li>• Cron job de varredura periódica</li>
+          <li>• Integração com CRM de clientes</li>
+        </ul>
+      </div>
+
+      <div class="bg-slate-800/60 rounded-xl border border-slate-700 p-5">
+        <div class="w-8 h-8 rounded-lg bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-400 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-2">Observabilidade</h3>
+        <p class="text-slate-400 text-sm">Adicione Prometheus + Grafana para visualização de métricas históricas de sinal, uptime e throughput de todas as ONUs do provedor.</p>
+        <ul class="mt-3 space-y-1 text-xs text-slate-500">
+          <li>• Métricas de RxPower por ONU</li>
+          <li>• Alertas por Alertmanager</li>
+          <li>• Dashboard Grafana FTTH</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="bg-gradient-to-r from-slate-800 to-slate-800/50 rounded-xl border border-slate-700 p-6 mb-10">
+      <h3 class="text-lg font-bold text-white mb-4">Stack Completa de Produção FTTH</h3>
+      <div class="grid md:grid-cols-4 gap-4 text-sm">
+        <div>
+          <p class="text-cyan-400 font-semibold mb-2">Gestão de Rede</p>
+          <ul class="space-y-1 text-slate-400">
+            <li>FiberOps (NOC, OSS)</li>
+            <li>OLT vendor software</li>
+            <li>pOLT REST bridge</li>
+            <li>SNMP poller</li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-purple-400 font-semibold mb-2">Gerência de CPE</p>
+          <ul class="space-y-1 text-slate-400">
+            <li>GenieACS (TR-069)</li>
+            <li>vOMCI controller</li>
+            <li>ONU config templates</li>
+            <li>OMCI channels</li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-green-400 font-semibold mb-2">Dados e Storage</p>
+          <ul class="space-y-1 text-slate-400">
+            <li>MongoDB (ONUs, OLTs)</li>
+            <li>Redis (sessões, cache)</li>
+            <li>TimescaleDB (métricas)</li>
+            <li>S3 (backups, logs)</li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-yellow-400 font-semibold mb-2">Observabilidade</p>
+          <ul class="space-y-1 text-slate-400">
+            <li>Prometheus</li>
+            <li>Grafana</li>
+            <li>Alertmanager</li>
+            <li>Loki (logs)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-emerald-900/20 border border-emerald-500/30 rounded-xl p-6">
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-emerald-300 mb-2">Lab Pronto para Uso</h3>
+          <p class="text-slate-300 text-sm leading-relaxed">
+            Com este guia, você tem um ambiente completo de simulação FTTH rodando em Docker — idêntico em comportamento a uma rede real de provedor. A pOLT Simulator responde aos mesmos comandos REST que uma OLT real suportando OB-BAA, e o ONU Simulator executa o mesmo handshake OMCI de uma ONU Huawei ou ZTE física.
+          </p>
+          <p class="text-slate-400 text-sm mt-2 leading-relaxed">
+            O FiberOps se conecta ao lab exatamente como se conectaria à produção: mesmo código, mesma API, mesmo NOC feed em tempo real. Quando chegar a hora do go-live, é só apontar as URLs para os equipamentos reais.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800 pt-8 pb-4">
+    <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-white">FiberOps Lab Guide</p>
+          <p class="text-xs text-slate-500">Docker OLT/ONU Simulation</p>
+        </div>
+      </div>
+      <div class="flex gap-6 text-xs text-slate-600">
+        <span>pOLT: broadbandforum/obbaa-polt-simulator</span>
+        <span>ONU-SIM: broadbandforum/obbaa-onu-sim</span>
+        <span>ACS: GenieACS 1.2.x</span>
+      </div>
+      <p class="text-xs text-slate-600">Broadband Forum OB-BAA · BBF TR-385 · ITU-T G.984</p>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
+<!-- CHUNK 17 END — DOCUMENTO COMPLETO -->

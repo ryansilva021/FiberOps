@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getNOCStats } from '@/actions/noc'
 import NOCClient from '@/components/admin/NOCClient'
+import POLTTestPanel from '@/components/admin/POLTTestPanel'
 
 export const metadata = { title: 'NOC | FiberOps' }
 
@@ -57,6 +58,10 @@ export default async function NOCPage() {
       )}
 
       <NOCClient stats={stats} userRole={role} />
+
+      <div style={{ marginTop: 24 }}>
+        <POLTTestPanel />
+      </div>
     </div>
   )
 }
