@@ -43,6 +43,7 @@ async function _getOltAndAdapter(projeto_id, oltId) {
     ip:       olt.ip       ?? 'mock',
     ssh_user: olt.ssh_user ?? 'admin',
     ssh_pass: olt.ssh_pass ?? '',
+    ssh_port: olt.ssh_port ?? 22,
   })
 
   return { olt, adapter }

@@ -760,7 +760,7 @@ function QuickActionsFAB({ onNavigate }) {
 
 // ─── DashboardView ────────────────────────────────────────────────────────────
 
-function DashboardView({ stats, ackedAlerts, onAck }) {
+function DashboardView({ stats, ackedAlerts, onAck, onSync, syncing, syncMsg, simStatus }) {
   const { oltStats, onuStats, totalCTOs, pendingEvents, alertas = [] } = stats ?? {}
   const onus = stats?.onus ?? []
   const olts = stats?.olts ?? []
@@ -785,6 +785,34 @@ function DashboardView({ stats, ackedAlerts, onAck }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Simulador sync panel */}
+      <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Simulador provedor-virtual</p>
+          {simStatus?.olts?.length > 0 ? (
+            <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
+              {simStatus.olts.map(o => (
+                <span key={o.olt_id} style={{ fontSize: 11, color: o.status === 'unreachable' ? '#FF3D00' : '#00C853' }}>
+                  {o.nome ?? o.olt_id}: {o.status === 'unreachable' ? '✗ offline' : `✓ ${o.onus?.total ?? '?'} ONUs`}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Aguardando status...</p>
+          )}
+          {syncMsg && (
+            <p style={{ fontSize: 11, color: '#00C853', margin: '4px 0 0' }}>{syncMsg}</p>
+          )}
+        </div>
+        <button
+          onClick={onSync}
+          disabled={syncing}
+          style={{ ...btn('#1a4080'), fontSize: 12, padding: '7px 14px', opacity: syncing ? 0.6 : 1, whiteSpace: 'nowrap' }}
+        >
+          {syncing ? '⟳ Sincronizando...' : '⟳ Sync Simulador'}
+        </button>
+      </div>
 
       {/* Metric cards */}
       <div className="noc-metric-grid">
@@ -1991,6 +2019,9 @@ export default function NOCClient({ stats, userRole }) {
   const [lastUpdate,       setLastUpdate]       = useState(null)
   const [now,              setNow]              = useState(null)
   const [isMobile,         setIsMobile]         = useState(false)
+  const [syncing,          setSyncing]          = useState(false)
+  const [syncMsg,          setSyncMsg]          = useState(null)
+  const [simStatus,        setSimStatus]        = useState(null) // latest simulator status
 
   useEffect(() => {
     const mounted = new Date()
@@ -2059,6 +2090,64 @@ export default function NOCClient({ stats, userRole }) {
     }])
   }, [])
 
+  // ── Sync simulador: poll rápido a cada 30s + sync completo a cada 5min ─────
+  const lastFullSync = useRef(0)
+
+  const pollSimulator = useCallback(async () => {
+    try {
+      // Quick status poll (GET) — sem escrever no banco
+      const res = await fetch('/api/noc/sync-simulator', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setSimStatus(data)
+
+      // Full sync (POST) a cada 5 minutos ou no primeiro poll
+      const ts = Date.now()
+      if (ts - lastFullSync.current > 5 * 60 * 1000) {
+        lastFullSync.current = ts
+        const syncRes = await fetch('/api/noc/sync-simulator', {
+          method: 'POST', cache: 'no-store',
+        })
+        if (syncRes.ok) {
+          const syncData = await syncRes.json()
+          if ((syncData.imported ?? 0) > 0 || (syncData.updated ?? 0) > 0) {
+            addLog('SYNC', `Simulador: ${syncData.imported} importadas, ${syncData.updated} atualizadas`, 'success')
+          }
+        }
+      }
+    } catch { /* silent — simulator may be offline */ }
+  }, [addLog])
+
+  useEffect(() => {
+    // Primeiro poll imediato
+    pollSimulator()
+    const interval = setInterval(pollSimulator, 30_000)
+    return () => clearInterval(interval)
+  }, [pollSimulator])
+
+  const handleSyncSimulator = useCallback(async () => {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const res = await fetch('/api/noc/sync-simulator', {
+        method: 'POST', cache: 'no-store',
+      })
+      const data = await res.json()
+      lastFullSync.current = Date.now()
+      const msg = `Sync: ${data.imported ?? 0} importadas, ${data.updated ?? 0} atualizadas`
+      setSyncMsg(msg)
+      addLog('SYNC', msg, 'success')
+      if ((data.imported ?? 0) > 0) {
+        setTimeout(() => window.location.reload(), 1500)
+      }
+    } catch (err) {
+      setSyncMsg('Erro ao sincronizar com o simulador')
+      addLog('SYNC', `Erro sync: ${err.message}`, 'error')
+    } finally {
+      setSyncing(false)
+    }
+  }, [addLog])
+
   function handleAck(key) { setAckedAlerts(prev => new Set([...prev, key])) }
 
   const alertCount = alertas.filter(a => !ackedAlerts.has(`${a.tipo}-${a.serial ?? a.cto_id}`)).length
@@ -2110,7 +2199,7 @@ export default function NOCClient({ stats, userRole }) {
 
         <StatusBar alertas={activeAlertasFiltered} now={now} lastUpdate={lastUpdate} userRole={userRole} />
 
-        {view === 'dashboard'   && <DashboardView stats={stats} ackedAlerts={ackedAlerts} onAck={handleAck} />}
+        {view === 'dashboard'   && <DashboardView stats={stats} ackedAlerts={ackedAlerts} onAck={handleAck} onSync={handleSyncSimulator} syncing={syncing} syncMsg={syncMsg} simStatus={simStatus} />}
         {view === 'onus'        && <ONUManagementView onus={onus} olts={olts} onLog={addLog} userRole={userRole} />}
         {view === 'olts'        && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

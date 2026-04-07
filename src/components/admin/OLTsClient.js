@@ -64,6 +64,8 @@ const STATUS_CONFIG = {
 const FORM_VAZIO = {
   olt_id: '', nome: '', modelo: '', ip: '',
   capacidade: 16, status: 'ativo', lat: '', lng: '',
+  ssh_user: 'admin', ssh_pass: '', ssh_port: 22,
+  rest_url: '',
 }
 
 export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
@@ -96,6 +98,10 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
       status:     olt.status  ?? 'ativo',
       lat:        olt.lat != null ? String(olt.lat) : '',
       lng:        olt.lng != null ? String(olt.lng) : '',
+      ssh_user:   olt.ssh_user ?? 'admin',
+      ssh_pass:   '',  // nunca pré-preenche senha
+      ssh_port:   olt.ssh_port ?? 22,
+      rest_url:   olt.rest_url ?? '',
     })
     setOltEditando(olt)
     setErro(null)
@@ -144,6 +150,10 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
         lat:        form.lat ? parseFloat(form.lat) : null,
         lng:        form.lng ? parseFloat(form.lng) : null,
         projeto_id: projetoId,
+        ssh_user:   form.ssh_user.trim() || 'admin',
+        ssh_pass:   form.ssh_pass.trim() || null,
+        ssh_port:   parseInt(form.ssh_port) || 22,
+        rest_url:   form.rest_url.trim() || null,
       })
       const normalizado = { ...res, id: res.id ?? form.olt_id.trim() }
       if (oltEditando) {
@@ -230,7 +240,12 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
                     <td className="px-4 py-3 font-mono text-xs text-sky-400">{olt.id ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-200 font-medium">{olt.nome ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs">{olt.modelo ?? '—'}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-400">{olt.ip ?? '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                      {olt.ip ?? '—'}
+                      {olt.ssh_port && olt.ssh_port !== 22 && (
+                        <span style={{ color: '#64748b', marginLeft: 4 }}>:{olt.ssh_port}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-300">{olt.capacidade ?? 16}</td>
                     <td className="px-4 py-3">
                       <span style={{
@@ -338,6 +353,49 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
                       ))}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Conexão SSH */}
+              <div style={fieldGroup}>
+                <p style={{ ...labelStyle, marginBottom: 0, color: 'var(--border-color)' }}>Conexão SSH</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label style={labelStyle}>Usuário SSH</label>
+                    <input name="ssh_user" value={form.ssh_user} onChange={handleFormChange}
+                      placeholder="admin" style={fieldInput}
+                      className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Senha SSH {oltEditando && <span style={{ fontWeight: 400, textTransform: 'none' }}>(vazio = manter)</span>}</label>
+                    <input name="ssh_pass" value={form.ssh_pass} onChange={handleFormChange}
+                      type="password" placeholder={oltEditando ? '••••••••' : 'senha'}
+                      style={fieldInput}
+                      className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Porta SSH</label>
+                    <input name="ssh_port" value={form.ssh_port} onChange={handleFormChange}
+                      type="number" min={1} max={65535} placeholder="22" style={fieldInput}
+                      className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                  </div>
+                </div>
+              </div>
+
+              {/* REST URL Simulador (opcional) */}
+              <div style={fieldGroup}>
+                <p style={{ ...labelStyle, marginBottom: 0, color: 'var(--border-color)' }}>
+                  Simulador REST <span style={{ fontWeight: 400, textTransform: 'none', color: 'var(--text-muted)' }}>(opcional)</span>
+                </p>
+                <div>
+                  <label style={labelStyle}>URL da API REST do simulador</label>
+                  <input name="rest_url" value={form.rest_url} onChange={handleFormChange}
+                    placeholder="http://localhost:3002"
+                    style={fieldInput}
+                    className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Preencha para habilitar sincronização automática com o provedor-virtual.
+                  </p>
                 </div>
               </div>
 

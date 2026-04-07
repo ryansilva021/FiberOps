@@ -175,6 +175,7 @@ export async function processNextEvent(projeto_id_override = null) {
           ip:       olt.ip ?? 'mock',
           ssh_user: olt.ssh_user ?? 'admin',
           ssh_pass: olt.ssh_pass ?? '',
+          ssh_port: olt.ssh_port ?? 22,
         })
         try {
           await adapter.connect()
@@ -250,6 +251,7 @@ export async function processNextEvent(projeto_id_override = null) {
             ip:       olt.ip ?? 'mock',
             ssh_user: olt.ssh_user ?? 'admin',
             ssh_pass: olt.ssh_pass ?? '',
+            ssh_port: olt.ssh_port ?? 22,
           })
           try {
             await adapter.connect()
@@ -345,6 +347,7 @@ export async function autoFindONUs() {
       ip:       olt.ip ?? 'mock',
       ssh_user: olt.ssh_user ?? 'admin',
       ssh_pass: olt.ssh_pass ?? '',
+      ssh_port: olt.ssh_port ?? 22,
     })
     try {
       await adapter.connect()
@@ -511,6 +514,7 @@ export async function quickProvisionAutoFound({ serial, olt_id, olt_ip, pon, pon
     ip:       olt?.ip ?? 'mock',
     ssh_user: olt?.ssh_user ?? 'admin',
     ssh_pass: olt?.ssh_pass ?? '',
+    ssh_port: olt?.ssh_port ?? 22,
   })
 
   try {
@@ -773,6 +777,7 @@ export async function testOnuConnection({ serial }) {
     ip:       olt?.ip ?? 'mock',
     ssh_user: olt?.ssh_user ?? 'admin',
     ssh_pass: olt?.ssh_pass ?? '',
+    ssh_port: olt?.ssh_port ?? 22,
   })
 
   let status         = 'unknown'

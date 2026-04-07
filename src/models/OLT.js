@@ -113,6 +113,14 @@ const OLTSchema = new Schema(
       default: "ativo",
     },
 
+    // URL da API REST do simulador (ex: http://localhost:3002)
+    // Presente apenas em OLTs conectadas ao provedor-virtual
+    rest_url: {
+      type:    String,
+      trim:    true,
+      default: null,
+    },
+
     // Mapa DIO (Distribution Input/Output): porta física → PON → local alimentado
     // Formato: { total: 48, mapa: [{ porta, pon, local }], placas: [] }
     dio_config: {

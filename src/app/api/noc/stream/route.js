@@ -1,26 +1,34 @@
 /**
  * src/app/api/noc/stream/route.js
- * Server-Sent Events endpoint that streams NOCLog entries in real time.
+ * Server-Sent Events — streaming de NOCLog em tempo real.
  *
- * Sends the last 20 entries on connect, then uses a MongoDB Change Stream
- * to push new inserts instantly — zero polling, sub-second latency.
- *
- * Requires a MongoDB replica set or Atlas (Change Streams prerequisite).
- * A heartbeat comment is sent every 30 s so proxies don't close idle connections.
+ * Modo preferido: MongoDB Change Stream (Atlas / replica set) — zero polling.
+ * Fallback automático: polling a cada 3 s quando Change Streams indisponível
+ * (standalone MongoDB sem replica set, ex: ambiente de desenvolvimento local).
  */
 
-import { auth } from '@/lib/auth'
+import { auth }     from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { NOCLog } from '@/models/NOCLog'
+import { NOCLog }   from '@/models/NOCLog'
 
-const NOC_ALLOWED   = ['superadmin', 'admin', 'noc']
-const HEARTBEAT_MS  = 30_000
+const NOC_ALLOWED  = ['superadmin', 'admin', 'noc']
+const HEARTBEAT_MS = 30_000
+const POLL_MS      = 3_000   // intervalo de polling no fallback
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function docToEvent(doc) {
+  return {
+    _id:     doc._id.toString(),
+    ts:      doc.ts?.toISOString() ?? new Date().toISOString(),
+    tag:     doc.tag    ?? 'SYSTEM',
+    message: doc.message,
+    nivel:   doc.nivel  ?? 'info',
+  }
+}
+
 export async function GET() {
-  // Auth check
   const session = await auth()
   const role    = session?.user?.role ?? 'user'
   if (!NOC_ALLOWED.includes(role)) {
@@ -30,7 +38,7 @@ export async function GET() {
 
   await connectDB()
 
-  // ── Initial burst: last 20 entries ─────────────────────────────────────────
+  // ── Initial burst: últimos 20 entries ──────────────────────────────────────
   const initial = await NOCLog
     .find({ projeto_id })
     .sort({ ts: -1 })
@@ -38,61 +46,72 @@ export async function GET() {
     .lean()
   initial.reverse()
 
-  // ── Change Stream: watch only inserts for this project ─────────────────────
-  const pipeline = [
-    {
+  // ── Testa se Change Streams estão disponíveis ──────────────────────────────
+  let useChangeStream = false
+  let changeStream    = null
+
+  try {
+    const pipeline = [{
       $match: {
-        operationType: 'insert',
+        operationType:              'insert',
         'fullDocument.projeto_id': projeto_id,
       },
-    },
-  ]
-  const changeStream = NOCLog.watch(pipeline, { fullDocument: 'required' })
+    }]
+    changeStream    = NOCLog.watch(pipeline, { fullDocument: 'required' })
+    useChangeStream = true
+  } catch {
+    // Standalone MongoDB — vai usar polling
+  }
 
   // ── SSE stream ─────────────────────────────────────────────────────────────
   const encoder = new TextEncoder()
   let hbTimer
+  let pollTimer
+  let lastTs = initial.length > 0
+    ? new Date(initial[initial.length - 1].ts ?? Date.now())
+    : new Date()
 
   const stream = new ReadableStream({
     start(ctrl) {
       const send = (data) => {
         try {
           ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-        } catch {
-          // client disconnected — cancel() will clean up
-        }
+        } catch { /* client disconnected */ }
       }
 
-      // Send initial burst (oldest → newest)
-      for (const doc of initial) {
-        send({
-          _id:     doc._id.toString(),
-          ts:      doc.ts?.toISOString() ?? new Date().toISOString(),
-          tag:     doc.tag   ?? 'SYSTEM',
-          message: doc.message,
-          nivel:   doc.nivel ?? 'info',
+      // Enviar burst inicial
+      for (const doc of initial) send(docToEvent(doc))
+
+      if (useChangeStream && changeStream) {
+        // ── Modo Change Stream ───────────────────────────────────────────────
+        changeStream.on('change', (event) => {
+          const doc = event.fullDocument
+          send(docToEvent(doc))
         })
+
+        changeStream.on('error', (err) => {
+          console.error('[SSE] change stream error:', err.message)
+          try { ctrl.close() } catch {}
+        })
+      } else {
+        // ── Modo Polling (fallback para standalone MongoDB) ──────────────────
+        pollTimer = setInterval(async () => {
+          try {
+            const newDocs = await NOCLog
+              .find({ projeto_id, ts: { $gt: lastTs } })
+              .sort({ ts: 1 })
+              .limit(20)
+              .lean()
+
+            for (const doc of newDocs) {
+              send(docToEvent(doc))
+              lastTs = new Date(doc.ts ?? Date.now())
+            }
+          } catch { /* silent */ }
+        }, POLL_MS)
       }
 
-      // Push new inserts in real time
-      changeStream.on('change', (event) => {
-        const doc = event.fullDocument
-        send({
-          _id:     doc._id.toString(),
-          ts:      doc.ts?.toISOString() ?? new Date().toISOString(),
-          tag:     doc.tag   ?? 'SYSTEM',
-          message: doc.message,
-          nivel:   doc.nivel ?? 'info',
-        })
-      })
-
-      changeStream.on('error', (err) => {
-        console.error('[SSE] change stream error:', err.message)
-        // Stream will be closed by the client reconnecting via EventSource
-        try { ctrl.close() } catch {}
-      })
-
-      // Heartbeat — prevents proxy / load-balancer timeouts on idle connections
+      // Heartbeat — evita timeout de proxy em conexões ociosas
       hbTimer = setInterval(() => {
         try {
           ctrl.enqueue(encoder.encode(': heartbeat\n\n'))
@@ -104,7 +123,8 @@ export async function GET() {
 
     cancel() {
       clearInterval(hbTimer)
-      changeStream.close().catch(() => {})
+      clearInterval(pollTimer)
+      if (changeStream) changeStream.close().catch(() => {})
     },
   })
 

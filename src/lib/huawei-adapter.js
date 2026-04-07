@@ -91,18 +91,11 @@ export class HuaweiOltAdapter {
       this.client.on('error', reject)
 
       this.client.connect({
-        host:           this.olt.ip,
-        port:           this.olt.ssh_port ?? 22,
-        username:       this.olt.ssh_user,
-        password:       this.olt.ssh_pass,
-        readyTimeout:   10_000,
-        algorithms: {
-          kex: [
-            'diffie-hellman-group14-sha1',
-            'diffie-hellman-group-exchange-sha256',
-            'diffie-hellman-group1-sha1',
-          ],
-        },
+        host:         this.olt.ip,
+        port:         this.olt.ssh_port ?? 22,
+        username:     this.olt.ssh_user,
+        password:     this.olt.ssh_pass,
+        readyTimeout: 8_000,
       })
     })
   }
