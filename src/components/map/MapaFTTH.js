@@ -21,8 +21,6 @@ import { fromLonLat, toLonLat } from 'ol/proj'
 import { flyTo as olFlyTo, fitExtent as olFitExtent } from '@/lib/olMap'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 import { useModoCampo }  from '@/hooks/useModoCampo'
-import { useTheme } from '@/contexts/ThemeContext'
-
 import BottomSheet        from '@/components/map/BottomSheet'
 // LayerToggles moved into map side panel
 import ModalMovimentacao  from '@/components/map/ModalMovimentacao'
@@ -155,9 +153,8 @@ export default function MapaFTTH({
   // ---- AGENT_CAMPO — modo campo mobile ----
   const { isCampo } = useModoCampo()
 
-  // ---- Tema ----
-  const { theme } = useTheme()
-  const isDark = theme === 'dark'
+  // ---- Tema único claro ----
+  const isDark = false
 
   // ---- Hooks do mapa ----
   const { map, mapLoaded } = useOLMap(containerRef, {
@@ -1110,7 +1107,7 @@ export default function MapaFTTH({
 
       {/* Spread panel overlay — seletor de itens sobrepostos */}
       {spreadPanel && (() => {
-        const isDark = theme === 'dark'
+        const isDark = false
         return (
           <div
             style={{

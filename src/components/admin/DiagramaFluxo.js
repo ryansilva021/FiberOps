@@ -15,7 +15,6 @@ import {
 import '@xyflow/react/dist/style.css'
 import Dagre from '@dagrejs/dagre'
 import { getTopologia } from '@/actions/olts'
-import { useTheme } from '@/contexts/ThemeContext'
 import { ABNT, abntHex } from '@/lib/topologia-ftth'
 
 // ─── Mobile detection ─────────────────────────────────────────────────────────
@@ -33,50 +32,26 @@ function useMobile() {
 
 // ─── Paleta de cores (dark / light) ─────────────────────────────────────────
 
-function mkTheme(isDark) {
-  if (isDark) return {
-    canvas:     '#060a16',
-    bg:         '#0d1117',
-    bg2:        '#161b22',
-    border:     '#21262d',
-    text:       '#e6edf3',
-    muted:      '#8b949e',
-    shadow:     '0 4px 24px rgba(0,0,0,0.6)',
-    // OLT
-    oltBg:  '#050f1f', oltBdr: '#0891b2', oltHdr: '#67e8f9', oltHdrBg: '#0a1929',
-    // CDO
-    cdoBg:  '#0d0820', cdoBdr: '#7c3aed', cdoHdr: '#c4b5fd', cdoHdrBg: '#100520',
-    // Splitter
-    splBg:  '#1a0d00', splBdr: '#ea580c', splHdr: '#fb923c', splHdrBg: '#1f0800',
-    // CTO
-    ctoBg:  '#052e16', ctoBdr: '#16a34a', ctoHdr: '#4ade80', ctoHdrBg: '#031a0e',
-    // Panels
-    panelBg: 'rgba(13,17,23,0.92)', panelBorder: '#21262d',
-    mmBg: '#0d1117', mmMask: '#060a1688',
-    // Edges
-    feeder:  { stroke: '#2563eb', strokeWidth: 3 },
-    distrib: { stroke: '#7c3aed', strokeWidth: 2 },
-    drop:    { stroke: '#16a34a', strokeWidth: 1.5 },
-  }
+function mkTheme() {
   return {
-    canvas:     '#e2e8f0',
+    canvas:     '#fdf7f2',
     bg:         '#ffffff',
-    bg2:        '#f8fafc',
-    border:     '#cbd5e1',
-    text:       '#1e293b',
-    muted:      '#64748b',
-    shadow:     '0 2px 16px rgba(0,0,0,0.12)',
-    // OLT
+    bg2:        '#fff9f5',
+    border:     '#eed5be',
+    text:       '#1c1208',
+    muted:      '#a07040',
+    shadow:     '0 2px 16px rgba(160,112,64,0.14)',
+    // OLT — azul
     oltBg:  '#eff6ff', oltBdr: '#0369a1', oltHdr: '#0369a1', oltHdrBg: '#dbeafe',
-    // CDO
+    // CDO — roxo
     cdoBg:  '#faf5ff', cdoBdr: '#7c3aed', cdoHdr: '#6d28d9', cdoHdrBg: '#ede9fe',
-    // Splitter
-    splBg:  '#fff7ed', splBdr: '#c2410c', splHdr: '#9a3412', splHdrBg: '#fed7aa',
-    // CTO
+    // Splitter — laranja (identidade do projeto)
+    splBg:  '#fff7ed', splBdr: '#ea580c', splHdr: '#c2410c', splHdrBg: '#ffedd5',
+    // CTO — verde
     ctoBg:  '#f0fdf4', ctoBdr: '#16a34a', ctoHdr: '#166534', ctoHdrBg: '#bbf7d0',
     // Panels
-    panelBg: 'rgba(255,255,255,0.94)', panelBorder: '#cbd5e1',
-    mmBg: '#f8fafc', mmMask: '#e2e8f088',
+    panelBg: 'rgba(253,247,242,0.96)', panelBorder: '#eed5be',
+    mmBg: '#fff9f5', mmMask: '#eed5be88',
     // Edges
     feeder:  { stroke: '#1d4ed8', strokeWidth: 3 },
     distrib: { stroke: '#7c3aed', strokeWidth: 2 },
@@ -1853,9 +1828,7 @@ function MapPanel({ T, rfNodes, rfEdges }) {
 // ─── Inner component (needs ReactFlow context) ────────────────────────────────
 
 function DiagramaFluxoInner({ projetoId }) {
-  const { theme } = useTheme()
-  const isDark    = theme === 'dark'
-  const T         = useMemo(() => mkTheme(isDark), [isDark])
+  const T         = useMemo(() => mkTheme(), [])
 
   const isMobile = useMobile()
   const [legendOpen, setLegendOpen] = useState(false)
@@ -2056,7 +2029,7 @@ function DiagramaFluxoInner({ projetoId }) {
     >
       <Background
         variant={BackgroundVariant.Dots}
-        color={isDark ? '#21262d' : '#cbd5e1'}
+        color="#eed5be"
         gap={20}
         size={1.5}
       />
