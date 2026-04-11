@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
-import { useTheme } from '@/contexts/ThemeContext'
 
 const ROLE_LABEL = {
   superadmin: 'Super Administrador',
@@ -25,8 +24,6 @@ function getAvatarColor(str = '') {
 
 export default function PerfilPage() {
   const { data: session } = useSession()
-  const { theme, toggleTheme } = useTheme()
-  const isDark            = theme === 'dark'
 
   const [campoMode, setCampoMode] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -94,8 +91,8 @@ export default function PerfilPage() {
             </p>
             <span style={{
               ...S.badge, marginTop: 8, display: 'inline-block',
-              backgroundColor: isDark ? 'rgba(2,132,199,0.15)' : '#e0f2fe',
-              color: '#0284c7', border: '1px solid #0284c740',
+              backgroundColor: '#ffedd5',
+              color: '#ea580c', border: '1px solid #f4b07a',
             }}>
               {ROLE_LABEL[user.role] ?? user.role ?? 'Usuário'}
             </span>
@@ -120,10 +117,10 @@ export default function PerfilPage() {
           <div style={S.row}>
             <span style={S.label}>Segurança</span>
             <Link href="/perfil/senha" style={{
-              fontSize: 13, fontWeight: 600, color: '#0284c7',
+              fontSize: 13, fontWeight: 600, color: '#ea580c',
               textDecoration: 'none', padding: '6px 14px',
-              background: isDark ? 'rgba(2,132,199,0.1)' : '#e0f2fe',
-              borderRadius: 8, border: '1px solid #0284c740',
+              background: '#ffedd5',
+              borderRadius: 8, border: '1px solid #f4b07a',
             }}>
               Alterar senha →
             </Link>
@@ -144,18 +141,6 @@ export default function PerfilPage() {
         {/* Configurações Rápidas */}
         <div style={S.card}>
           <p style={S.title}>Configurações Rápidas</p>
-          <div style={{ ...S.row }}>
-            <span style={S.label}>Tema</span>
-            <button onClick={toggleTheme} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
-              border: '1px solid var(--border-color)',
-              background: 'var(--card-bg-active)',
-              fontSize: 13, fontWeight: 600, color: 'var(--foreground)',
-            }}>
-              {isDark ? '☀️ Claro' : '🌙 Escuro'}
-            </button>
-          </div>
           <div style={{ ...S.row, borderBottom: 'none' }}>
             <div>
               <span style={S.label}>Modo Campo</span>
@@ -200,7 +185,7 @@ export default function PerfilPage() {
               style={{
                 fontSize: 13, fontWeight: 600, color: '#ef4444',
                 padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
-                background: isDark ? 'rgba(239,68,68,0.08)' : '#fef2f2',
+                background: '#fef2f2',
                 border: '1px solid rgba(239,68,68,0.3)',
               }}
             >
@@ -241,7 +226,7 @@ export default function PerfilPage() {
 
         {/* Assinatura — visível apenas para admin */}
         {(user.role === 'admin') && (
-          <div style={{ ...S.card, background: isDark ? 'rgba(2,132,199,0.06)' : '#f0f9ff', borderColor: '#0284c730' }}>
+          <div style={{ ...S.card, background: '#fff9f5', borderColor: '#f4b07a' }}>
             <p style={S.title}>Assinatura</p>
             <div style={S.row}>
               <div>
@@ -251,10 +236,10 @@ export default function PerfilPage() {
                 </span>
               </div>
               <Link href="/admin/assinatura" style={{
-                fontSize: 13, fontWeight: 600, color: '#0284c7',
+                fontSize: 13, fontWeight: 600, color: '#ea580c',
                 textDecoration: 'none', padding: '7px 16px',
-                background: isDark ? 'rgba(2,132,199,0.12)' : '#e0f2fe',
-                borderRadius: 8, border: '1px solid #0284c740',
+                background: '#ffedd5',
+                borderRadius: 8, border: '1px solid #f4b07a',
                 whiteSpace: 'nowrap',
               }}>
                 Gerenciar 💳

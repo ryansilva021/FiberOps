@@ -45,19 +45,19 @@ const SPLITTER_TIPOS = ['1x2', '1x4', '1x8', '1x16', '1x32']
 function uid() { return Math.random().toString(36).slice(2, 9) }
 
 // ─── Estilos base ─────────────────────────────────────────────────────────────
-// Dark-mode constants kept at module scope so sub-component inline JSX references remain valid.
-const BG   = '#0d1117'
-const BG2  = '#161b22'
-const BG3  = '#1c2333'
-const BORDER = '#30363d'
+// Palette constants (warm light+orange theme)
+const BG   = '#ffffff'
+const BG2  = '#fff9f5'
+const BG3  = '#fff4ea'
+const BORDER = '#eed5be'
 
 function getStyles(isDark) {
   const bg   = isDark ? '#0d1117' : '#ffffff'
-  const bg2  = isDark ? '#161b22' : '#f8fafc'
-  const bg3  = isDark ? '#1c2333' : '#f1f5f9'
-  const br   = isDark ? '#30363d' : '#e2e8f0'
-  const text = isDark ? '#e6edf3' : '#1e293b'
-  const muted = isDark ? '#8b949e' : '#64748b'
+  const bg2  = isDark ? '#161b22' : '#fff9f5'
+  const bg3  = isDark ? '#1c2333' : '#fff4ea'
+  const br   = isDark ? '#30363d' : '#eed5be'
+  const text = isDark ? '#e6edf3' : '#1c1208'
+  const muted = isDark ? '#8b949e' : '#a07040'
   return {
     wrap:     { backgroundColor: bg, border: `1px solid ${br}`, borderRadius: 12, color: text, overflow: 'visible', minWidth: 0 },
     header:   { backgroundColor: bg2, borderBottom: `1px solid ${br}`, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
@@ -82,8 +82,8 @@ function getStyles(isDark) {
   }
 }
 
-// Module-level S (dark defaults) used by sub-components that cannot access theme context.
-const S = getStyles(true)
+// Module-level S (light theme) used by sub-components that cannot access theme context.
+const S = getStyles(false)
 
 // ─── Seletor de fibra como <select> com opções coloridas ─────────────────────
 function FibraSelect({ value, onChange, small }) {

@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useTheme } from '@/contexts/ThemeContext'
 import { hasPermission, PERM, ROLE_LABELS, ROLE_COLORS } from '@/lib/permissions'
 
 // ── Grupos de separação visual ──────────────────────────────────────────────
@@ -55,9 +54,6 @@ export default function SidebarLayout({ session, children }) {
   const [aberta, setAberta] = useState(false);
   const pathname = usePathname();
   const role = session?.user?.role ?? "user";
-  const { theme, toggleTheme } = useTheme()
-  const isDark = theme === 'dark'
-
   const roleLabel = ROLE_LABELS[role] ?? role
   const roleColor = ROLE_COLORS[role] ?? ROLE_COLORS.user
 
@@ -102,24 +98,10 @@ export default function SidebarLayout({ session, children }) {
           <Image src="/short-logo.svg" alt="FiberOps" width={32} height={32} priority />
           <div className="flex-1 min-w-0">
             <p style={{ color: "var(--foreground)" }} className="text-sm font-bold">FiberOps</p>
-            <p className="text-slate-500 text-xs truncate max-w-[120px]">
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs truncate max-w-[120px]">
               {session?.user?.projeto_nome ?? session?.user?.projeto_id}
             </p>
           </div>
-          <button
-            onClick={toggleTheme}
-            title={isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-            style={{
-              background: 'none',
-              border: '1px solid var(--sidebar-border)',
-              borderRadius: 8, width: 30, height: 30,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', fontSize: 16, flexShrink: 0,
-              color: 'var(--text-muted)',
-            }}
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
         </div>
 
         {/* Nav */}
@@ -142,8 +124,8 @@ export default function SidebarLayout({ session, children }) {
                   onClick={() => setAberta(false)}
                   style={{
                     backgroundColor: ativa ? "var(--card-bg-active)" : "transparent",
-                    color:           ativa ? "#38bdf8" : "var(--text-muted)",
-                    border:          ativa ? "1px solid #0369a1" : "1px solid transparent",
+                    color:           ativa ? "#ea580c" : "var(--text-muted)",
+                    border:          ativa ? "1px solid #f4b07a" : "1px solid transparent",
                   }}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-slate-200/20 hover:text-current"
                 >

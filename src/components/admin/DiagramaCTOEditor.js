@@ -35,11 +35,11 @@ function uid() { return Math.random().toString(36).slice(2, 9) }
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 function getStyles(isDark) {
   const BG    = isDark ? '#0d1117' : '#ffffff'
-  const BG2   = isDark ? '#161b22' : '#f8fafc'
-  const BG3   = isDark ? '#1c2333' : '#f1f5f9'
-  const BR    = isDark ? '#30363d' : '#e2e8f0'
-  const TEXT  = isDark ? '#e6edf3' : '#1e293b'
-  const MUTED = isDark ? '#8b949e' : '#64748b'
+  const BG2   = isDark ? '#161b22' : '#fff9f5'
+  const BG3   = isDark ? '#1c2333' : '#fff4ea'
+  const BR    = isDark ? '#30363d' : '#eed5be'
+  const TEXT  = isDark ? '#e6edf3' : '#1c1208'
+  const MUTED = isDark ? '#8b949e' : '#a07040'
 
   return {
     wrap:     { backgroundColor: BG, border: `1px solid ${BR}`, borderRadius: 12, color: TEXT, overflow: 'hidden' },

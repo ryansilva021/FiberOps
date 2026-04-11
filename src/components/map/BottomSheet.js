@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useTheme } from '@/contexts/ThemeContext'
 
 // ─── Configurações por tipo ────────────────────────────────────────────────────
 const ROTA_TIPO_CONFIG = {
@@ -56,45 +55,45 @@ function Badge({ label, bg, border, color }) {
   )
 }
 
-function InfoSection({ title, children, isDark }) {
+function InfoSection({ title, children, isDark: _d }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: isDark ? 'rgba(255,255,255,0.25)' : '#1e293b', marginBottom: 6 }}>{title}</p>
-      <div style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`, borderRadius: 10, overflow: 'hidden' }}>
+      <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#704520', marginBottom: 6 }}>{title}</p>
+      <div style={{ backgroundColor: '#fffaf7', border: '1px solid #eed5be', borderRadius: 10, overflow: 'hidden' }}>
         {children}
       </div>
     </div>
   )
 }
 
-function InfoRow({ label, value, mono, accent, isDark }) {
+function InfoRow({ label, value, mono, accent, isDark: _d }) {
   if (value == null || value === '' || value === '—' || value === 'null' || value === 'undefined') return null
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'}` }}>
-      <span style={{ fontSize: 11, color: isDark ? 'rgba(255,255,255,0.4)' : '#334155', fontWeight: 600 }}>{label}</span>
-      <span style={{ fontSize: 12, color: accent ?? (isDark ? '#e2e8f0' : '#1e293b'), fontWeight: 700, fontFamily: mono ? 'monospace' : 'inherit', maxWidth: '60%', textAlign: 'right', wordBreak: 'break-word' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid #fff4ea' }}>
+      <span style={{ fontSize: 11, color: '#704520', fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 12, color: accent ?? '#1c1208', fontWeight: 700, fontFamily: mono ? 'monospace' : 'inherit', maxWidth: '60%', textAlign: 'right', wordBreak: 'break-word' }}>
         {String(value)}
       </span>
     </div>
   )
 }
 
-function OcupacaoBar({ ocupadas = 0, capacidade = 0, accent, isDark }) {
+function OcupacaoBar({ ocupadas = 0, capacidade = 0, accent, isDark: _d }) {
   if (!capacidade) return null
   const pct = Math.round((ocupadas / capacidade) * 100)
-  const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : accent ?? '#22c55e'
+  const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : accent ?? '#16a34a'
   return (
-    <div style={{ padding: '12px 16px', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : '#e2e8f0'}`, borderRadius: 10, marginBottom: 12 }}>
+    <div style={{ padding: '12px 16px', backgroundColor: '#fffaf7', border: '1px solid #eed5be', borderRadius: 10, marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: isDark ? 'rgba(255,255,255,0.35)' : '#1e293b' }}>Ocupação de Portas</span>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#704520' }}>Ocupação de Portas</span>
         <span style={{ fontSize: 14, fontWeight: 800, color: barColor }}>{ocupadas}/{capacidade} <span style={{ fontSize: 11, fontWeight: 600 }}>({pct}%)</span></span>
       </div>
-      <div style={{ height: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ height: 8, backgroundColor: '#eed5be', borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: `linear-gradient(90deg, ${barColor}, ${barColor}cc)`, borderRadius: 4, transition: 'width .5s ease' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-        <span style={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,0.25)' : '#475569' }}>0</span>
-        <span style={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,0.25)' : '#475569' }}>{capacidade}</span>
+        <span style={{ fontSize: 10, color: '#a07040' }}>0</span>
+        <span style={{ fontSize: 10, color: '#a07040' }}>{capacidade}</span>
       </div>
     </div>
   )
@@ -161,7 +160,7 @@ function CTOContent({ data, isAdmin, isTecnico, onAction, onIrAte, onMedirPotenc
         {/* Admin only */}
         {isAdmin && <ActBtn onClick={() => onAction('fusoes')}       color="#fde68a" bg="rgba(234,179,8,0.12)"  border="rgba(234,179,8,0.3)"   icon="🧩" label="Fusões" />}
         {isAdmin && <ActBtn onClick={() => onAction('reposicionar')} color="#fdba74" bg="rgba(249,115,22,0.12)" border="rgba(249,115,22,0.3)" icon="📍" label="Reposicionar" />}
-        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color={isDark ? '#f1f5f9' : '#475569'} bg={isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'} border={isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0'} icon="✏️" label="Editar" />}
+        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#704520" bg="#fff4ea" border="#eed5be" icon="✏️" label="Editar" />}
       </div>
     </div>
   )
@@ -198,7 +197,7 @@ function CaixaContent({ data, isAdmin, onAction, onIrAte, isDark }) {
         {onIrAte && <ActBtn onClick={onIrAte} color="#93c5fd" bg="rgba(59,130,246,0.12)" border="rgba(59,130,246,0.3)" icon="🧭" label="Ir Até" />}
         {isAdmin && <ActBtn onClick={() => onAction('fusoes')}       color="#fde68a" bg="rgba(234,179,8,0.12)"  border="rgba(234,179,8,0.3)"   icon="🧩" label="Fusões" />}
         {isAdmin && <ActBtn onClick={() => onAction('reposicionar')} color="#fdba74" bg="rgba(249,115,22,0.12)" border="rgba(249,115,22,0.3)" icon="📍" label="Reposicionar" />}
-        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color={isDark ? '#f1f5f9' : '#475569'} bg={isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'} border={isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0'} icon="✏️" label="Editar" />}
+        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#704520" bg="#fff4ea" border="#eed5be" icon="✏️" label="Editar" />}
       </div>
     </div>
   )
@@ -223,7 +222,7 @@ function RotaContent({ data, isAdmin, onAction, isDark }) {
       {isAdmin && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
           <ActBtn onClick={() => onAction('editar_pontos')} color="#a5b4fc" bg="rgba(99,102,241,0.12)" border="rgba(99,102,241,0.35)" icon="🖊️" label="Mover pontos" />
-          <ActBtn onClick={() => onAction('editar')} color={isDark ? '#f1f5f9' : '#475569'} bg={isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'} border={isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0'} icon="✏️" label="Editar dados" />
+          <ActBtn onClick={() => onAction('editar')} color="#704520" bg="#fff4ea" border="#eed5be" icon="✏️" label="Editar dados" />
         </div>
       )}
     </div>
@@ -255,7 +254,7 @@ function PosteContent({ data, isAdmin, onAction, onIrAte, isDark }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
         {onIrAte && <ActBtn onClick={onIrAte} color="#93c5fd" bg="rgba(59,130,246,0.12)" border="rgba(59,130,246,0.3)" icon="🧭" label="Ir Até" />}
         {isAdmin && <ActBtn onClick={() => onAction('reposicionar')} color="#fdba74" bg="rgba(249,115,22,0.12)" border="rgba(249,115,22,0.3)" icon="📍" label="Reposicionar" />}
-        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color={isDark ? '#f1f5f9' : '#475569'} bg={isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'} border={isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0'} icon="✏️" label="Editar" />}
+        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#704520" bg="#fff4ea" border="#eed5be" icon="✏️" label="Editar" />}
       </div>
     </div>
   )
@@ -288,9 +287,9 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
     window.location.href = `/admin/noc?olt_id=${encodeURIComponent(oltId)}`
   }
 
-  const muted     = isDark ? 'rgba(255,255,255,0.4)' : '#1e293b'
-  const cardBg    = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc'
-  const cardBord  = isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'
+  const muted     = '#704520'
+  const cardBg    = '#fffaf7'
+  const cardBord  = '#eed5be'
 
   return (
     <div>
@@ -384,7 +383,7 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '7px 12px', borderBottom: i < Math.min(stats.ponPorts.length, 8) - 1 ? `1px solid ${cardBord}` : 'none',
                   }}>
-                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: isDark ? '#67e8f9' : '#0891b2', fontWeight: 700 }}>{p.pon}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#0891b2', fontWeight: 700 }}>{p.pon}</span>
                     <span style={{ fontSize: 11, color: muted }}>{p.count} ONUs{p.offline > 0 ? ` · ` : ''}{p.offline > 0 && <span style={{ color: '#f87171' }}>{p.offline} offline</span>}</span>
                   </div>
                 ))}
@@ -394,8 +393,8 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
             {/* Alerts */}
             {stats.alerts.length > 0 && (
               <div style={{
-                backgroundColor: isDark ? 'rgba(239,68,68,0.08)' : '#fef2f2',
-                border: `1px solid ${isDark ? 'rgba(239,68,68,0.25)' : '#fecaca'}`,
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
                 borderRadius: 10, padding: '10px 12px', marginBottom: 10,
               }}>
                 <p style={{ fontSize: 9, fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 7 }}>
@@ -405,7 +404,7 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: i < stats.alerts.length - 1 ? 5 : 0 }}>
                     <span style={{ fontSize: 10, flexShrink: 0 }}>{a.nivel === 'critico' ? '🔴' : '📴'}</span>
                     <div>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? '#e2e8f0' : '#1e293b' }}>{a.cto_id}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#1c1208' }}>{a.cto_id}</span>
                       <span style={{ fontSize: 10, color: muted, marginLeft: 5 }}>— {a.problema}</span>
                     </div>
                   </div>
@@ -429,7 +428,7 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
           <ActBtn onClick={() => onAction('reposicionar')} color="#fbbf24" bg="rgba(251,191,36,0.12)" border="rgba(251,191,36,0.35)" icon="📍" label="Reposicionar" />
         )}
         {isAdmin && (
-          <ActBtn onClick={() => onAction('editar')} color={isDark ? '#f1f5f9' : '#475569'} bg={isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'} border={isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0'} icon="✏️" label="Editar OLT" />
+          <ActBtn onClick={() => onAction('editar')} color="#704520" bg="#fff4ea" border="#eed5be" icon="✏️" label="Editar OLT" />
         )}
       </div>
 
@@ -438,7 +437,7 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
   )
 }
 
-function CopyBtn({ text, isDark }) {
+function CopyBtn({ text, isDark: _d }) {
   const [copied, setCopied] = useState(false)
   function copy() {
     navigator.clipboard?.writeText(String(text ?? '')).then(() => {
@@ -451,9 +450,9 @@ function CopyBtn({ text, isDark }) {
       onClick={copy}
       style={{
         marginLeft: 8, padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 6,
-        backgroundColor: copied ? 'rgba(34,197,94,0.18)' : (isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'),
-        border: `1px solid ${copied ? 'rgba(34,197,94,0.4)' : (isDark ? 'rgba(255,255,255,0.13)' : '#e2e8f0')}`,
-        color: copied ? '#86efac' : (isDark ? 'rgba(255,255,255,0.5)' : '#475569'),
+        backgroundColor: copied ? 'rgba(34,197,94,0.18)' : '#fff4ea',
+        border: `1px solid ${copied ? 'rgba(34,197,94,0.4)' : '#eed5be'}`,
+        color: copied ? '#16a34a' : '#a07040',
         cursor: 'pointer', transition: 'all .2s', flexShrink: 0,
       }}
     >
@@ -462,16 +461,16 @@ function CopyBtn({ text, isDark }) {
   )
 }
 
-function InfoRowCopy({ label, value, mono, accent, isDark }) {
+function InfoRowCopy({ label, value, mono, accent, isDark: _d }) {
   if (value == null || value === '' || value === '—') return null
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'}` }}>
-      <span style={{ fontSize: 11, color: isDark ? 'rgba(255,255,255,0.4)' : '#334155', fontWeight: 600, flexShrink: 0 }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid #fff4ea' }}>
+      <span style={{ fontSize: 11, color: '#704520', fontWeight: 600, flexShrink: 0 }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', maxWidth: '65%', justifyContent: 'flex-end' }}>
-        <span style={{ fontSize: 12, color: accent ?? (isDark ? '#e2e8f0' : '#1e293b'), fontWeight: 700, fontFamily: mono ? 'monospace' : 'inherit', textAlign: 'right', wordBreak: 'break-word' }}>
+        <span style={{ fontSize: 12, color: accent ?? '#1c1208', fontWeight: 700, fontFamily: mono ? 'monospace' : 'inherit', textAlign: 'right', wordBreak: 'break-word' }}>
           {String(value)}
         </span>
-        <CopyBtn text={value} isDark={isDark} />
+        <CopyBtn text={value} />
       </div>
     </div>
   )
@@ -567,7 +566,7 @@ function OSContent({ data, isAdmin, isTecnico, onAction, onIrAte, isDark }) {
           <ActBtn onClick={onIrAte} color="#93c5fd" bg="rgba(59,130,246,0.12)" border="rgba(59,130,246,0.3)" icon="🧭" label="Ir Até" />
         )}
         {(isAdmin || isTecnico) && (
-          <ActBtn onClick={() => onAction('editar')} color={isDark ? '#f1f5f9' : '#475569'} bg={isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'} border={isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0'} icon="✏️" label="Editar OS" />
+          <ActBtn onClick={() => onAction('editar')} color="#704520" bg="#fff4ea" border="#eed5be" icon="✏️" label="Editar OS" />
         )}
       </div>
     </div>
@@ -581,8 +580,7 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
   const startYRef = useRef(null)
   const sheetRef  = useRef(null)
 
-  const { theme } = useTheme()
-  const isDark = theme === 'dark'
+  const isDark = false
 
   const role      = userRole || session?.user?.role || 'user'
   const isAdmin   = role === 'admin' || role === 'superadmin'
@@ -636,10 +634,10 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
       {/* Cabeçalho arrastável */}
       <div
         style={{
-          backgroundColor: isDark ? 'rgba(6,10,22,0.99)' : '#ffffff',
+          backgroundColor: '#fff9f5',
           borderTop: `3px solid ${cfg.accent}`,
-          borderLeft: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`,
-          borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`,
+          borderLeft: '1px solid #eed5be',
+          borderRight: '1px solid #eed5be',
           borderRadius: '20px 20px 0 0',
           cursor: 'grab', padding: '10px 16px 12px',
           userSelect: 'none',
@@ -653,7 +651,7 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
         onTouchEnd={handleDragEnd}
       >
         {/* Handle bar */}
-        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0', margin: '0 auto 12px' }} />
+        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#eed5be', margin: '0 auto 12px' }} />
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -669,8 +667,8 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
               {cfg.emoji}
             </div>
             <div>
-              <p style={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,0.35)' : '#475569', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, marginBottom: 2 }}>{cfg.label}</p>
-              <p style={{ fontSize: 17, fontWeight: 800, color: isDark ? '#f1f5f9' : '#1e293b', lineHeight: 1.2, margin: 0 }}>{name}</p>
+              <p style={{ fontSize: 10, color: '#a07040', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, marginBottom: 2 }}>{cfg.label}</p>
+              <p style={{ fontSize: 17, fontWeight: 800, color: '#1c1208', lineHeight: 1.2, margin: 0 }}>{name}</p>
             </div>
           </div>
           <button
@@ -678,9 +676,9 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
             onClick={onClose}
             style={{
               width: 32, height: 32, borderRadius: 8,
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
-              border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`,
-              color: isDark ? 'rgba(255,255,255,0.4)' : '#334155', fontSize: 16, lineHeight: 1,
+              backgroundColor: '#fff4ea',
+              border: '1px solid #eed5be',
+              color: '#704520', fontSize: 16, lineHeight: 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', flexShrink: 0,
             }}
@@ -693,9 +691,9 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
 
       {/* Conteúdo scrollável */}
       <div style={{
-        backgroundColor: isDark ? 'rgba(6,10,22,0.99)' : '#ffffff',
-        borderLeft: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`,
-        borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`,
+        backgroundColor: '#ffffff',
+        borderLeft: '1px solid #eed5be',
+        borderRight: '1px solid #eed5be',
         padding: '12px 16px 32px',
         maxHeight: '55vh', overflowY: 'auto',
       }}>

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useTheme } from '@/contexts/ThemeContext'
 import Link from 'next/link'
 import { getProjetoConfig, updateProjetoConfig } from '@/actions/projetos'
 
@@ -83,8 +82,6 @@ function Toggle({ value, onChange }) {
 // ---------------------------------------------------------------------------
 export default function ConfiguracoesPage() {
   const router = useRouter()
-  const { theme, toggleTheme } = useTheme()
-  const isDark = theme === 'dark'
 
   const [campoMode, setCampoMode] = useState(false)
 
@@ -191,24 +188,6 @@ export default function ConfiguracoesPage() {
           <SectionTitle>Preferências</SectionTitle>
 
           <SettingRow
-            label="Tema"
-            description={isDark ? 'Tema escuro ativado' : 'Tema claro ativado'}
-          >
-            <button
-              onClick={toggleTheme}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
-                border: '1px solid var(--border-color)',
-                background: 'var(--card-bg-active)',
-                fontSize: 13, fontWeight: 600, color: 'var(--foreground)',
-              }}
-            >
-              {isDark ? '☀️ Claro' : '🌙 Escuro'}
-            </button>
-          </SettingRow>
-
-          <SettingRow
             label="Modo Campo"
             description="Interface simplificada para uso em campo com sol forte"
             last
@@ -271,7 +250,7 @@ export default function ConfiguracoesPage() {
                   disabled={fiberSaving}
                   style={{
                     textAlign: 'left', cursor: fiberSaving ? 'not-allowed' : 'pointer',
-                    background: active ? (isDark ? 'rgba(2,132,199,0.12)' : '#e0f2fe') : 'var(--card-bg)',
+                    background: active ? '#ffedd5' : 'var(--card-bg)',
                     border: `2px solid ${active ? '#0284c7' : 'var(--border-color)'}`,
                     borderRadius: 12, padding: '12px 14px',
                     transition: 'all 0.15s',
@@ -279,13 +258,13 @@ export default function ConfiguracoesPage() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: active ? '#0284c7' : 'var(--foreground)' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: active ? '#ea580c' : 'var(--foreground)' }}>
                       {opt.label}
                     </span>
                     {active && (
                       <span style={{
-                        fontSize: 10, fontWeight: 700, color: '#0284c7',
-                        background: isDark ? 'rgba(2,132,199,0.2)' : '#bae6fd',
+                        fontSize: 10, fontWeight: 700, color: '#ea580c',
+                        background: '#ffedd5',
                         borderRadius: 4, padding: '1px 6px',
                       }}>
                         ATIVO
@@ -350,8 +329,8 @@ export default function ConfiguracoesPage() {
               style={{
                 padding: '7px 14px', borderRadius: 8, cursor: syncing ? 'not-allowed' : 'pointer',
                 border: '1px solid #0284c740',
-                background: isDark ? 'rgba(2,132,199,0.1)' : '#e0f2fe',
-                fontSize: 13, fontWeight: 600, color: '#0284c7',
+                background: '#ffedd5',
+                fontSize: 13, fontWeight: 600, color: '#ea580c',
                 opacity: syncing ? 0.6 : 1,
               }}
             >
