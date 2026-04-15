@@ -301,6 +301,23 @@ const S = {
   }),
 }
 
+// ─── Spinner ─────────────────────────────────────────────────────────────────
+
+function Spinner({ color = '#fff', size = 14 }) {
+  return (
+    <span style={{
+      display:     'inline-block',
+      width:       size,
+      height:      size,
+      border:      `2px solid ${color}44`,
+      borderTop:   `2px solid ${color}`,
+      borderRadius: '50%',
+      animation:   'spin .65s linear infinite',
+      flexShrink:  0,
+    }} />
+  )
+}
+
 // ─── Preview row (editável) ───────────────────────────────────────────────────
 
 const cellStyle = { padding: '4px 6px', verticalAlign: 'middle' }
@@ -370,20 +387,25 @@ function PreviewRow({ item, onChange }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ImportarExportarClient({ ctos, caixas, rotas, postes, projetoId }) {
-  const [aba,           setAba]          = useState('exportar')
-  const [preview,       setPreview]       = useState(null)   // Item[]
-  const [parseErro,     setParseErro]     = useState(null)
-  const [importando,    setImportando]    = useState(false)
-  const [resultado,     setResultado]     = useState(null)   // { ok, erros }
+  const [aba,              setAba]             = useState('exportar')
+  const [preview,          setPreview]          = useState(null)   // Item[]
+  const [parseErro,        setParseErro]        = useState(null)
+  const [importando,       setImportando]       = useState(false)
+  const [progresso,        setProgresso]        = useState({ atual: 0, total: 0 })
+  const [resultado,        setResultado]        = useState(null)   // { ok, erros }
+  const [exportandoFmt,    setExportandoFmt]    = useState(null)   // 'json'|'kml'|'geojson'|null
   const fileRef = useRef(null)
 
   // ── Export ──────────────────────────────────────────────────────────────────
 
-  function exportar(formato) {
+  async function exportar(formato) {
+    setExportandoFmt(formato)
+    await new Promise(r => setTimeout(r, 30)) // allow spinner to render
     const base = `fiberops_${projetoId}_${new Date().toISOString().slice(0, 10)}`
     if (formato === 'json')    downloadFile(genJSON(ctos, caixas, rotas, postes),    `${base}.json`,    'application/json')
     if (formato === 'kml')     downloadFile(genKML(ctos, caixas, rotas, postes),     `${base}.kml`,     'application/vnd.google-earth.kml+xml')
     if (formato === 'geojson') downloadFile(genGeoJSON(ctos, caixas, rotas, postes), `${base}.geojson`, 'application/geo+json')
+    setExportandoFmt(null)
   }
 
   // ── Import: read & parse ────────────────────────────────────────────────────
@@ -423,10 +445,13 @@ export default function ImportarExportarClient({ ctos, caixas, rotas, postes, pr
   async function confirmar() {
     if (!preview?.length) return
     setImportando(true)
+    setProgresso({ atual: 0, total: preview.length })
     const erros = []
     let ok = 0
 
-    for (const item of preview) {
+    for (let idx = 0; idx < preview.length; idx++) {
+      const item = preview[idx]
+      setProgresso({ atual: idx + 1, total: preview.length })
       try {
         if (item.tipo === 'cto') {
           await upsertCTO({
@@ -495,24 +520,37 @@ export default function ImportarExportarClient({ ctos, caixas, rotas, postes, pr
               { f: 'json',    label: 'JSON',    desc: 'Padrão do sistema',   color: '#6366f1' },
               { f: 'kml',     label: 'KML',     desc: 'Google Earth / QGIS', color: '#22c55e' },
               { f: 'geojson', label: 'GeoJSON', desc: 'Padrão GIS / Web',    color: '#f59e0b' },
-            ].map(({ f, label, desc, color }) => (
-              <button
-                key={f}
-                onClick={() => exportar(f)}
-                style={{
-                  ...S.btn(color),
-                  display:        'flex',
-                  flexDirection:  'column',
-                  alignItems:     'flex-start',
-                  padding:        '14px 20px',
-                  gap:            4,
-                  minWidth:       160,
-                }}
-              >
-                <span style={{ fontSize: 15 }}>⬇️ {label}</span>
-                <span style={{ fontSize: 11, opacity: 0.65, fontWeight: 400 }}>{desc}</span>
-              </button>
-            ))}
+            ].map(({ f, label, desc, color }) => {
+              const carregando = exportandoFmt === f
+              return (
+                <button
+                  key={f}
+                  onClick={() => exportar(f)}
+                  disabled={!!exportandoFmt}
+                  style={{
+                    ...S.btn(color),
+                    display:       'flex',
+                    flexDirection: 'column',
+                    alignItems:    'flex-start',
+                    padding:       '14px 20px',
+                    gap:           4,
+                    minWidth:      160,
+                    opacity:       exportandoFmt && !carregando ? 0.5 : 1,
+                    position:      'relative',
+                    transition:    'opacity .15s',
+                  }}
+                >
+                  <span style={{ fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {carregando
+                      ? <Spinner color={color} />
+                      : '⬇️'
+                    }
+                    {carregando ? `Gerando ${label}…` : label}
+                  </span>
+                  <span style={{ fontSize: 11, opacity: 0.65, fontWeight: 400 }}>{desc}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -602,6 +640,34 @@ export default function ImportarExportarClient({ ctos, caixas, rotas, postes, pr
               {/* Preview */}
               {preview && (
                 <div style={S.card}>
+                  {/* Loading overlay */}
+                  {importando && (
+                    <div style={{
+                      position:        'fixed', inset: 0,
+                      background:      'rgba(0,0,0,0.6)',
+                      backdropFilter:  'blur(3px)',
+                      zIndex:          100,
+                      display:         'flex',
+                      flexDirection:   'column',
+                      alignItems:      'center',
+                      justifyContent:  'center',
+                      gap:             14,
+                    }}>
+                      <Spinner color="#22c55e" size={28} />
+                      <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 14 }}>
+                        Importando {progresso.atual} de {progresso.total}…
+                      </div>
+                      <div style={{ width: 200, height: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          height:     '100%',
+                          width:      `${progresso.total > 0 ? (progresso.atual / progresso.total) * 100 : 0}%`,
+                          background: '#22c55e',
+                          borderRadius: 4,
+                          transition: 'width .2s',
+                        }} />
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                     <div style={{ color: 'var(--foreground)', fontWeight: 700 }}>
                       {preview.length} item(s) encontrado(s) — revise antes de confirmar
@@ -609,16 +675,17 @@ export default function ImportarExportarClient({ ctos, caixas, rotas, postes, pr
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
                         onClick={() => setPreview(null)}
-                        style={{ ...S.btn('var(--text-secondary)'), padding: '6px 14px', fontSize: 12 }}
+                        disabled={importando}
+                        style={{ ...S.btn('var(--text-secondary)'), padding: '6px 14px', fontSize: 12, opacity: importando ? 0.5 : 1 }}
                       >
                         Cancelar
                       </button>
                       <button
                         onClick={confirmar}
                         disabled={importando}
-                        style={{ ...S.btn('#22c55e'), padding: '6px 18px', fontSize: 12, opacity: importando ? 0.6 : 1 }}
+                        style={{ ...S.btn('#22c55e'), padding: '6px 18px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: importando ? 0.7 : 1 }}
                       >
-                        {importando ? 'Importando…' : '✓ Confirmar importação'}
+                        {importando ? <><Spinner color="#22c55e" />Importando…</> : '✓ Confirmar importação'}
                       </button>
                     </div>
                   </div>

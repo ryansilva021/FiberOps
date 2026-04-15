@@ -59,7 +59,7 @@ function InfoSection({ title, children, isDark: _d }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#271204', marginBottom: 6 }}>{title}</p>
-      <div style={{ backgroundColor: '#e8dccf', border: '1px solid #b8a080', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ backgroundColor: '#d0bfa8', border: '1px solid #8e7254', borderRadius: 10, overflow: 'hidden' }}>
         {children}
       </div>
     </div>
@@ -69,7 +69,7 @@ function InfoSection({ title, children, isDark: _d }) {
 function InfoRow({ label, value, mono, accent, isDark: _d }) {
   if (value == null || value === '' || value === '—' || value === 'null' || value === 'undefined') return null
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid #cdb89c' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid #a88e72' }}>
       <span style={{ fontSize: 11, color: '#271204', fontWeight: 700 }}>{label}</span>
       <span style={{ fontSize: 12, color: accent ?? '#0f0701', fontWeight: 800, fontFamily: mono ? 'monospace' : 'inherit', maxWidth: '60%', textAlign: 'right', wordBreak: 'break-word' }}>
         {String(value)}
@@ -81,14 +81,14 @@ function InfoRow({ label, value, mono, accent, isDark: _d }) {
 function OcupacaoBar({ ocupadas = 0, capacidade = 0, accent, isDark: _d }) {
   if (!capacidade) return null
   const pct = Math.round((ocupadas / capacidade) * 100)
-  const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#ff8000' : accent ?? '#16a34a'
+  const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#D4622B' : accent ?? '#16a34a'
   return (
-    <div style={{ padding: '12px 16px', backgroundColor: '#e8dccf', border: '1px solid #b8a080', borderRadius: 10, marginBottom: 12 }}>
+    <div style={{ padding: '12px 16px', backgroundColor: '#d0bfa8', border: '1px solid #8e7254', borderRadius: 10, marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#271204' }}>Ocupação de Portas</span>
         <span style={{ fontSize: 14, fontWeight: 800, color: barColor }}>{ocupadas}/{capacidade} <span style={{ fontSize: 11, fontWeight: 600 }}>({pct}%)</span></span>
       </div>
-      <div style={{ height: 8, backgroundColor: '#b8a080', borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ height: 8, backgroundColor: '#8e7254', borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: `linear-gradient(90deg, ${barColor}, ${barColor}cc)`, borderRadius: 4, transition: 'width .5s ease' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
@@ -153,14 +153,10 @@ function CTOContent({ data, isAdmin, isTecnico, onAction, onIrAte, onMedirPotenc
         {/* Disponível para todos */}
         <ActBtn onClick={() => onAction('movimentacao')} color="#0f0701" bg="rgba(34,197,94,0.20)" border="rgba(34,197,94,0.5)"  icon="👤" label="Clientes" />
         {onIrAte && <ActBtn onClick={onIrAte}           color="#0f0701" bg="rgba(59,130,246,0.20)" border="rgba(59,130,246,0.5)" icon="🧭" label="Ir Até" />}
-        {/* Técnico: medir potência */}
-        {(isTecnico || isAdmin) && onMedirPotencia && (
-          <ActBtn onClick={onMedirPotencia} color="#0f0701" bg="rgba(234,179,8,0.25)" border="rgba(234,179,8,0.6)" icon="📶" label="Medir Sinal" />
-        )}
         {/* Admin only */}
         {isAdmin && <ActBtn onClick={() => onAction('fusoes')}       color="#0f0701" bg="rgba(234,179,8,0.25)"  border="rgba(234,179,8,0.6)"   icon="🧩" label="Fusões" />}
         {isAdmin && <ActBtn onClick={() => onAction('reposicionar')} color="#0f0701" bg="rgba(249,115,22,0.22)" border="rgba(249,115,22,0.55)" icon="📍" label="Reposicionar" />}
-        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#0f0701" bg="#dfd0bc" border="#b8a080" icon="✏️" label="Editar" />}
+        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#0f0701" bg="#c8b094" border="#8e7254" icon="✏️" label="Editar" />}
       </div>
     </div>
   )
@@ -197,7 +193,7 @@ function CaixaContent({ data, isAdmin, onAction, onIrAte, isDark }) {
         {onIrAte && <ActBtn onClick={onIrAte} color="#0f0701" bg="rgba(59,130,246,0.20)" border="rgba(59,130,246,0.5)" icon="🧭" label="Ir Até" />}
         {isAdmin && <ActBtn onClick={() => onAction('fusoes')}       color="#0f0701" bg="rgba(234,179,8,0.25)"  border="rgba(234,179,8,0.6)"   icon="🧩" label="Fusões" />}
         {isAdmin && <ActBtn onClick={() => onAction('reposicionar')} color="#0f0701" bg="rgba(249,115,22,0.22)" border="rgba(249,115,22,0.55)" icon="📍" label="Reposicionar" />}
-        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#0f0701" bg="#dfd0bc" border="#b8a080" icon="✏️" label="Editar" />}
+        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#0f0701" bg="#c8b094" border="#8e7254" icon="✏️" label="Editar" />}
       </div>
     </div>
   )
@@ -222,7 +218,7 @@ function RotaContent({ data, isAdmin, onAction, isDark }) {
       {isAdmin && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
           <ActBtn onClick={() => onAction('editar_pontos')} color="#0f0701" bg="rgba(99,102,241,0.22)" border="rgba(99,102,241,0.55)" icon="🖊️" label="Mover pontos" />
-          <ActBtn onClick={() => onAction('editar')} color="#0f0701" bg="#dfd0bc" border="#b8a080" icon="✏️" label="Editar dados" />
+          <ActBtn onClick={() => onAction('editar')} color="#0f0701" bg="#c8b094" border="#8e7254" icon="✏️" label="Editar dados" />
         </div>
       )}
     </div>
@@ -254,7 +250,7 @@ function PosteContent({ data, isAdmin, onAction, onIrAte, isDark }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
         {onIrAte && <ActBtn onClick={onIrAte} color="#0f0701" bg="rgba(59,130,246,0.20)" border="rgba(59,130,246,0.5)" icon="🧭" label="Ir Até" />}
         {isAdmin && <ActBtn onClick={() => onAction('reposicionar')} color="#0f0701" bg="rgba(249,115,22,0.22)" border="rgba(249,115,22,0.55)" icon="📍" label="Reposicionar" />}
-        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#0f0701" bg="#dfd0bc" border="#b8a080" icon="✏️" label="Editar" />}
+        {isAdmin && <ActBtn onClick={() => onAction('editar')}       color="#0f0701" bg="#c8b094" border="#8e7254" icon="✏️" label="Editar" />}
       </div>
     </div>
   )
@@ -288,8 +284,8 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
   }
 
   const muted     = '#271204'
-  const cardBg    = '#e8dccf'
-  const cardBord  = '#b8a080'
+  const cardBg    = '#d0bfa8'
+  const cardBord  = '#8e7254'
 
   return (
     <div>
@@ -359,7 +355,7 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
                   color: stats.avgRx == null ? muted
                     : stats.avgRx > -20 ? '#22c55e'
                     : stats.avgRx >= -25 ? '#4ade80'
-                    : stats.avgRx >= -28 ? '#ff8000' : '#ef4444',
+                    : stats.avgRx >= -28 ? '#D4622B' : '#ef4444',
                 }}>
                   {stats.avgRx != null ? `${stats.avgRx} dBm` : '—'}
                 </span>
@@ -428,7 +424,7 @@ function OLTContent({ data, isAdmin, isNoc, onAction, onIrAte, isDark }) {
           <ActBtn onClick={() => onAction('reposicionar')} color="#0f0701" bg="rgba(251,191,36,0.25)" border="rgba(251,191,36,0.60)" icon="📍" label="Reposicionar" />
         )}
         {isAdmin && (
-          <ActBtn onClick={() => onAction('editar')} color="#0f0701" bg="#dfd0bc" border="#b8a080" icon="✏️" label="Editar OLT" />
+          <ActBtn onClick={() => onAction('editar')} color="#0f0701" bg="#c8b094" border="#8e7254" icon="✏️" label="Editar OLT" />
         )}
       </div>
 
@@ -450,8 +446,8 @@ function CopyBtn({ text, isDark: _d }) {
       onClick={copy}
       style={{
         marginLeft: 8, padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 6,
-        backgroundColor: copied ? 'rgba(34,197,94,0.18)' : '#dfd0bc',
-        border: `1px solid ${copied ? 'rgba(34,197,94,0.4)' : '#b8a080'}`,
+        backgroundColor: copied ? 'rgba(34,197,94,0.18)' : '#c8b094',
+        border: `1px solid ${copied ? 'rgba(34,197,94,0.4)' : '#8e7254'}`,
         color: copied ? '#15803d' : '#271204',
         cursor: 'pointer', transition: 'all .2s', flexShrink: 0,
       }}
@@ -464,7 +460,7 @@ function CopyBtn({ text, isDark: _d }) {
 function InfoRowCopy({ label, value, mono, accent, isDark: _d }) {
   if (value == null || value === '' || value === '—') return null
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid #cdb89c' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderBottom: '1px solid #a88e72' }}>
       <span style={{ fontSize: 11, color: '#271204', fontWeight: 700, flexShrink: 0 }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', maxWidth: '65%', justifyContent: 'flex-end' }}>
         <span style={{ fontSize: 12, color: accent ?? '#0f0701', fontWeight: 800, fontFamily: mono ? 'monospace' : 'inherit', textAlign: 'right', wordBreak: 'break-word' }}>
@@ -566,7 +562,7 @@ function OSContent({ data, isAdmin, isTecnico, onAction, onIrAte, isDark }) {
           <ActBtn onClick={onIrAte} color="#0f0701" bg="rgba(59,130,246,0.20)" border="rgba(59,130,246,0.5)" icon="🧭" label="Ir Até" />
         )}
         {(isAdmin || isTecnico) && (
-          <ActBtn onClick={() => onAction('editar')} color="#0f0701" bg="#dfd0bc" border="#b8a080" icon="✏️" label="Editar OS" />
+          <ActBtn onClick={() => onAction('editar')} color="#0f0701" bg="#c8b094" border="#8e7254" icon="✏️" label="Editar OS" />
         )}
       </div>
     </div>
@@ -634,10 +630,10 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
       {/* Cabeçalho arrastável */}
       <div
         style={{
-          backgroundColor: '#d4c5b2',
+          backgroundColor: '#9e8a6e',
           borderTop: `3px solid ${cfg.accent}`,
-          borderLeft: '1px solid #b8a080',
-          borderRight: '1px solid #b8a080',
+          borderLeft: '1px solid #8e7254',
+          borderRight: '1px solid #8e7254',
           borderRadius: '20px 20px 0 0',
           cursor: 'grab', padding: '10px 16px 12px',
           userSelect: 'none',
@@ -651,7 +647,7 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
         onTouchEnd={handleDragEnd}
       >
         {/* Handle bar */}
-        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#b8a080', margin: '0 auto 12px' }} />
+        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#8e7254', margin: '0 auto 12px' }} />
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -676,8 +672,8 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
             onClick={onClose}
             style={{
               width: 32, height: 32, borderRadius: 8,
-              backgroundColor: '#dfd0bc',
-              border: '1px solid #b8a080',
+              backgroundColor: '#c8b094',
+              border: '1px solid #8e7254',
               color: '#0f0701', fontSize: 16, lineHeight: 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', flexShrink: 0,
@@ -691,9 +687,9 @@ export default function BottomSheet({ element, onClose, session, userRole, onAct
 
       {/* Conteúdo scrollável */}
       <div style={{
-        backgroundColor: '#e8dccf',
-        borderLeft: '1px solid #b8a080',
-        borderRight: '1px solid #b8a080',
+        backgroundColor: '#d0bfa8',
+        borderLeft: '1px solid #8e7254',
+        borderRight: '1px solid #8e7254',
         padding: '12px 16px 32px',
         maxHeight: '55vh', overflowY: 'auto',
       }}>

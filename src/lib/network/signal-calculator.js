@@ -120,7 +120,7 @@ export function classifySignal(powerDbm) {
   }
 
   if (powerDbm < -24.0) {
-    return { status: 'WARNING', label: 'Sinal fraco', color: '#ff8000' };
+    return { status: 'WARNING', label: 'Sinal fraco', color: '#D4622B' };
   }
 
   return { status: 'GOOD', label: 'Sinal OK', color: '#22c55e' };

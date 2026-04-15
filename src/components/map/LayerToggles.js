@@ -21,7 +21,7 @@ export default function LayerToggles({ toggles = {}, onToggle }) {
             onClick={() => onToggle?.(key, !isActive)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? activeBorder : '#b8a080'}`,
+              padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? activeBorder : '#8e7254'}`,
               backgroundColor: isActive ? activeBg : 'rgba(0,0,0,0.06)',
               color: '#0f0701',
               fontSize: 12, fontWeight: 700,

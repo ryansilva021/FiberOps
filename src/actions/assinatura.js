@@ -12,7 +12,19 @@ async function requireAdmin() {
   const session = await auth()
   if (!session?.user) throw new Error('Não autenticado')
   if (session.user.role !== 'admin') throw new Error('Apenas administradores podem gerenciar a assinatura')
-  if (!session.user.empresa_id) throw new Error('Empresa não encontrada na sessão')
+
+  // Se empresa_id não está na sessão, tenta buscar no banco pelo ID do usuário
+  if (!session.user.empresa_id) {
+    await connectDB()
+    const { User } = await import('@/models/User')
+    const dbUser = await User.findById(session.user.id, 'empresa_id').lean()
+    if (dbUser?.empresa_id) {
+      session.user.empresa_id = dbUser.empresa_id.toString()
+    } else {
+      throw new Error('Sua conta não está vinculada a uma empresa. Contate o suporte.')
+    }
+  }
+
   return session
 }
 

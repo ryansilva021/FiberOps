@@ -21,22 +21,22 @@ import { getOLTs } from '@/actions/olts'
 const T = {
   canvas:       '#2a2218',
   panelBg:      'rgba(38,28,16,0.98)',
-  panelBorder:  '#ff800055',
-  accent:       '#ff8000',
-  accentDim:    '#ff800033',
-  accentHover:  'rgba(255,128,0,0.18)',
+  panelBorder:  '#D4622B55',
+  accent:       '#D4622B',
+  accentDim:    '#D4622B33',
+  accentHover:  'rgba(212,98,43,0.18)',
   text:         '#f0e4d0',
   muted:        '#c8a878',
   subtle:       '#7a6040',
   inputBg:      'rgba(255,255,255,0.05)',
-  inputBorder:  '#ff800033',
+  inputBorder:  '#D4622B33',
   danger:       '#ef4444',
   dangerDim:    'rgba(239,68,68,0.12)',
   success:      '#22c55e',
-  cdoColor:     '#ff8000',
+  cdoColor:     '#D4622B',
   ctoColor:     '#22d3ee',
   distColor:    '#c084fc',
-  bbColor:      '#ff8000',
+  bbColor:      '#D4622B',
 }
 
 const STEPS = {
@@ -212,13 +212,13 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '11px 16px',
-        background: `linear-gradient(135deg, rgba(255,128,0,0.12), rgba(255,128,0,0.04))`,
+        background: `linear-gradient(135deg, rgba(212,98,43,0.12), rgba(212,98,43,0.04))`,
         borderBottom: `1px solid ${T.panelBorder}`,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 8,
-            background: 'rgba(255,128,0,0.15)', border: `1px solid ${T.panelBorder}`,
+            background: 'rgba(212,98,43,0.15)', border: `1px solid ${T.panelBorder}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16,
           }}>🪄</div>
@@ -297,7 +297,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
             {/* Config camadas */}
             {isLayers && (
               <div style={{
-                background: 'rgba(255,128,0,0.06)',
+                background: 'rgba(212,98,43,0.06)',
                 border: `1px solid ${T.panelBorder}`,
                 borderRadius: 10, padding: '10px 12px',
                 display: 'flex', flexDirection: 'column', gap: 8,

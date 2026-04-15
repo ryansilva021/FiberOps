@@ -290,7 +290,7 @@ function _autoRouteStyle(feature) {
   // Backbone OLT→CDO — laranja espesso sólido
   if (tipo === 'BACKBONE') {
     return new Style({
-      stroke: new Stroke({ color: '#ff8000', width: 4 }),
+      stroke: new Stroke({ color: '#D4622B', width: 4 }),
       zIndex: 22,
     })
   }
@@ -323,7 +323,7 @@ function _autoCDOStyle(feature) {
         points:  4,
         radius:  10,
         angle:   Math.PI / 4,
-        fill:    new Fill({ color: '#ff8000' }),
+        fill:    new Fill({ color: '#D4622B' }),
         stroke:  new Stroke({ color: '#0f172a', width: 2 }),
       }),
       zIndex: 26,
@@ -333,7 +333,7 @@ function _autoCDOStyle(feature) {
         text:     feature.get('nome') ?? '',
         offsetY:  -18,
         font:     'bold 9px sans-serif',
-        fill:     new Fill({ color: '#ff8000' }),
+        fill:     new Fill({ color: '#D4622B' }),
         stroke:   new Stroke({ color: '#0f172a', width: 2 }),
         overflow: true,
       }),
