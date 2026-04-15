@@ -37,7 +37,7 @@ function getStyles(isDark) {
   const BG    = isDark ? '#0d1117' : '#ffffff'
   const BG2   = isDark ? '#161b22' : '#fff9f5'
   const BG3   = isDark ? '#1c2333' : '#fff4ea'
-  const BR    = isDark ? '#30363d' : '#eed5be'
+  const BR    = isDark ? '#30363d' : '#cca880'
   const TEXT  = isDark ? '#e6edf3' : '#1c1208'
   const MUTED = isDark ? '#8b949e' : '#a07040'
 

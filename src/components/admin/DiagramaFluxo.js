@@ -46,22 +46,22 @@ function mkTheme() {
     // CDO — roxo
     cdoBg:  '#221830', cdoBdr: '#a855f7', cdoHdr: '#d8b4fe', cdoHdrBg: '#2e1a48',
     // Splitter — amber/laranja (identidade do projeto)
-    splBg:  '#2e2010', splBdr: '#ff8000', splHdr: '#fcd34d', splHdrBg: '#3a280e',
+    splBg:  '#2e2010', splBdr: '#D4622B', splHdr: '#fcd34d', splHdrBg: '#3a280e',
     // CTO — verde
     ctoBg:  '#102210', ctoBdr: '#22c55e', ctoHdr: '#86efac', ctoHdrBg: '#143214',
     // Panels — borda laranja (cor do projeto)
-    panelBg: 'rgba(38,28,16,0.97)', panelBorder: '#ff800055',
-    panelAccent: '#ff8000',
-    mmBg: '#2e2010', mmMask: '#ff800022',
+    panelBg: 'rgba(38,28,16,0.97)', panelBorder: '#D4622B55',
+    panelAccent: '#D4622B',
+    mmBg: '#2e2010', mmMask: '#D4622B22',
     // Edges
     //   backbone = tronco principal OLT→CDO  (laranja espesso)
     //   distrib  = distribuição CDO→Splitter  (roxo médio)
     //   ramal    = ramal Splitter→CTO         (verde fino, por fibra ABNT)
-    backbone: { stroke: '#ff8000', strokeWidth: 4 },
+    backbone: { stroke: '#D4622B', strokeWidth: 4 },
     distrib:  { stroke: '#c084fc', strokeWidth: 2 },
     ramal:    { stroke: '#4ade80', strokeWidth: 1.5 },
     // compat aliases
-    feeder: { stroke: '#ff8000', strokeWidth: 4 },
+    feeder: { stroke: '#D4622B', strokeWidth: 4 },
     drop:   { stroke: '#4ade80', strokeWidth: 1.5 },
   }
 }
@@ -383,7 +383,7 @@ function SplitterNode({ data }) {
         {entrada?.fibra != null && (
           <span style={{
             marginLeft: 'auto', fontSize: 10, fontWeight: 700,
-            color: ligadas === saidas.length ? T.ctoBdr : ligadas > 0 ? '#ff8000' : T.muted,
+            color: ligadas === saidas.length ? T.ctoBdr : ligadas > 0 ? '#D4622B' : T.muted,
           }}>
             {ligadas}/{saidas.length}
           </span>
@@ -483,7 +483,7 @@ function CTONode({ data }) {
   const pct     = Math.min(1, ocupacao / Math.max(1, capacidade))
   const livres  = capacidade - ocupacao
   const cheio   = livres <= 0
-  const alertC  = cheio ? '#ef4444' : pct > 0.8 ? '#ff8000' : T.ctoBdr
+  const alertC  = cheio ? '#ef4444' : pct > 0.8 ? '#D4622B' : T.ctoBdr
   const segs    = Math.min(capacidade, 16)
   const filled  = Math.round(pct * segs)
 
@@ -711,7 +711,7 @@ function CTONode({ data }) {
                 const ocup  = (spl.saidas ?? []).filter(sd => sd.cliente?.trim()).length
                 const total = (spl.saidas ?? []).length
                 const p     = total > 0 ? ocup / total : 0
-                const barC  = p >= 0.9 ? '#ef4444' : p >= 0.7 ? '#ff8000' : '#16a34a'
+                const barC  = p >= 0.9 ? '#ef4444' : p >= 0.7 ? '#D4622B' : '#16a34a'
                 return (
                   <div key={spl.id} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: si < splitters.length - 1 ? 3 : 0 }}>
                     <span style={{ fontSize: 9, color: T.muted, minWidth: 46, whiteSpace: 'nowrap' }}>🔀 {spl.tipo}</span>
@@ -2059,10 +2059,10 @@ function DiagramaFluxoInner({ projetoId }) {
       proOptions={{ hideAttribution: true }}
     >
       <Background
-        variant={BackgroundVariant.Dots}
-        color="#eed5be"
-        gap={20}
-        size={1.5}
+        variant={BackgroundVariant.Lines}
+        color="rgba(255,255,255,0.04)"
+        gap={32}
+        lineWidth={0.5}
       />
       <Controls
         style={{

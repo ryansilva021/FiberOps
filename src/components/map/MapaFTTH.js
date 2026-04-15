@@ -457,7 +457,7 @@ export default function MapaFTTH({
     const sigColor =
       simResult.signal_quality === 'EXCELENTE' ? '#22c55e' :
       simResult.signal_quality === 'BOM'        ? '#4ade80' :
-      simResult.signal_quality === 'LIMITE'     ? '#ff8000' : '#ef4444'
+      simResult.signal_quality === 'LIMITE'     ? '#D4622B' : '#ef4444'
 
     const src = new VectorSource()
     const lineF = new Feature({ geometry: new LineString([clientCoord, ctoCoord]) })
@@ -467,7 +467,7 @@ export default function MapaFTTH({
     dotF.setStyle(new Style({
       image: new OLCircle({
         radius: 10,
-        fill:   new Fill({ color: '#ff8000' }),
+        fill:   new Fill({ color: '#D4622B' }),
         stroke: new Stroke({ color: '#ffffff', width: 2.5 }),
       }),
     }))
@@ -864,8 +864,8 @@ export default function MapaFTTH({
         >
           <div style={{
             width: 220, height: '100%',
-            background: '#d4c5b2',
-            borderLeft: '1px solid #b8a080',
+            background: '#9e8a6e',
+            borderLeft: '1px solid #8e7254',
             boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
             display: 'flex', flexDirection: 'column',
             padding: '16px 12px',
@@ -884,7 +884,7 @@ export default function MapaFTTH({
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '10px 12px', borderRadius: 10,
                 background: '#c8b89e',
-                border: '1px solid #b8a080',
+                border: '1px solid #8e7254',
                 color: '#0f0701',
                 fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left',
               }}
@@ -894,7 +894,7 @@ export default function MapaFTTH({
             </button>
 
             {/* Divisor */}
-            <div style={{ height: 1, background: '#b8a080', margin: '4px 0' }} />
+            <div style={{ height: 1, background: '#8e7254', margin: '4px 0' }} />
 
             {/* Camadas */}
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#271204', marginBottom: 2 }}>
@@ -903,7 +903,7 @@ export default function MapaFTTH({
             {[
               { key: 'ctos',   label: 'CTOs',    icon: '📡', color: '#10b981' },
               { key: 'caixas', label: 'CE/CDOs', icon: '🔷', color: '#6366f1' },
-              { key: 'rotas',  label: 'Rotas',   icon: '〰️', color: '#ff8000' },
+              { key: 'rotas',  label: 'Rotas',   icon: '〰️', color: '#D4622B' },
               { key: 'postes', label: 'Postes',  icon: '🪝', color: '#eab308' },
               { key: 'olts',   label: 'OLTs',    icon: '🖥️', color: '#0891b2' },
             ].map(({ key, label, icon, color }) => {
@@ -915,7 +915,7 @@ export default function MapaFTTH({
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '8px 12px', borderRadius: 8,
                     background: ativo ? `${color}28` : '#c8b89e',
-                    border: `1px solid ${ativo ? color + '66' : '#b8a080'}`,
+                    border: `1px solid ${ativo ? color + '66' : '#8e7254'}`,
                     color: '#0f0701',
                     fontSize: 12, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left',
                     transition: 'all 0.15s',
@@ -929,7 +929,7 @@ export default function MapaFTTH({
             })}
 
             {/* Divisor */}
-            <div style={{ height: 1, background: '#b8a080', margin: '4px 0' }} />
+            <div style={{ height: 1, background: '#8e7254', margin: '4px 0' }} />
 
             {/* Satélite */}
             <button
@@ -939,7 +939,7 @@ export default function MapaFTTH({
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '10px 12px', borderRadius: 10,
                 background: layerToggles.satellite ? 'rgba(14,165,233,0.25)' : '#c8b89e',
-                border: `1px solid ${layerToggles.satellite ? '#0ea5e9' : '#b8a080'}`,
+                border: `1px solid ${layerToggles.satellite ? '#0ea5e9' : '#8e7254'}`,
                 color: '#0f0701',
                 fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left',
               }}
@@ -956,7 +956,7 @@ export default function MapaFTTH({
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '10px 12px', borderRadius: 10,
                 background: '#c8b89e',
-                border: '1px solid #b8a080',
+                border: '1px solid #8e7254',
                 color: '#0f0701',
                 fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left',
                 opacity: loadingData ? 0.5 : 1,
@@ -967,7 +967,7 @@ export default function MapaFTTH({
             </button>
 
             {/* Divisor */}
-            <div style={{ height: 1, background: '#b8a080', margin: '4px 0' }} />
+            <div style={{ height: 1, background: '#8e7254', margin: '4px 0' }} />
 
             {/* Simular Instalação */}
             <button
@@ -975,8 +975,8 @@ export default function MapaFTTH({
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '10px 12px', borderRadius: 10,
-                background: simMode ? 'rgba(255,128,0,0.28)' : '#c8b89e',
-                border: simMode ? '1.5px solid #ff8000' : '1px solid #b8a080',
+                background: simMode ? 'rgba(212,98,43,0.28)' : '#c8b89e',
+                border: simMode ? '1.5px solid #D4622B' : '1px solid #8e7254',
                 color: '#0f0701',
                 fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left',
                 transition: 'all 0.18s',
@@ -987,7 +987,7 @@ export default function MapaFTTH({
               {simMode && (
                 <span style={{
                   marginLeft: 'auto', fontSize: 9, fontWeight: 800,
-                  background: 'rgba(255,128,0,0.2)', color: '#ff8000',
+                  background: 'rgba(212,98,43,0.2)', color: '#D4622B',
                   padding: '2px 5px', borderRadius: 4,
                 }}>ATIVO</span>
               )}
@@ -996,7 +996,7 @@ export default function MapaFTTH({
             {/* ── Adicionar elementos — visível apenas para admin e superadmin ── */}
             {(userRole === 'admin' || userRole === 'superadmin') && (
               <>
-                <div style={{ height: 1, background: '#b8a080', margin: '4px 0' }} />
+                <div style={{ height: 1, background: '#8e7254', margin: '4px 0' }} />
                 {/* Permissão: somente admin e superadmin podem ver esta seção */}
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#271204', marginBottom: 2 }}>
                   Adicionar
@@ -1005,7 +1005,7 @@ export default function MapaFTTH({
                   { type: 'cto',   label: 'CTO',    color: '#10b981', icon: '📡' },
                   { type: 'caixa', label: 'CE/CDO', color: '#6366f1', icon: '🔷' },
                   { type: 'poste', label: 'Poste',  color: '#d97706', icon: '🪝' },
-                  { type: 'rota',  label: 'Rota',   color: '#ff8000', icon: '〰️' },
+                  { type: 'rota',  label: 'Rota',   color: '#D4622B', icon: '〰️' },
                 ].map(({ type, label, color, icon }) => (
                   <button key={type}
                     onClick={() => { enterAddMode(type); setMapPainel(false) }}
@@ -1025,7 +1025,7 @@ export default function MapaFTTH({
                 ))}
 
                 {/* Varinha de rede automática */}
-                <div style={{ height: 1, background: '#b8a080', margin: '4px 0' }} />
+                <div style={{ height: 1, background: '#8e7254', margin: '4px 0' }} />
                 <button
                   onClick={enterVarinhaMode}
                   style={{
@@ -1064,11 +1064,11 @@ export default function MapaFTTH({
             transform: 'translateY(-50%)',
             transition: 'right 0.22s ease',
             pointerEvents: 'auto',
-            background: '#d4c5b2',
-            borderTop:    '1px solid #b8a080',
-            borderBottom: '1px solid #b8a080',
-            borderRight:  mapPainel ? '1px solid #b8a080' : 'none',
-            borderLeft:   mapPainel ? 'none' : '1px solid #b8a080',
+            background: '#9e8a6e',
+            borderTop:    '1px solid #8e7254',
+            borderBottom: '1px solid #8e7254',
+            borderRight:  mapPainel ? '1px solid #8e7254' : 'none',
+            borderLeft:   mapPainel ? 'none' : '1px solid #8e7254',
             borderRadius: mapPainel ? '0 8px 8px 0' : '8px 0 0 8px',
             width: 22,
             height: 64,
@@ -1188,7 +1188,7 @@ export default function MapaFTTH({
                     padding: '7px 12px',
                     borderRadius: 8,
                     border: `1.5px solid ${item.cor}66`,
-                    background: 'rgba(212,197,178,0.97)',
+                    background: 'rgba(162,138,108,0.97)',
                     color: item.cor,
                     cursor: 'pointer',
                     fontSize: 12,
@@ -1269,8 +1269,8 @@ export default function MapaFTTH({
               position: 'relative',
               width: 44, height: 44,
               borderRadius: 12,
-              background: gpsExpanded ? 'rgba(37,99,235,0.18)' : 'rgba(212,197,178,0.96)',
-              border: gpsExpanded ? '1.5px solid #3b82f6' : '1px solid #b8a080',
+              background: gpsExpanded ? 'rgba(37,99,235,0.18)' : 'rgba(162,138,108,0.96)',
+              border: gpsExpanded ? '1.5px solid #3b82f6' : '1px solid #8e7254',
               backdropFilter: 'blur(14px)',
               WebkitBackdropFilter: 'blur(14px)',
               boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
@@ -1295,8 +1295,8 @@ export default function MapaFTTH({
           {/* Painel expandido */}
           {gpsExpanded && (
             <div style={{
-              background: 'rgba(212,197,178,0.97)',
-              border: '1px solid #b8a080',
+              background: 'rgba(162,138,108,0.97)',
+              border: '1px solid #8e7254',
               borderRadius: 14,
               backdropFilter: 'blur(14px)',
               WebkitBackdropFilter: 'blur(14px)',
@@ -1310,11 +1310,11 @@ export default function MapaFTTH({
               <div style={{
                 padding: '7px 12px 6px',
                 display: 'flex', alignItems: 'center', gap: 6,
-                borderBottom: '1px solid #b8a080',
+                borderBottom: '1px solid #8e7254',
               }}>
                 <span style={{
                   width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                  background: tracking ? '#3b82f6' : '#b8a080',
+                  background: tracking ? '#3b82f6' : '#8e7254',
                   ...(tracking ? { animation: 'gps-pulse 1.5s ease-in-out infinite' } : {}),
                 }} />
                 <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#271204' }}>
@@ -1351,7 +1351,7 @@ export default function MapaFTTH({
                 Localizar
               </button>
 
-              <div style={{ height: 1, background: '#b8a080', margin: '0 10px' }} />
+              <div style={{ height: 1, background: '#8e7254', margin: '0 10px' }} />
 
               {/* Seguir / Parar */}
               <button
@@ -1378,7 +1378,7 @@ export default function MapaFTTH({
               {/* Centralizar — só quando há posição mas não está seguindo */}
               {gpsPosition && !followMode && (
                 <>
-                  <div style={{ height: 1, background: '#b8a080', margin: '0 10px' }} />
+                  <div style={{ height: 1, background: '#8e7254', margin: '0 10px' }} />
                   <button
                     onClick={() => map?.flyTo({ center: [gpsPosition.lng, gpsPosition.lat], zoom: 16, duration: 800 })}
                     style={{
@@ -1598,19 +1598,19 @@ export default function MapaFTTH({
           className="absolute top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-xs font-semibold shadow-lg flex items-center gap-3 whitespace-nowrap"
           style={{
             backgroundColor: isDark ? 'rgba(8,13,28,0.95)' : 'rgba(255,255,255,0.97)',
-            border: '1.5px solid rgba(255,128,0,0.6)',
-            color: '#ff8000',
-            boxShadow: '0 4px 20px rgba(255,128,0,0.2)',
+            border: '1.5px solid rgba(212,98,43,0.6)',
+            color: '#D4622B',
+            boxShadow: '0 4px 20px rgba(212,98,43,0.2)',
           }}
         >
           <span style={{
-            width: 8, height: 8, borderRadius: '50%', background: '#ff8000',
+            width: 8, height: 8, borderRadius: '50%', background: '#D4622B',
             display: 'inline-block', animation: 'gps-pulse 1.2s ease-in-out infinite',
           }} />
           {simLoading
             ? <><span style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}>Analisando localização...</span></>
             : <><span style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}>Clique no mapa para simular uma instalação</span></>}
-          <button onClick={cancelSimMode} style={{ color: 'rgba(255,128,0,0.6)', marginLeft: 4 }}>✕</button>
+          <button onClick={cancelSimMode} style={{ color: 'rgba(212,98,43,0.6)', marginLeft: 4 }}>✕</button>
         </div>
       )}
 
@@ -1712,7 +1712,7 @@ function SimResultCard({
   const SIG_COLOR = {
     EXCELENTE: '#22c55e',
     BOM:       '#4ade80',
-    LIMITE:    '#ff8000',
+    LIMITE:    '#D4622B',
     CRÍTICO:   '#ef4444',
   }
 
@@ -1802,11 +1802,11 @@ function SimResultCard({
             {/* Diagnostics */}
             {result.diags?.length > 0 && (
               <div style={{
-                background: 'rgba(255,128,0,0.08)', border: '1px solid rgba(255,128,0,0.3)',
+                background: 'rgba(212,98,43,0.08)', border: '1px solid rgba(212,98,43,0.3)',
                 borderRadius: 8, padding: '8px 12px', marginBottom: 12,
               }}>
                 {result.diags.map((d, i) => (
-                  <p key={i} style={{ fontSize: 11, color: '#ff8000', margin: 0 }}>⚠ {d}</p>
+                  <p key={i} style={{ fontSize: 11, color: '#D4622B', margin: 0 }}>⚠ {d}</p>
                 ))}
               </div>
             )}

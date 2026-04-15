@@ -49,13 +49,13 @@ function uid() { return Math.random().toString(36).slice(2, 9) }
 const BG   = '#ffffff'
 const BG2  = '#fff9f5'
 const BG3  = '#fff4ea'
-const BORDER = '#eed5be'
+const BORDER = '#cca880'
 
 function getStyles(isDark) {
   const bg   = isDark ? '#0d1117' : '#ffffff'
   const bg2  = isDark ? '#161b22' : '#fff9f5'
   const bg3  = isDark ? '#1c2333' : '#fff4ea'
-  const br   = isDark ? '#30363d' : '#eed5be'
+  const br   = isDark ? '#30363d' : '#cca880'
   const text = isDark ? '#e6edf3' : '#1c1208'
   const muted = isDark ? '#8b949e' : '#a07040'
   return {
@@ -1079,12 +1079,12 @@ function MobileCDOEditor({
   splitters, setSplitters, olts, ctos = [], caixas = [], usadosGlobal, saving, salvar, sucesso, erro, isDark
 }) {
   const S   = getStyles(isDark)
-  const bg  = isDark ? '#0d1117' : '#ffffff'
-  const bg2 = isDark ? '#161b22' : '#f8fafc'
-  const bg3 = isDark ? '#1c2333' : '#f1f5f9'
-  const br  = isDark ? '#30363d' : '#e2e8f0'
-  const txt = isDark ? '#e6edf3' : '#1e293b'
-  const mut = isDark ? '#8b949e' : '#64748b'
+  const bg  = isDark ? '#0d1117' : '#c4b098'
+  const bg2 = isDark ? '#161b22' : '#d0bfa8'
+  const bg3 = isDark ? '#1c2333' : '#c8b094'
+  const br  = isDark ? '#30363d' : '#8e7254'
+  const txt = isDark ? '#e6edf3' : '#0f0701'
+  const mut = isDark ? '#8b949e' : '#3d1f04'
 
   const [step, setStep] = useState(0)
   const curStep = MOBILE_STEPS[step]
@@ -1749,9 +1749,23 @@ function MobileCDOEditor({
         <button onClick={() => setStep(s => Math.max(0, s - 1))} style={navBtn(step === 0)}>
           ← Anterior
         </button>
-        <button onClick={() => setStep(s => Math.min(MOBILE_STEPS.length - 1, s + 1))} style={navBtn(step === MOBILE_STEPS.length - 1)}>
-          Próximo →
-        </button>
+        {step < MOBILE_STEPS.length - 1 ? (
+          <button onClick={() => setStep(s => s + 1)} style={navBtn(false)}>
+            Próximo →
+          </button>
+        ) : (
+          <button
+            onClick={salvar}
+            disabled={saving}
+            style={{
+              ...navBtn(false),
+              background: saving ? br : 'linear-gradient(135deg,#16a34a,#15803d)',
+              opacity: saving ? 0.6 : 1,
+            }}
+          >
+            {saving ? 'Salvando…' : '✓ Finalizar'}
+          </button>
+        )}
       </div>
     </div>
   )

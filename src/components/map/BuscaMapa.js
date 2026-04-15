@@ -67,7 +67,7 @@ export default function BuscaMapa({ projetoId, onFlyTo, onClose }) {
     <div style={{
       position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
       zIndex: 300, display: 'flex', flexDirection: 'column',
-      background: 'rgba(221,208,192,0.98)',
+      background: 'rgba(168,148,118,0.98)',
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
     }}>
@@ -85,8 +85,8 @@ export default function BuscaMapa({ projetoId, onFlyTo, onClose }) {
             placeholder="Buscar cliente, CTO, CDO, rota..."
             style={{
               width: '100%', boxSizing: 'border-box',
-              background: '#e8dccf',
-              border: '1px solid #b8a080',
+              background: '#d0bfa8',
+              border: '1px solid #8e7254',
               borderRadius: 12, padding: '13px 16px 13px 40px',
               color: '#0f0701', fontSize: 15, outline: 'none',
             }}
@@ -99,7 +99,7 @@ export default function BuscaMapa({ projetoId, onFlyTo, onClose }) {
           )}
         </div>
         <button onClick={onClose} style={{
-          background: '#dfd0bc', border: '1px solid #b8a080',
+          background: '#c8b094', border: '1px solid #8e7254',
           borderRadius: 10, padding: '12px 14px', color: '#0f0701',
           fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
         }}>
@@ -116,7 +116,7 @@ export default function BuscaMapa({ projetoId, onFlyTo, onClose }) {
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
             fontSize: 13, fontWeight: 600,
-            background: tab === key ? 'rgba(255,128,0,0.25)' : '#dfd0bc',
+            background: tab === key ? 'rgba(212,98,43,0.25)' : '#c8b094',
             color: tab === key ? '#92400e' : '#271204',
             transition: 'all 0.15s',
           }}>
@@ -154,14 +154,14 @@ export default function BuscaMapa({ projetoId, onFlyTo, onClose }) {
               style={{
                 width: '100%', textAlign: 'left', display: 'flex',
                 alignItems: 'center', gap: 12,
-                padding: '12px 14px', borderRadius: 12, border: '1px solid #b8a080',
-                background: '#e8dccf',
+                padding: '12px 14px', borderRadius: 12, border: '1px solid #8e7254',
+                background: '#d0bfa8',
                 cursor: hasCoords ? 'pointer' : 'default',
                 marginBottom: 4, transition: 'background 0.1s',
                 opacity: hasCoords ? 1 : 0.5,
               }}
-              onMouseEnter={e => { if (hasCoords) e.currentTarget.style.background = 'rgba(255,128,0,0.25)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#e8dccf' }}
+              onMouseEnter={e => { if (hasCoords) e.currentTarget.style.background = 'rgba(212,98,43,0.25)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#d0bfa8' }}
             >
               <div style={{
                 width: 36, height: 36, borderRadius: 10, flexShrink: 0,
@@ -180,7 +180,7 @@ export default function BuscaMapa({ projetoId, onFlyTo, onClose }) {
                 </div>
               </div>
               {hasCoords && (
-                <span style={{ fontSize: 16, color: '#d97706', flexShrink: 0 }}>→</span>
+                <span style={{ fontSize: 16, color: '#D4622B', flexShrink: 0 }}>→</span>
               )}
             </button>
           )

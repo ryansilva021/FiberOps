@@ -2,20 +2,20 @@
 @import "@xyflow/react/dist/style.css";
 
 :root {
-  --background: #ddd0c0;
+  --background: #c4b098;
   --foreground: #0f0701;
-  --sidebar-bg: #d4c5b2;
-  --sidebar-border: #b8a080;
-  --card-bg: #e8dccf;
-  --card-bg-active: #dfd0bc;
-  --border-color: #b8a080;
+  --sidebar-bg: #9e8a6e;
+  --sidebar-border: #8e7254;
+  --card-bg: #d0bfa8;
+  --card-bg-active: #c8b094;
+  --border-color: #8e7254;
   --border-color-strong: #c47a28;
   --text-muted: #3d1f04;
   --text-secondary: #271204;
-  --inp-bg: #ddd0c0;
-  --accent: #ff8000;
-  --accent-dark: #d97706;
-  --accent-light: #fef3c7;
+  --inp-bg: #c4b098;
+  --accent: #D4622B;
+  --accent-dark: #b8501f;
+  --accent-light: #fde5d4;
 }
 
 @theme inline {
@@ -52,9 +52,9 @@ body,
 }
 .ol-zoom-ftth .ol-zoom-in,
 .ol-zoom-ftth .ol-zoom-out {
-  background: rgba(212, 197, 178, 0.95);
+  background: rgba(162, 138, 108, 0.95);
   color: #0f0701;
-  border: 1px solid #eed5be;
+  border: 1px solid #cca880;
   border-radius: 6px;
   font-size: 18px;
   width: 32px;
@@ -64,17 +64,17 @@ body,
 }
 .ol-zoom-ftth .ol-zoom-in:hover,
 .ol-zoom-ftth .ol-zoom-out:hover {
-  background: rgba(255, 128, 0, 0.18);
-  border-color: #ff8000;
+  background: rgba(212, 98, 43, 0.18);
+  border-color: #D4622B;
 }
 /* Scale line */
 .ol-scale-line {
-  background: rgba(212,197,178,0.88);
+  background: rgba(162,138,108,0.88);
   border-radius: 4px;
   padding: 2px 4px;
   bottom: 8px;
   left:   8px;
-  border: 1px solid #cdb89c;
+  border: 1px solid #a88e72;
 }
 .ol-scale-line-inner {
   color: #7a5530;
@@ -85,13 +85,17 @@ body,
 .ol-attribution {
   bottom: 8px;
   right:  8px;
-  background: rgba(212,197,178,0.88);
-  border: 1px solid #cdb89c;
+  background: rgba(162,138,108,0.88);
+  border: 1px solid #a88e72;
   border-radius: 4px;
   font-size: 10px;
 }
-.ol-attribution a { color: #d97706; }
+.ol-attribution a { color: #D4622B; }
 /* ─────────────────────────────────────────────────────────────────────────── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 /* Inputs e selects seguem a cor do tema */
 input, select, textarea {

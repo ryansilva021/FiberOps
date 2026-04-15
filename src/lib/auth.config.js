@@ -86,6 +86,11 @@ export const authConfig = {
       // Demais rotas: exige autenticação
       if (!isLoggedIn) return false
 
+      // Superadmin: redireciona da raiz para visão geral
+      if (role === 'superadmin' && (pathname === '/' || pathname === '')) {
+        return Response.redirect(new URL('/superadmin/stats', nextUrl))
+      }
+
       // Rotas superadmin
       if (pathname.startsWith('/superadmin')) {
         if (role !== 'superadmin') {

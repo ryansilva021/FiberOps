@@ -13,7 +13,7 @@ const TABS = [
   { id: 'caixas', label: 'CE / CDO', icon: '🔌', color: '#7c3aed' },
   { id: 'rotas',  label: 'Rotas',   icon: '〰️', color: '#059669' },
   { id: 'postes', label: 'Postes',  icon: '🏗️', color: '#d97706' },
-  { id: 'ctos',   label: 'CTOs',    icon: '📦', color: '#ff8000' },
+  { id: 'ctos',   label: 'CTOs',    icon: '📦', color: '#D4622B' },
 ]
 
 export default function CampoClient({

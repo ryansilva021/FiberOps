@@ -1664,26 +1664,32 @@ function StatusBar({ nodeCount, edgeCount, isMobile }) {
   return (
     <Panel position="bottom-center" style={{ margin: 0, width: isMobile ? '100%' : 'auto' }}>
       <div style={{
-        background:   'rgba(6,10,22,0.85)',
-        border:       '1px solid rgba(255,255,255,0.06)',
-        borderRadius: isMobile ? 0 : '8px 8px 0 0',
-        padding:      '4px 12px',
-        fontSize:     10,
-        color:        'rgba(255,255,255,0.3)',
-        display:      'flex', gap: isMobile ? 8 : 16, flexWrap: 'wrap',
-        fontFamily:   'inherit',
-        justifyContent: isMobile ? 'center' : 'flex-start',
+        background:     'rgba(6,10,22,0.85)',
+        border:         '1px solid rgba(255,255,255,0.06)',
+        borderRadius:   isMobile ? 0 : '8px 8px 0 0',
+        padding:        isMobile ? '3px 10px' : '4px 12px',
+        fontSize:       isMobile ? 9 : 10,
+        color:          'rgba(255,255,255,0.3)',
+        display:        'flex', gap: isMobile ? 6 : 16, flexWrap: 'nowrap',
+        fontFamily:     'inherit',
+        justifyContent: 'center',
+        alignItems:     'center',
+        overflow:       'hidden',
       }}>
         {!isMobile && <><span>Arrastar = mover nó</span><span>·</span><span>Scroll = zoom</span><span>·</span></>}
         <span>Nós: <strong style={{ color: 'rgba(255,255,255,0.55)' }}>{nodeCount}</strong></span>
         <span>·</span>
         <span>Arestas: <strong style={{ color: 'rgba(255,255,255,0.55)' }}>{edgeCount}</strong></span>
-        <span>·</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#94a3b8" strokeWidth="2"/></svg>usada
-          <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="6 3"/></svg>livre
-          <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="2 3"/></svg>reserva
-        </span>
+        {!isMobile && (
+          <>
+            <span>·</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#94a3b8" strokeWidth="2"/></svg>usada
+              <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="6 3"/></svg>livre
+              <svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="2 3"/></svg>reserva
+            </span>
+          </>
+        )}
       </div>
     </Panel>
   )
@@ -2025,7 +2031,7 @@ function FlowInner({ projetoId, userRole, altura }) {
             borderRadius: 8,
             '--xy-controls-button-background-color': 'rgba(255,255,255,0.06)',
             '--xy-controls-button-color': 'rgba(255,255,255,0.7)',
-            ...(isMobile ? { transform: 'scale(1.7)', transformOrigin: 'bottom left' } : {}),
+            ...(isMobile ? { transform: 'scale(1.2)', transformOrigin: 'bottom left' } : {}),
           }}
         />
 

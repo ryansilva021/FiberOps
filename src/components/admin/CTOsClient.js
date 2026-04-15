@@ -220,14 +220,14 @@ export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicia
                 const pct = ocupacaoPct(cto)
                 return (
                   <tr key={cto._id} style={{ borderBottom: i < ctos.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs" style={{ color: '#ff8000' }}>{cto.cto_id}</td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: '#D4622B' }}>{cto.cto_id}</td>
                     <td className="px-4 py-3 text-slate-200">{cto.nome ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs">{[cto.rua, cto.bairro].filter(Boolean).join(', ') || '—'}</td>
                     <td className="px-4 py-3 text-slate-300">{cto.capacidade ?? '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div style={{ backgroundColor: 'var(--inp-bg)' }} className="w-16 h-1.5 rounded-full overflow-hidden">
-                          <div style={{ width: `${pct}%`, backgroundColor: pct > 80 ? '#ef4444' : pct > 50 ? '#ff8000' : '#22c55e' }} className="h-full rounded-full" />
+                          <div style={{ width: `${pct}%`, backgroundColor: pct > 80 ? '#ef4444' : pct > 50 ? '#D4622B' : '#22c55e' }} className="h-full rounded-full" />
                         </div>
                         <span className="text-xs text-slate-400">{cto.ocupacao ?? 0}/{cto.capacidade ?? 0}</span>
                       </div>
@@ -235,7 +235,7 @@ export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicia
                     <td className="px-4 py-3 font-mono text-xs text-slate-400">{cto.cdo_id ?? '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => abrirEditar(cto)} className="text-xs" style={{ color: '#ff8000' }}>Editar</button>
+                        <button onClick={() => abrirEditar(cto)} className="text-xs" style={{ color: '#D4622B' }}>Editar</button>
                         <span className="text-slate-700">|</span>
                         <button onClick={() => setConfirmDelete(cto)} className="text-xs text-red-400 hover:text-red-300">Excluir</button>
                       </div>
@@ -294,7 +294,7 @@ export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicia
                   <p style={{ ...labelStyle, marginBottom: 0, color: 'var(--border-color)' }}>Localização *</p>
                   <div className="flex gap-2">
                     <button type="button" onClick={usarGPS} disabled={gpsCarregando}
-                      style={{ backgroundColor: 'rgba(255,128,0,0.15)', border: '1px solid rgba(255,128,0,0.5)', color: '#ff8000', fontSize: 11, padding: '4px 10px', borderRadius: 8 }}
+                      style={{ backgroundColor: 'rgba(212,98,43,0.15)', border: '1px solid rgba(212,98,43,0.5)', color: '#D4622B', fontSize: 11, padding: '4px 10px', borderRadius: 8 }}
                       className="disabled:opacity-40 hover:brightness-110 transition-all flex items-center gap-1">
                       {gpsCarregando ? '⏳' : '📍'} GPS
                     </button>
@@ -373,9 +373,9 @@ export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicia
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={modalOverlay}>
           <div style={modalPanel} className="rounded-2xl p-6 text-center max-w-sm">
-            <p className="text-white font-semibold mb-2">Excluir CTO?</p>
+            <p className="text-slate-100 font-semibold mb-2">Excluir CTO?</p>
             <p className="text-sm text-slate-400 mb-6">
-              A CTO <span className="text-white font-mono">{confirmDelete.cto_id}</span> será removida permanentemente.
+              A CTO <span className="text-slate-100 font-mono">{confirmDelete.cto_id}</span> será removida permanentemente.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmDelete(null)}

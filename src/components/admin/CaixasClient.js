@@ -241,7 +241,7 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                 const chip = TIPO_CHIP[caixa.tipo] ?? TIPO_CHIP.CDO
                 return (
                   <tr key={caixa._id} style={{ borderBottom: i < caixas.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs" style={{ color: '#ff8000' }}>{getCaixaId(caixa)}</td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: '#D4622B' }}>{getCaixaId(caixa)}</td>
                     <td className="px-4 py-3 text-slate-200">{caixa.nome ?? '—'}</td>
                     <td className="px-4 py-3">
                       <span style={{ backgroundColor: chip.bg, border: `1px solid ${chip.border}`, color: chip.color }} className="text-xs px-2 py-0.5 rounded-full font-semibold">
@@ -253,7 +253,7 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                     <td className="px-4 py-3 font-mono text-xs text-slate-400">{caixa.olt_id ?? '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => abrirEditar(caixa)} className="text-xs" style={{ color: '#ff8000' }}>Editar</button>
+                        <button onClick={() => abrirEditar(caixa)} className="text-xs" style={{ color: '#D4622B' }}>Editar</button>
                         <span className="text-slate-700">|</span>
                         <button onClick={() => setConfirmDelete(caixa)} className="text-xs text-red-400 hover:text-red-300">Excluir</button>
                       </div>
@@ -269,14 +269,22 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
       {/* Modal Nova/Editar Caixa */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={modalOverlay} onClick={(e) => e.target === e.currentTarget && fecharModal()}>
-          <div style={modalPanel} className="rounded-t-2xl sm:rounded-2xl w-full p-6 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
+          <div style={{ ...modalPanel, maxHeight: '92dvh', display: 'flex', flexDirection: 'column' }} className="rounded-t-2xl sm:rounded-2xl w-full">
+            {/* Handle bar — mobile only */}
+            <div className="flex justify-center pt-3 pb-1 sm:hidden">
+              <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'var(--border-color)' }} />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 sm:px-6 sm:pt-5">
               <h2 style={{ color: 'var(--foreground)', fontSize: 17, fontWeight: 700 }}>
                 {caixaEditando ? 'Editar Caixa CE/CDO' : 'Nova Caixa CE/CDO'}
               </h2>
-              <button onClick={fecharModal} style={{ color: 'var(--border-color)', fontSize: 20, lineHeight: 1 }} className="hover:text-white transition-colors">✕</button>
+              <button onClick={fecharModal} style={{ color: 'var(--border-color)', fontSize: 22, lineHeight: 1, padding: '4px 8px' }} className="hover:text-white transition-colors">✕</button>
             </div>
 
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto px-5 sm:px-6 pb-2">
             <div className="flex flex-col gap-4">
               {/* Grupo: Identificação */}
               <div style={fieldGroup}>
@@ -288,12 +296,12 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                       name="ce_id" value={form.ce_id} onChange={handleFormChange}
                       disabled={!!caixaEditando} placeholder="ex: CDO-001"
                       style={{ ...fieldInput, opacity: caixaEditando ? 0.5 : 1 }}
-                      className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40"
+                      className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]"
                     />
                   </div>
                   <div>
                     <label style={labelStyle}>Nome</label>
-                    <input name="nome" value={form.nome} onChange={handleFormChange} placeholder="Nome descritivo" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                    <input name="nome" value={form.nome} onChange={handleFormChange} placeholder="Nome descritivo" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                   </div>
                   <div className="col-span-2">
                     <label style={labelStyle}>Tipo</label>
@@ -325,7 +333,7 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                   <p style={{ ...labelStyle, marginBottom: 0, color: 'var(--border-color)' }}>Localização *</p>
                   <div className="flex gap-2">
                     <button type="button" onClick={usarGPS} disabled={gpsCarregando}
-                      style={{ backgroundColor: 'rgba(255,128,0,0.15)', border: '1px solid rgba(255,128,0,0.5)', color: '#ff8000', fontSize: 11, padding: '4px 10px', borderRadius: 8 }}
+                      style={{ backgroundColor: 'rgba(212,98,43,0.15)', border: '1px solid rgba(212,98,43,0.5)', color: '#D4622B', fontSize: 11, padding: '4px 10px', borderRadius: 8 }}
                       className="disabled:opacity-40 hover:brightness-110 transition-all flex items-center gap-1">
                       {gpsCarregando ? '⏳' : '📍'} GPS
                     </button>
@@ -339,11 +347,11 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>Latitude</label>
-                    <input name="lat" value={form.lat} onChange={handleFormChange} placeholder="-23.550520" type="number" step="any" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                    <input name="lat" value={form.lat} onChange={handleFormChange} placeholder="-23.550520" type="number" step="any" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                   </div>
                   <div>
                     <label style={labelStyle}>Longitude</label>
-                    <input name="lng" value={form.lng} onChange={handleFormChange} placeholder="-46.633309" type="number" step="any" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                    <input name="lng" value={form.lng} onChange={handleFormChange} placeholder="-46.633309" type="number" step="any" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                   </div>
                 </div>
                 {mostrarMapa && (
@@ -358,11 +366,11 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>Rua</label>
-                    <input name="rua" value={form.rua} onChange={handleFormChange} placeholder="Logradouro" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                    <input name="rua" value={form.rua} onChange={handleFormChange} placeholder="Logradouro" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                   </div>
                   <div>
                     <label style={labelStyle}>Bairro</label>
-                    <input name="bairro" value={form.bairro} onChange={handleFormChange} placeholder="Bairro" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                    <input name="bairro" value={form.bairro} onChange={handleFormChange} placeholder="Bairro" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                   </div>
                 </div>
               </div>
@@ -402,11 +410,11 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                     <>
                       <div>
                         <label style={labelStyle}>ID da OLT</label>
-                        <input name="olt_id" value={form.olt_id} onChange={handleFormChange} placeholder="ex: OLT-001" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                        <input name="olt_id" value={form.olt_id} onChange={handleFormChange} placeholder="ex: OLT-001" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                       </div>
                       <div>
                         <label style={labelStyle}>Porta OLT</label>
-                        <input name="porta_olt" value={form.porta_olt} onChange={handleFormChange} placeholder="ex: 1" type="number" min={1} style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                        <input name="porta_olt" value={form.porta_olt} onChange={handleFormChange} placeholder="ex: 1" type="number" min={1} style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                       </div>
                     </>
                   ) : (
@@ -416,24 +424,24 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                         <input name="cdo_pai_id" value={form.cdo_pai_id} onChange={handleFormChange}
                           placeholder="ex: CDO-001"
                           style={{ ...fieldInput, border: form.cdo_pai_id && form.cdo_pai_id === form.ce_id ? '1px solid #ef4444' : fieldInput.border }}
-                          className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500/40" />
+                          className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500/40 min-h-[44px]" />
                         {form.cdo_pai_id && form.cdo_pai_id === form.ce_id && (
                           <p style={{ color: '#f87171', fontSize: 10, marginTop: 2 }}>Não pode ser pai de si mesma</p>
                         )}
                       </div>
                       <div>
                         <label style={labelStyle}>Porta CDO/CE pai</label>
-                        <input name="porta_cdo_pai" value={form.porta_cdo_pai} onChange={handleFormChange} placeholder="ex: 1" type="number" min={1} style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500/40" />
+                        <input name="porta_cdo_pai" value={form.porta_cdo_pai} onChange={handleFormChange} placeholder="ex: 1" type="number" min={1} style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500/40 min-h-[44px]" />
                       </div>
                     </>
                   )}
                   <div className="col-span-2">
                     <label style={labelStyle}>Splitter CDO</label>
-                    <input name="splitter_cdo" value={form.splitter_cdo} onChange={handleFormChange} placeholder="ex: 1:8, 1:16, 2:16" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                    <input name="splitter_cdo" value={form.splitter_cdo} onChange={handleFormChange} placeholder="ex: 1:8, 1:16, 2:16" style={fieldInput} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                   </div>
                   <div className="col-span-2">
                     <label style={labelStyle}>Observações</label>
-                    <textarea name="obs" value={form.obs} onChange={handleFormChange} rows={2} placeholder="Observações..." style={{ ...fieldInput, resize: 'vertical' }} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40" />
+                    <textarea name="obs" value={form.obs} onChange={handleFormChange} rows={2} placeholder="Observações..." style={{ ...fieldInput, resize: 'vertical' }} className="w-full rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500/40 min-h-[44px]" />
                   </div>
                 </div>
               </div>
@@ -444,16 +452,21 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
                 {erro}
               </div>
             )}
+            </div>{/* end scrollable body */}
 
-            <div className="flex justify-end gap-3 mt-5">
+            {/* Sticky footer — always visible */}
+            <div
+              className="px-5 sm:px-6 pt-3 pb-5 sm:pb-6 flex gap-3"
+              style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--card-bg)' }}
+            >
               <button onClick={fecharModal} disabled={isPending}
-                style={{ border: '1px solid var(--border-color)', color: 'var(--border-color)' }}
-                className="px-5 py-2.5 rounded-lg text-sm hover:bg-white/5 transition-colors disabled:opacity-40">
+                style={{ border: '1px solid var(--border-color)', color: 'var(--border-color)', minHeight: 48 }}
+                className="flex-1 sm:flex-none sm:px-5 rounded-xl text-sm hover:bg-white/5 transition-colors disabled:opacity-40">
                 Cancelar
               </button>
               <button onClick={handleSalvar} disabled={isPending || !form.ce_id || !form.lat || !form.lng || (form.parent_tipo === 'cdo' && form.cdo_pai_id === form.ce_id)}
-                style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#052e16', fontWeight: 700, fontSize: 14 }}
-                className="px-5 py-2.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-40">
+                style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#052e16', fontWeight: 700, fontSize: 15, minHeight: 48 }}
+                className="flex-1 rounded-xl transition-opacity hover:opacity-90 disabled:opacity-40">
                 {isPending ? 'Salvando...' : caixaEditando ? 'Salvar alterações' : 'Criar Caixa'}
               </button>
             </div>
@@ -465,9 +478,9 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={modalOverlay}>
           <div style={modalPanel} className="rounded-2xl p-6 text-center max-w-sm">
-            <p className="text-white font-semibold mb-2">Excluir Caixa?</p>
+            <p className="text-slate-100 font-semibold mb-2">Excluir Caixa?</p>
             <p className="text-sm text-slate-400 mb-6">
-              A caixa <span className="text-white font-mono">{getCaixaId(confirmDelete)}</span> será removida permanentemente.
+              A caixa <span className="text-slate-100 font-mono">{getCaixaId(confirmDelete)}</span> será removida permanentemente.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmDelete(null)}
