@@ -63,6 +63,13 @@ export default function PontoClient({ initialRecord, initialRequests, userName, 
   const [record,     setRecord]     = useState(initialRecord)
   const [requests,   setRequests]   = useState(initialRequests ?? [])
   const [toast,      setToast]      = useState(null)
+  const [today,      setToday]      = useState('')
+
+  useEffect(() => {
+    setToday(new Date().toLocaleDateString('pt-BR', {
+      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+    }))
+  }, [])
 
   const showToast = useCallback((msg, type = 'ok') => {
     setToast({ msg, type, id: Date.now() })
@@ -138,16 +145,11 @@ export default function PontoClient({ initialRecord, initialRequests, userName, 
         showToast(result?.error ?? 'Erro ao registrar ponto', 'error')
       }
     })
-  }, [showToast])
+  }, [showToast, setRecord])
 
   const addRequest = useCallback((req) => {
     setRequests(prev => [req, ...prev])
   }, [])
-
-  // Data de hoje formatada
-  const today = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
-  })
 
   return (
     <div style={{ minHeight: '100dvh', background: T.canvas, fontFamily: T.ff, color: T.text, display: 'flex', flexDirection: 'column' }}>
