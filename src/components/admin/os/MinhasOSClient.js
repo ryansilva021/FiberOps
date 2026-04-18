@@ -227,7 +227,7 @@ const STATUS_FILTERS = [
   { key: 'concluida',   label: 'Concluídas' },
 ]
 
-export default function MinhasOSClient({ initialItems, userRole, userId, erro }) {
+export default function MinhasOSClient({ initialItems, userRole, userId, pageTitle, erro }) {
   const [items,        setItems]        = useState(initialItems ?? [])
   const [filtro,       setFiltro]       = useState('todas')
   const [reagendarOS,  setReagendarOS]  = useState(null)
@@ -258,7 +258,7 @@ export default function MinhasOSClient({ initialItems, userRole, userId, erro })
             Ordens de Serviço
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Minhas OS</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{pageTitle ?? 'Minhas OS'}</h1>
             <span style={{
               fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
               background: 'rgba(59,130,246,0.15)', color: '#60a5fa',

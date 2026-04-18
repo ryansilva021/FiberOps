@@ -163,16 +163,15 @@ export default function PontoClient({ initialRecord, initialRequests, userName, 
           <div style={{ fontSize: 10, color: T.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
             Controle de Ponto
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 Olá, {userName} 👋
               </div>
               <div style={{ fontSize: 11, color: T.dim, marginTop: 2, textTransform: 'capitalize' }}>
                 {today}
               </div>
             </div>
-            {/* Badge de status rápido no header */}
             {record && (
               <StatusBadgeMini status={record.status} />
             )}

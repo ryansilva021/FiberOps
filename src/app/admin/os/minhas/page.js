@@ -11,26 +11,33 @@ export default async function MinhasOSPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const role = session.user.role
+  const role     = session.user.role
+  const username = session.user.username ?? ''
+
   if (!ALLOWED.includes(role)) redirect('/')
 
   let items = []
   let erro  = null
 
   try {
-    // listOS já filtra automaticamente por tecnico_id para role=tecnico
-    // Para outros roles, filtra por criado_por via query extra (abaixo)
-    const data = await listOS({ limit: 100 })
+    // Backend enforces filtering:
+    //   tecnico  → only OS where tecnico_id === username (in listOS action)
+    //   admin / recepcao / noc / superadmin → all OS of the project
+    const data = await listOS({ limit: 200 })
     items = data.items
   } catch (e) {
     erro = e.message
   }
 
+  const isTecnico  = role === 'tecnico'
+  const pageTitle  = isTecnico ? 'Minhas OS' : 'Todas as OS'
+
   return (
     <MinhasOSClient
       initialItems={items}
       userRole={role}
-      userId={session.user.username ?? ''}
+      userId={username}
+      pageTitle={pageTitle}
       erro={erro}
     />
   )
