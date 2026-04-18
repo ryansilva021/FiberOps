@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/ponto",
-      "schedule": "* * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
