@@ -77,6 +77,30 @@ self.addEventListener('message', (event) => {
   )
 })
 
-// ── Instalação / ativação (sem cache offline por enquanto) ────────────────────
-self.addEventListener('install',  () => self.skipWaiting())
-self.addEventListener('activate', (e) => e.waitUntil(clients.claim()))
+// ── Instalação / ativação ─────────────────────────────────────────────────────
+self.addEventListener('install', (e) => {
+  self.skipWaiting()
+  e.waitUntil(
+    caches.open('fiberops-shell-v1').then(cache =>
+      cache.addAll(['/', '/manifest.json', '/short-logo.svg'])
+    ).catch(() => {})
+  )
+})
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== 'fiberops-shell-v1').map(k => caches.delete(k)))
+    ).then(() => clients.claim())
+  )
+})
+
+// ── Fetch: network-first, fallback para cache apenas na raiz ──────────────────
+self.addEventListener('fetch', (e) => {
+  if (e.request.mode !== 'navigate') return
+  e.respondWith(
+    fetch(e.request).catch(() =>
+      caches.match('/').then(r => r ?? Response.error())
+    )
+  )
+})
