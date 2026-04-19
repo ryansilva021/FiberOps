@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { updateSystemConfig, updateFiberColors } from '@/actions/config'
-import { FIBER_COLOR_DEFAULTS } from '@/models/SystemConfig'
+import { FIBER_COLOR_DEFAULTS } from '@/lib/fiber-color-defaults'
 
 // ─── Seção visual ──────────────────────────────────────────────────────────────
 
