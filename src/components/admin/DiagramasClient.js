@@ -132,8 +132,15 @@ function ItemCDO({ caixa, ativo, onClick }) {
   return (
     <div style={ativo ? S.cardItemAtivo : S.cardItem} onClick={onClick} role="button" tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onClick()}>
-      <div>
-        <p style={S.cardItemNome}>{caixa.nome ?? idCaixa}</p>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <p style={S.cardItemNome}>{caixa.nome ?? idCaixa}</p>
+          {!caixa.olt_id && !caixa.cdo_pai_id && (
+            <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: 'rgba(239,68,68,0.12)', color: '#fca5a5', borderRadius: 4, padding: '1px 6px' }}>
+              Sem OLT
+            </span>
+          )}
+        </div>
         <p style={S.cardItemSub}>{idCaixa}{caixa.tipo ? ` · ${caixa.tipo.toUpperCase()}` : ''}</p>
       </div>
       <span style={ativo ? S.badgeAtivo : S.badge}>{utilizadas}/{total} saídas</span>
@@ -600,6 +607,7 @@ function EditorModal({ title, onClose, children }) {
 // ---------------------------------------------------------------------------
 export default function DiagramasClient({ ctos, caixas, olts = [], projetoId, tabInicial, idInicial, userRole }) {
   const readOnly = userRole === 'tecnico'
+  const ctosOrfas = ctos.filter(c => !c.cdo_id).length
   const [aba, setAba] = useState(tabInicial ?? 'topologia')
   const [ctoModal, setCTOModal]     = useState(null)   // CTO aberta no modal
   const [cdoModal, setCDOModal]     = useState(null)   // CDO/CE aberta no modal
@@ -774,9 +782,21 @@ export default function DiagramasClient({ ctos, caixas, olts = [], projetoId, ta
 
       {/* Aba Topologia — desktop apenas (mobile usa overlay acima) */}
       {aba === 'topologia' && (
-        <div className="hidden lg:block" style={{ height: 'calc(100vh - 220px)', minHeight: 480, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-          <DiagramaFluxo projetoId={projetoId} altura="100%" />
-        </div>
+        <>
+          {ctosOrfas > 0 && (
+            <div className="hidden lg:flex" style={{ alignItems: 'center', gap: 10, marginBottom: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+              <span style={{ fontSize: 13, color: '#fca5a5', fontWeight: 600 }}>
+                {ctosOrfas} CTO{ctosOrfas !== 1 ? 's' : ''} sem CDO vinculado
+              </span>
+              <span style={{ fontSize: 12, color: '#ef444488' }}>
+                · Use "Vincular elementos" para conectar ao CDO pai
+              </span>
+            </div>
+          )}
+          <div className="hidden lg:block" style={{ height: 'calc(100vh - 220px)', minHeight: 480, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+            <DiagramaFluxo projetoId={projetoId} altura="100%" />
+          </div>
+        </>
       )}
 
       {/* Aba CTOs */}

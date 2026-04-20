@@ -57,8 +57,8 @@ const NAV_ITEMS = [
   { href: '/admin/calculos',  labelKey: 'nav.calculations', icon: '⚡', perm: PERM.VIEW_CALCULATIONS,  group: GROUPS.staff },
 
   // Ordens de Serviço (tecnico, noc, recepcao)
-  { href: '/admin/os',             labelKey: 'nav.all_os',       icon: '📋', perm: PERM.VIEW_SERVICE_ORDERS,  group: GROUPS.staff },
-  { href: '/admin/os/minhas',      labelKey: 'nav.my_os',        icon: '🗒️', perm: PERM.VIEW_SERVICE_ORDERS,  group: GROUPS.staff, indent: true },
+  { href: '/admin/os',        labelKey: 'nav.all_os', icon: '📋', perm: PERM.VIEW_SERVICE_ORDERS, group: GROUPS.staff },
+  { href: '/admin/os/minhas', labelKey: 'nav.my_os',  icon: '🗒️', perm: PERM.VIEW_SERVICE_ORDERS, group: GROUPS.staff, indent: true, noTecnico: true },
   { href: '/ponto',                labelKey: 'nav.ponto',        icon: '🕐', perm: PERM.PUNCH_CLOCK,          group: GROUPS.staff },
   { href: '/configuracoes/ponto',  labelKey: 'nav.ponto_config', icon: '⏰', perm: PERM.MANAGE_USERS,         group: GROUPS.staff, indent: true },
 
@@ -75,13 +75,13 @@ const NAV_ITEMS = [
 
 function isItemVisible(item, role) {
   if (role === 'superadmin') {
-    // Superadmin vê APENAS o painel de gestão (Projetos, Empresas, Registros)
     return item.group === GROUPS.superadmin
   }
-  // Demais roles nunca veem itens do painel superadmin
   if (item.group === GROUPS.superadmin) return false
+  // Técnico não vê painel administrativo de ordens (acessa apenas as suas via /admin/os)
+  if (item.noTecnico && role === 'tecnico') return false
   if (item.perm) return hasPermission(role, item.perm)
-  return true // sem restrição (Mapa)
+  return true
 }
 
 export default function SidebarLayout({ session, children }) {

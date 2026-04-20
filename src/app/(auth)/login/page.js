@@ -228,9 +228,26 @@ function LoginForm() {
   return (
     <div style={{ width: '100%', maxWidth: 380 }}>
 
-      {/* Logo mobile */}
+      {/* Logo mobile — SVG usa cores claras (design para fundo escuro), usar texto no fundo branco */}
       <div className="mobile-logo" style={{ textAlign: 'center', marginBottom: 32 }}>
-        <Image src="/long-logo.svg" alt="FiberOps" width={130} height={33} priority />
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+          <span style={{
+            fontSize: 28, fontWeight: 800, letterSpacing: '-0.04em',
+            color: '#000000',
+            fontFamily: 'inherit',
+            lineHeight: 1,
+          }}>
+            Fiber
+          </span>
+          <span style={{
+            fontSize: 28, fontWeight: 800, letterSpacing: '-0.04em',
+            color: '#ea580c',
+            fontFamily: 'inherit',
+            lineHeight: 1,
+          }}>
+            Ops
+          </span>
+        </div>
       </div>
 
       {/* Heading */}

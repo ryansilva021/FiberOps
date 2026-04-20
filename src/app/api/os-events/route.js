@@ -1,21 +1,24 @@
 /**
  * GET /api/os-events
- * Server-Sent Events stream for real-time OS notifications.
+ * Server-Sent Events stream para notificações de OS em tempo real.
+ *
+ * Estratégia: polling no banco a cada 3s — funciona em ambientes serverless
+ * multi-instância (Vercel) onde EventEmitter in-memory não é compartilhado.
  *
  * Delivery rules:
- *   - admin / superadmin / recepcao / noc → receive ALL new OS in the projeto
- *   - tecnico → receives ONLY OS where tecnico_id or auxiliar_id matches their username
- *
- * Each connected client receives:
- *   - `nova-os`   — when a new service order is created (filtered per role)
- *   - `: ping`    — heartbeat every 25 s to keep the connection alive
+ *   - admin / superadmin / recepcao / noc → todas as OS do projeto
+ *   - tecnico → apenas OS onde tecnico_id ou auxiliar_id === username
  */
 
-import { auth } from '@/lib/auth'
-import emitter  from '@/lib/os-events'
+import { auth }         from '@/lib/auth'
+import { connectDB }    from '@/lib/db'
+import { ServiceOrder } from '@/models/ServiceOrder'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+const POLL_MS = 3_000   // intervalo de polling (ms)
+const HB_MS   = 25_000  // heartbeat keep-alive (ms)
 
 export async function GET(request) {
   const session = await auth()
@@ -23,60 +26,75 @@ export async function GET(request) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const { projeto_id: projetoId, role, username } = session.user
+  const { projeto_id, role, username } = session.user
   const isTecnico = role === 'tecnico'
   const encoder   = new TextEncoder()
 
   const stream = new ReadableStream({
-    start(controller) {
-      // Initial heartbeat so the browser knows the connection is alive
-      controller.enqueue(encoder.encode(': connected\n\n'))
+    async start(controller) {
+      await connectDB()
 
-      function handleNova(event) {
-        // Always filter by project
-        if (event.projeto_id !== projetoId) return
+      // Só entrega OS criadas APÓS a conexão do cliente
+      let since = new Date()
 
-        // Técnicos only see OS assigned to them
-        if (isTecnico) {
-          const isAssigned =
-            event.tecnico_id  === username ||
-            event.auxiliar_id === username
-          if (!isAssigned) return
-        }
+      function enqueue(text) {
+        try { controller.enqueue(encoder.encode(text)) }
+        catch { /* controller fechado */ }
+      }
 
+      enqueue(': connected\n\n')
+
+      // ── Polling DB ─────────────────────────────────────────────────────────
+      const poll = async () => {
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-        } catch (_) {
-          // Controller already closed
+          const filter = { projeto_id, data_abertura: { $gt: since } }
+
+          if (isTecnico) {
+            filter.$or = [{ tecnico_id: username }, { auxiliar_id: username }]
+          }
+
+          const now   = new Date()
+          const newOS = await ServiceOrder.find(filter)
+            .sort({ data_abertura: 1 })
+            .lean()
+          since = now
+
+          for (const os of newOS) {
+            const event = {
+              projeto_id,
+              os_id:            os.os_id,
+              cliente_nome:     os.cliente_nome,
+              cliente_endereco: os.cliente_endereco ?? null,
+              tipo:             os.tipo,
+              status:           os.status,
+              tecnico_id:       os.tecnico_id   ?? null,
+              auxiliar_id:      os.auxiliar_id  ?? null,
+              criado_em:        os.data_abertura?.toISOString() ?? new Date().toISOString(),
+            }
+            enqueue(`data: ${JSON.stringify(event)}\n\n`)
+          }
+        } catch {
+          // erro de DB transiente — continua polling
         }
       }
 
-      emitter.on('nova-os', handleNova)
+      const pollTimer = setInterval(poll, POLL_MS)
+      const hbTimer   = setInterval(() => enqueue(': ping\n\n'), HB_MS)
 
-      // Heartbeat every 25 s
-      const hbInterval = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(': ping\n\n'))
-        } catch (_) {
-          clearInterval(hbInterval)
-        }
-      }, 25_000)
-
-      // Cleanup when client disconnects
       request.signal.addEventListener('abort', () => {
-        emitter.off('nova-os', handleNova)
-        clearInterval(hbInterval)
-        try { controller.close() } catch (_) {}
+        clearInterval(pollTimer)
+        clearInterval(hbTimer)
+        try { controller.close() } catch {}
       })
     },
   })
 
   return new Response(stream, {
     headers: {
-      'Content-Type':  'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection':    'keep-alive',
-      'X-Accel-Buffering': 'no', // Disable Nginx buffering
+      'Content-Type':      'text/event-stream',
+      'Cache-Control':     'no-cache, no-transform',
+      'Connection':        'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
 }

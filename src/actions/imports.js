@@ -328,6 +328,32 @@ export async function importPostes(rows, projetoId) {
 }
 
 // ---------------------------------------------------------------------------
+// deleteAutoRoutes — remove rotas geradas automaticamente pela Varinha
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove todas as rotas marcadas como geradas automaticamente (obs = '_varinha_auto').
+ * Chamado antes de salvar uma nova geração para evitar acúmulo de rotas antigas.
+ *
+ * @param {string} projetoId
+ * @returns {Promise<{ deleted: number }>}
+ */
+export async function deleteAutoRoutes(projetoId) {
+  const session = await requireActiveEmpresa(WRITE_ROLES)
+  const { role, projeto_id: userProjeto } = session.user
+  const targetProjeto = role === 'superadmin' ? projetoId : userProjeto
+
+  if (!targetProjeto) throw new Error('projeto_id é obrigatório')
+
+  await connectDB()
+
+  const result = await Rota.deleteMany({ projeto_id: targetProjeto, obs: '_varinha_auto' })
+  revalidatePath('/')
+
+  return { deleted: result.deletedCount }
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/limpar_dados_projeto → limparDadosProjeto
 // ---------------------------------------------------------------------------
 

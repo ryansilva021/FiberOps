@@ -32,8 +32,8 @@
       "description": "Registrar ponto"
     },
     {
-      "name": "Minhas OS",
-      "url": "/admin/os/minhas",
+      "name": "Ordens de Serviço",
+      "url": "/admin/os",
       "description": "Ver ordens de serviço"
     }
   ]

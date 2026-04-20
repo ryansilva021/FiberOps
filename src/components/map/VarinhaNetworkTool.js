@@ -14,7 +14,7 @@ import {
   clearPreview,
 } from '@/lib/olMap'
 import { autoBuildNetwork } from '@/services/network/autoBuildNetwork'
-import { importCTOs, importCDOsBulk, importRotas } from '@/actions/imports'
+import { importCTOs, importCDOsBulk, importRotas, deleteAutoRoutes } from '@/actions/imports'
 import { getOLTs } from '@/actions/olts'
 
 // ── Tema do projeto ──────────────────────────────────────────────
@@ -56,16 +56,20 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
 
   const [prefix,        setPrefix]       = useState('CTO')
   const [capac,         setCapac]        = useState(16)
-  const [spacingM,      setSpacingM]     = useState(80)
+  const [spacingM,      setSpacingM]     = useState(100)
   const [genDistRoutes, setGenDistRoutes] = useState(true)
   const [mode,          setMode]         = useState('ctos')
+  // Em camadas, rotas desativadas por padrão (evita linhas cruzadas no preview)
+  const [genLayerRoutes, setGenLayerRoutes] = useState(false)
   const [cdoPrefix,     setCdoPrefix]    = useState('CDO')
   const [ctosPerCdo,    setCtosPerCdo]   = useState(8)
   const [selectedOlt,   setSelectedOlt]  = useState(null)
   const [olts,          setOlts]         = useState([])
   const [oltsLoading,   setOltsLoading]  = useState(false)
+  const [minimized,     setMinimized]    = useState(false)
 
-  const networkRef = useRef(null)
+  const networkRef  = useRef(null)
+  const polygonRef  = useRef(null)
 
   useEffect(() => {
     if (mode !== 'layers' || !projetoId || olts.length > 0) return
@@ -86,16 +90,10 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
     enablePolygonDraw(handlePolygonComplete)
   }
 
-  const handlePolygonComplete = useCallback(async (coords) => {
-    disablePolygonDraw()
-    if (coords.length < 3) {
-      setStep(STEPS.IDLE)
-      setError('Polígono precisa de pelo menos 3 vértices.')
-      return
-    }
-
+  const runGeneration = useCallback(async (coords) => {
     setStep(STEPS.FETCHING)
     setProgress('Buscando ruas no OpenStreetMap…')
+    setError(null)
     renderPolygonPreview(coords)
 
     try {
@@ -104,7 +102,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
         spacingM,
         capacidade: capac,
         prefix,
-        genDistRoutes,
+        genDistRoutes: layersMode ? genLayerRoutes : genDistRoutes,
         genCDOs:    layersMode,
         ctosPerCdo: layersMode ? ctosPerCdo : 8,
         cdoPrefix:  layersMode ? cdoPrefix  : 'CDO',
@@ -143,7 +141,19 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
       clearPreview()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capac, prefix, spacingM, genDistRoutes, mode, cdoPrefix, ctosPerCdo, selectedOlt])
+  }, [capac, prefix, spacingM, genDistRoutes, genLayerRoutes, mode, cdoPrefix, ctosPerCdo, selectedOlt])
+
+  const handlePolygonComplete = useCallback(async (coords) => {
+    disablePolygonDraw()
+    if (coords.length < 3) {
+      setStep(STEPS.IDLE)
+      setError('Arraste no mapa para definir a área de geração.')
+      return
+    }
+    polygonRef.current = coords
+    await runGeneration(coords)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runGeneration])
 
   async function handleConfirm() {
     const net = networkRef.current
@@ -151,6 +161,9 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
     setStep(STEPS.SAVING)
     setError(null)
     try {
+      // Apaga rotas de gerações anteriores antes de salvar as novas
+      await deleteAutoRoutes(projetoId)
+
       const ctoRows = net.ctos.map(c => ({
         cto_id: c.cto_id, nome: c.nome,
         lat: c.lat, lng: c.lng,
@@ -160,6 +173,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
       const allRoutes    = [...net.routes, ...net.backboneRoutes, ...net.distRoutes]
       const rotaFeatures = allRoutes.map(r => ({
         rota_id: r.rota_id, nome: r.nome, tipo: r.tipo, coordinates: r.coordinates,
+        obs: '_varinha_auto',  // marca para limpeza na próxima geração
       }))
 
       const promises = [
@@ -206,7 +220,10 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
       fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
       overflow: 'hidden',
     }}>
-      <style>{`@keyframes vr-spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        @keyframes vr-spin{to{transform:rotate(360deg)}}
+        .ol-dragbox-varinha{border:2px dashed #00e5ff;background:rgba(0,229,255,0.08);cursor:crosshair;}
+      `}</style>
 
       {/* ── Header ── */}
       <div style={{
@@ -229,14 +246,21 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
             <div style={{ fontSize: 10, color: T.subtle }}>OSM + geração automática</div>
           </div>
         </div>
-        <button onClick={() => { handleDiscard(); onClose?.() }} disabled={isBusy} style={{
-          background: 'none', border: 'none', color: T.subtle,
-          cursor: isBusy ? 'not-allowed' : 'pointer', fontSize: 16, padding: '3px 5px',
-          borderRadius: 5, lineHeight: 1,
-        }}>✕</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button onClick={() => setMinimized(v => !v)} title={minimized ? 'Expandir' : 'Minimizar'} style={{
+            background: 'none', border: 'none', color: T.subtle,
+            cursor: 'pointer', fontSize: 14, padding: '3px 6px',
+            borderRadius: 5, lineHeight: 1,
+          }}>{minimized ? '▲' : '▼'}</button>
+          <button onClick={() => { handleDiscard(); onClose?.() }} disabled={isBusy} style={{
+            background: 'none', border: 'none', color: T.subtle,
+            cursor: isBusy ? 'not-allowed' : 'pointer', fontSize: 16, padding: '3px 5px',
+            borderRadius: 5, lineHeight: 1,
+          }}>✕</button>
+        </div>
       </div>
 
-      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {!minimized && <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* ── Erro ── */}
         {error && (
@@ -273,6 +297,26 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
               ))}
             </div>
 
+            {/* Presets de cenário */}
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {[
+                { label: 'Centro',    spacingM: 60,  capac: 16, ctosPerCdo: 8  },
+                { label: 'Bairro',    spacingM: 100, capac: 16, ctosPerCdo: 8  },
+                { label: 'Periferia', spacingM: 150, capac: 16, ctosPerCdo: 12 },
+                { label: 'Rural',     spacingM: 250, capac: 8,  ctosPerCdo: 4  },
+              ].map(p => (
+                <button key={p.label}
+                  onClick={() => { setSpacingM(p.spacingM); setCapac(p.capac); if (isLayers) setCtosPerCdo(p.ctosPerCdo) }}
+                  style={{
+                    padding: '4px 10px', borderRadius: 6, border: `1px solid ${T.panelBorder}`,
+                    background: 'transparent', color: T.muted,
+                    fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
             {/* Config comum */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               <ConfigRow label="Prefixo CTO">
@@ -287,7 +331,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
               </ConfigRow>
               <ConfigRow label="Espaç. entre CTOs">
                 <select value={spacingM} onChange={e => setSpacingM(Number(e.target.value))} style={selectSt}>
-                  {[40, 60, 80, 100, 120, 150, 200].map(m => (
+                  {[40, 60, 80, 100, 120, 150, 200, 250].map(m => (
                     <option key={m} value={m} style={{ background: '#1a1208' }}>~{m} m</option>
                   ))}
                 </select>
@@ -346,6 +390,14 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
                   }
                 </ConfigRow>
 
+                {/* Toggle rotas CDO→CTO */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 2 }}>
+                  <Toggle active={genLayerRoutes} onToggle={() => setGenLayerRoutes(v => !v)} />
+                  <span style={{ fontSize: 11, color: genLayerRoutes ? T.muted : T.subtle }}>
+                    Gerar rotas CDO→CTO
+                  </span>
+                </div>
+
                 {/* Diagrama de camadas */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
@@ -359,7 +411,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
                     </>
                   )}
                   <LayerTag color={T.cdoColor} label="CDO" />
-                  <FlowArrow color={T.distColor} label="dist." />
+                  {genLayerRoutes && <FlowArrow color={T.distColor} label="dist." />}
                   <LayerTag color={T.ctoColor} label="CTO" />
                   <FlowArrow color="#4ade80" label="ramal" />
                   <LayerTag color="#86efac" label="ONUs" />
@@ -367,12 +419,12 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
               </div>
             )}
 
-            {/* Toggle rotas distribuição (modo plano) */}
+            {/* Toggle rotas distribuição (modo plano apenas) */}
             {!isLayers && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Toggle active={genDistRoutes} onToggle={() => setGenDistRoutes(v => !v)} />
                 <span style={{ fontSize: 11, color: genDistRoutes ? T.muted : T.subtle }}>
-                  Gerar rotas de distribuição (MST)
+                  Gerar árvore de cabo (SPT)
                 </span>
               </div>
             )}
@@ -397,8 +449,8 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
                   Modo de desenho ativo
                 </div>
                 <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.55 }}>
-                  Clique para adicionar vértices.<br/>
-                  <strong style={{ color: T.text }}>Duplo-clique</strong> para fechar e gerar.
+                  <strong style={{ color: T.text }}>Arraste</strong> no mapa para definir a área.<br/>
+                  Solte para gerar a rede automaticamente.
                 </div>
               </div>
             </div>
@@ -439,7 +491,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
               background: T.accentHover, border: `1px solid ${T.panelBorder}`,
               borderRadius: 20, padding: '3px 11px', fontSize: 10, fontWeight: 700, color: T.accent,
             }}>
-              {network.source === 'osm' ? '🗺 Ruas reais (OSM) + IA' : '⊞ Grade automática'}
+              {network.source === 'osm' ? '🗺 Ruas reais (OSM)' : '⊞ Grade automática (OSM indisponível)'}
             </div>
 
             {/* Métricas */}
@@ -452,7 +504,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
                 <Metric label="CDOs"      value={network.metrics.totalCDOs}    icon="◆" color={T.cdoColor} />
               )}
               <Metric label="CTOs"        value={network.metrics.totalCTOs}    icon="●" color={T.ctoColor} />
-              <Metric label="Vias"        value={network.metrics.totalRoutes}  icon="〰" color={T.muted} />
+              <Metric label="Cabos"       value={network.metrics.totalRoutes}  icon="〰" color={T.muted} />
               {network.metrics.backboneRoutes > 0
                 ? <Metric label="Backbone" value={network.metrics.backboneRoutes} icon="⚡" color={T.accent} />
                 : network.metrics.distRoutes > 0
@@ -469,6 +521,13 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
               <Metric label="Cap. máx." value={`${network.metrics.totalClients}`} icon="👥" color={T.subtle} />
             </div>
 
+            {network?.metrics && (
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>
+                ~{Math.round((network.metrics.totalLengthM + (network.metrics.distLengthM ?? 0)) / 1000 * 10) / 10} km de cabo
+                · {network.metrics.totalClients} portas potenciais
+              </div>
+            )}
+
             {/* Legenda */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
               {network.metrics.backboneRoutes > 0 && (
@@ -483,7 +542,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
               {network.metrics.distRoutes > 0 && network.metrics.totalCDOs === 0 && (
                 <LegendLine color="#f59e0b" label="Distribuição" dashed />
               )}
-              <LegendLine color={T.ctoColor} label="Vias / Infra" dashed />
+              <LegendLine color={T.ctoColor} label="Cabo distribuição" dashed />
               <LegendDot  color={T.ctoColor} label="CTOs" />
             </div>
 
@@ -505,6 +564,19 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
                   </span>
                 ) : '💾 Confirmar e Salvar'}
               </button>
+              <button
+                onClick={() => { clearPreview(); handleStartDraw() }}
+                disabled={step === STEPS.SAVING}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  padding: '9px 0', borderRadius: 8, border: `1px solid ${T.panelBorder}`,
+                  background: 'rgba(212,98,43,0.08)', color: T.muted,
+                  fontWeight: 700, fontSize: 13, cursor: step === STEPS.SAVING ? 'not-allowed' : 'pointer',
+                  opacity: step === STEPS.SAVING ? 0.4 : 1, transition: 'background 0.15s',
+                }}
+              >
+                🔄 Nova Seleção
+              </button>
               <button onClick={handleDiscard} disabled={step === STEPS.SAVING} style={{
                 ...cancelBtnSt, opacity: step === STEPS.SAVING ? 0.4 : 1,
               }}>
@@ -513,7 +585,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
             </div>
           </>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

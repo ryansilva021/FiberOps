@@ -224,14 +224,13 @@ export default function SystemConfigClient({ initialConfig }) {
     setMsg(null)
     startTrans(async () => {
       const res = await updateSystemConfig({
-        nome_empresa:     cfg.nome_empresa,
-        timezone:         cfg.timezone,
-        notif_nova_os:    cfg.notif_nova_os,
-        notif_status_os:  cfg.notif_status_os,
-        notif_ponto:      cfg.notif_ponto,
-        os_prazo_horas:   cfg.os_prazo_horas,
-        mapa_lat_default: cfg.mapa_lat_default,
-        mapa_lng_default: cfg.mapa_lng_default,
+        nome_empresa:      cfg.nome_empresa,
+        timezone:          cfg.timezone,
+        notif_nova_os:     cfg.notif_nova_os,
+        notif_status_os:   cfg.notif_status_os,
+        notif_ponto:       cfg.notif_ponto,
+        mapa_lat_default:  cfg.mapa_lat_default,
+        mapa_lng_default:  cfg.mapa_lng_default,
         mapa_zoom_default: cfg.mapa_zoom_default,
       })
       setMsg(res.error ?? 'Configurações salvas!')
@@ -295,20 +294,6 @@ export default function SystemConfigClient({ initialConfig }) {
         <Toggle value={cfg.notif_nova_os    ?? true} onChange={v => set('notif_nova_os', v)}    label="Nova OS atribuída ao técnico" />
         <Toggle value={cfg.notif_status_os  ?? true} onChange={v => set('notif_status_os', v)}  label="Mudança de status de OS" />
         <Toggle value={cfg.notif_ponto      ?? true} onChange={v => set('notif_ponto', v)}      label="Alertas de ponto (entrada, saída, almoço)" />
-        <SaveBtn pending={pending} onClick={handleSaveGeral} />
-      </Section>
-
-      {/* OS */}
-      <Section title="Ordens de Serviço" description="Configurações de SLA e fluxo de OS.">
-        <Field label="Prazo padrão de SLA (horas)" hint="Tempo máximo para conclusão de uma OS aberta.">
-          <Input
-            type="number"
-            value={cfg.os_prazo_horas ?? 48}
-            onChange={v => set('os_prazo_horas', v)}
-            min={1} max={720}
-            style={{ maxWidth: 140 }}
-          />
-        </Field>
         <SaveBtn pending={pending} onClick={handleSaveGeral} />
       </Section>
 

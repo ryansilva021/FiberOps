@@ -234,13 +234,13 @@ export default function MinhasOSClient({ initialItems, userRole, userId, pageTit
             Ordens de Serviço
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{pageTitle ?? 'Minhas OS'}</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{pageTitle ?? 'Ordens de Serviço'}</h1>
             <span style={{
               fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
               background: 'rgba(59,130,246,0.15)', color: '#60a5fa',
               border: '1px solid rgba(59,130,246,0.3)',
             }}>
-              {filtrados.length} OS
+              {filtrados.length} {filtrados.length === 1 ? 'ordem' : 'ordens'}
             </span>
           </div>
 

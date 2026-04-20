@@ -119,7 +119,7 @@ function CDONode({ caixa }) {
   )
 }
 
-export default function TopologiaClient({ arvoreInicial, projetoId, userRole }) {
+export default function TopologiaClient({ arvoreInicial, projetoId, userRole, ctosOrfas = 0 }) {
   const [arvore, setArvore] = useState(arvoreInicial)
   const [modalAberto, setModalAberto] = useState(false)
   const [erro, setErro] = useState(null)
@@ -275,7 +275,21 @@ export default function TopologiaClient({ arvoreInicial, projetoId, userRole }) 
         </div>
       )}
 
-      {/* CTOs sem vínculo (se OLTs existem mas sem caixas, já avisado acima por olt) */}
+      {/* CTOs sem vínculo */}
+      {ctosOrfas > 0 && (
+        <div style={{
+          marginTop: 16, padding: '12px 16px', borderRadius: 10,
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 13, color: '#fca5a5', fontWeight: 600 }}>
+            {ctosOrfas} CTO{ctosOrfas !== 1 ? 's' : ''} sem CDO vinculado
+          </span>
+          <span style={{ fontSize: 12, color: '#ef444488' }}>
+            · Use "Vincular elementos" para conectar ao CDO pai
+          </span>
+        </div>
+      )}
 
       {/* Modal Vincular */}
       {modalAberto && (

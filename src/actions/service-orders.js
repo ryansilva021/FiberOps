@@ -272,6 +272,9 @@ export async function updateOSFields(osId, fields) {
 
   await connectDB()
 
+  // Captura tecnico_id anterior para detectar reassign
+  const before = await ServiceOrder.findOne({ projeto_id, os_id: osId }, 'tecnico_id auxiliar_id cliente_nome tipo').lean()
+
   const os = await ServiceOrder.findOneAndUpdate(
     { projeto_id, os_id: osId },
     { $set: safe },
@@ -281,6 +284,30 @@ export async function updateOSFields(osId, fields) {
   if (!os) throw new Error('OS não encontrada')
 
   revalidatePath('/admin/os')
+
+  // Push para novo técnico quando tecnico_id ou auxiliar_id mudou
+  const tecnicoMudou   = safe.tecnico_id  && safe.tecnico_id  !== before?.tecnico_id
+  const auxiliarMudou  = safe.auxiliar_id && safe.auxiliar_id !== before?.auxiliar_id
+
+  if (tecnicoMudou || auxiliarMudou) {
+    try {
+      const { sendPushToUser } = await import('@/lib/webpush')
+      const TIPO_LABEL = { instalacao: 'Instalação', manutencao: 'Manutenção', suporte: 'Suporte', cancelamento: 'Cancelamento' }
+      const newTargets = [tecnicoMudou && safe.tecnico_id, auxiliarMudou && safe.auxiliar_id].filter(Boolean)
+      await Promise.allSettled(
+        newTargets.map(uid =>
+          sendPushToUser(uid, {
+            title: `OS atribuída · ${TIPO_LABEL[os.tipo] ?? os.tipo}`,
+            body:  os.cliente_nome ?? osId,
+            url:   '/admin/os',
+          })
+        )
+      )
+    } catch (err) {
+      console.error('[updateOSFields] push erro:', err)
+    }
+  }
+
   return { ...os, _id: os._id.toString() }
 }
 

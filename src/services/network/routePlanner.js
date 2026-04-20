@@ -26,7 +26,23 @@
  * @param {Array} streets — retorno de fetchStreetsInPolygon
  * @returns {Map<string, {lng, lat, neighbors: [{key, cost}]}>}
  */
-export function buildStreetGraph(streets) {
+/** Peso da aresta por tipo de via — usado em buildStreetGraph e buildBackboneGraph */
+function _streetWeight(highway = '', backbone = false) {
+  if (backbone) {
+    // Backbone prefere fortemente vias arteriais; penaliza ruas residenciais
+    if (/^(primary|secondary|trunk)/.test(highway))    return 1.0
+    if (/^(tertiary)/.test(highway))                   return 2.5
+    if (/^(unclassified|road)/.test(highway))          return 5.0
+    if (/^(residential|living_street)/.test(highway))  return 10.0
+    return 15.0  // service / outros
+  }
+  // Distribuição: pesos próximos para seguir ruas naturalmente
+  if (/^(primary|secondary|trunk)/.test(highway))    return 0.85
+  if (/^(tertiary|residential)/.test(highway))        return 0.95
+  return 1.0
+}
+
+export function buildStreetGraph(streets, backbone = false) {
   const nodes = new Map()
 
   function node(key, lng, lat) {
@@ -37,12 +53,14 @@ export function buildStreetGraph(streets) {
   // ── 1. Arestas reais das vias OSM ─────────────────────────────────────────
   for (const street of streets) {
     const coords = street.coordinates
+    const streetType = street.highway ?? 'unclassified'
+    const typeWeight = _streetWeight(streetType, backbone)
     for (let i = 1; i < coords.length; i++) {
       const [lng1, lat1] = coords[i - 1]
       const [lng2, lat2] = coords[i]
       const k1 = _key(lng1, lat1)
       const k2 = _key(lng2, lat2)
-      const cost = _segM(lng1, lat1, lng2, lat2)
+      const cost = _segM(lng1, lat1, lng2, lat2) * typeWeight
       const n1 = node(k1, lng1, lat1)
       const n2 = node(k2, lng2, lat2)
       n1.neighbors.push({ key: k2, cost })
@@ -54,7 +72,7 @@ export function buildStreetGraph(streets) {
   // Dois nós a ≤ 12m um do outro recebem aresta virtual (custo real).
   // Resolve: ruas adjacentes sem nó compartilhado, calçadas que quase tocam
   // uma avenida, dados OSM imprecisos.
-  const SNAP_TOL   = 20      // metros — cobre near-miss em dados OSM imprecisos
+  const SNAP_TOL   = 8       // metros — near-miss real; 20m criava pontes entre pistas paralelas
   const BUCKET_DEG = 0.0003  // ~33m em latitude — garante que nós dentro de
                               // SNAP_TOL caiam no mesmo bucket ou no adjacente
 
@@ -93,6 +111,45 @@ export function buildStreetGraph(streets) {
 }
 
 // =============================================================================
+// MIN-HEAP BINÁRIO — fila de prioridade para Dijkstra O(n log n)
+// =============================================================================
+
+class MinHeap {
+  constructor() { this.h = [] }
+  push(item) {
+    this.h.push(item)
+    this._bubbleUp(this.h.length - 1)
+  }
+  pop() {
+    const top = this.h[0]
+    const last = this.h.pop()
+    if (this.h.length > 0) { this.h[0] = last; this._sinkDown(0) }
+    return top
+  }
+  get size() { return this.h.length }
+  _bubbleUp(i) {
+    while (i > 0) {
+      const p = (i - 1) >> 1
+      if (this.h[p].d <= this.h[i].d) break
+      ;[this.h[p], this.h[i]] = [this.h[i], this.h[p]]
+      i = p
+    }
+  }
+  _sinkDown(i) {
+    const n = this.h.length
+    while (true) {
+      let s = i
+      const l = 2*i+1, r = 2*i+2
+      if (l < n && this.h[l].d < this.h[s].d) s = l
+      if (r < n && this.h[r].d < this.h[s].d) s = r
+      if (s === i) break
+      ;[this.h[s], this.h[i]] = [this.h[i], this.h[s]]
+      i = s
+    }
+  }
+}
+
+// =============================================================================
 // DIJKSTRA — caminho mínimo entre dois nós do grafo
 // =============================================================================
 
@@ -105,28 +162,21 @@ export function buildStreetGraph(streets) {
  * @param {string} endKey
  * @param {number} [maxNodes=2000] — limita busca (evita timeout em mapas grandes)
  */
-export function dijkstraPath(graph, startKey, endKey, maxNodes = 2000) {
+export function dijkstraPath(graph, startKey, endKey, maxNodes = 5000) {
   if (startKey === endKey || !graph.has(startKey) || !graph.has(endKey)) return []
 
   const dist    = new Map([[startKey, 0]])
   const prev    = new Map()
   const visited = new Set()
+  const queue   = new MinHeap()
+  queue.push({ key: startKey, d: 0 })
 
-  // Fila simples — para grafos pequenos (<2000 nós) é suficientemente rápida
-  const queue = [{ key: startKey, d: 0 }]
-
-  while (queue.length > 0) {
-    // Extrai o nó com menor distância acumulada
-    let minIdx = 0
-    for (let i = 1; i < queue.length; i++) {
-      if (queue[i].d < queue[minIdx].d) minIdx = i
-    }
-    const { key: u, d: du } = queue.splice(minIdx, 1)[0]
-
+  while (queue.size > 0) {
+    const { key: u, d: du } = queue.pop()
     if (u === endKey) break
     if (visited.has(u)) continue
     visited.add(u)
-    if (visited.size > maxNodes) break   // guarda de performance
+    if (visited.size > maxNodes) break
 
     for (const { key: v, cost } of graph.get(u)?.neighbors ?? []) {
       if (visited.has(v)) continue
@@ -139,7 +189,6 @@ export function dijkstraPath(graph, startKey, endKey, maxNodes = 2000) {
     }
   }
 
-  // Reconstrói o caminho de endKey → startKey, invertendo no final
   const path = []
   let cur = endKey
   let steps = 0
@@ -148,11 +197,9 @@ export function dijkstraPath(graph, startKey, endKey, maxNodes = 2000) {
     path.push([lng, lat])
     cur = prev.get(cur)
   }
-  // Adiciona o nó inicial
   const [slng, slat] = startKey.split(',').map(Number)
   path.push([slng, slat])
   path.reverse()
-
   return path.length >= 2 ? path : []
 }
 
@@ -258,7 +305,7 @@ export function planOptimalRoutes(ctos, streets, opts = {}) {
     routes.push({
       rota_id:     `DIST-${routeIdx++}`,
       nome:        `Dist. ${ctoA.cto_id} → ${ctoB.cto_id}`,
-      tipo:        'DROP',
+      tipo:        'RAMAL',
       coordinates: deduped,
     })
   }
@@ -282,14 +329,15 @@ export function planOptimalRoutes(ctos, streets, opts = {}) {
 export function planBackboneRoutes(olt, cdos, streets) {
   if (!olt || !cdos?.length) return []
 
-  const graph    = buildStreetGraph(streets)
+  // Grafo com pesos que penalizam ruas residenciais → backbone prefere arteriais
+  const graph    = buildStreetGraph(streets, true)
   const hasGraph = graph.size > 0
 
-  // Insere OLT como nó virtual uma única vez
-  const oltKey = hasGraph ? _insertVirtualNode(graph, olt.lng, olt.lat) : null
+  // OLT snappada ao nó viário mais próximo — sem segmento fora de rua
+  const oltKey = hasGraph ? _snapToGraph(graph, olt.lng, olt.lat) : null
 
   return cdos.map((cdo, i) => {
-    const cdoKey = hasGraph ? _insertVirtualNode(graph, cdo.lng, cdo.lat) : null
+    const cdoKey = hasGraph ? _snapToGraph(graph, cdo.lng, cdo.lat) : null
 
     let coords = [[olt.lng, olt.lat], [cdo.lng, cdo.lat]]
 
@@ -389,14 +437,27 @@ function _euclidM(a, b) {
   return _segM(a.lng, a.lat, b.lng, b.lat)
 }
 
-/** Nó do grafo mais próximo de [lng, lat] */
-function _nearestNode(graph, lng, lat) {
+/** Nó do grafo mais próximo de [lng, lat], excluindo chaves em excludeSet */
+function _nearestNode(graph, lng, lat, excludeSet = null) {
   let bestKey = null, bestDist = Infinity
   for (const [key, node] of graph.entries()) {
+    if (excludeSet?.has(key)) continue
     const d = _segM(lng, lat, node.lng, node.lat)
     if (d < bestDist) { bestDist = d; bestKey = key }
   }
   return bestKey
+}
+
+/**
+ * Retorna a chave do nó real mais próximo em [lng, lat].
+ * Se o ponto já é um nó do grafo (mesma chave 5dp), retorna essa chave.
+ * Caso contrário, retorna o nó mais próximo — sem criar arestas fora de rua.
+ */
+function _snapToGraph(graph, lng, lat, excludeSet = null) {
+  if (!graph.size) return null
+  const key = _key(lng, lat)
+  if (graph.has(key) && !excludeSet?.has(key)) return key
+  return _nearestNode(graph, lng, lat, excludeSet)
 }
 
 /**
@@ -414,7 +475,7 @@ function _nearestNode(graph, lng, lat) {
  * @param {number} [maxNeighbors=4]
  * @returns {string|null}         — chave do nó virtual, ou null se grafo vazio
  */
-function _insertVirtualNode(graph, lng, lat, maxDist = 250, maxNeighbors = 4) {
+function _insertVirtualNode(graph, lng, lat, maxDist = 250, maxNeighbors = 6) {
   if (!graph.size) return null
 
   const key = _key(lng, lat)
@@ -459,3 +520,236 @@ function _dedupeCoords(coords) {
   }
   return out
 }
+
+// =============================================================================
+// SPT — Dijkstra completo + extração de polylines de cabo
+// =============================================================================
+
+/**
+ * Dijkstra single-source que percorre o grafo inteiro (full SPT).
+ * Necessário para ter dist[] correto em todos os nós intermediários
+ * antes de determinar direção pai→filho na árvore.
+ */
+function _fullDijkstra(graph, rootKey) {
+  const dist    = new Map([[rootKey, 0]])
+  const prev    = new Map()
+  const visited = new Set()
+  const queue   = new MinHeap()
+  queue.push({ key: rootKey, d: 0 })
+
+  while (queue.size > 0) {
+    const { key: u, d: du } = queue.pop()
+    if (visited.has(u)) continue
+    visited.add(u)
+    for (const { key: v, cost } of graph.get(u)?.neighbors ?? []) {
+      if (visited.has(v)) continue
+      const alt = du + cost
+      if (alt < (dist.get(v) ?? Infinity)) {
+        dist.set(v, alt)
+        prev.set(v, u)
+        queue.push({ key: v, d: alt })
+      }
+    }
+  }
+  return { prev, dist }
+}
+
+/**
+ * Converte um SPT (prev + dist) em segmentos de polyline de cabo.
+ *
+ * @param {string}  rootKey
+ * @param {Map}     targetMap   — Map< graphKey, {rootLng,rootLat,ctoLng,ctoLat,nome} >
+ * @param {Map}     prev        — mapa nó→pai do Dijkstra
+ * @param {Map}     dist        — mapa nó→distância do root
+ * @param {string}  [label]     — prefixo para nomes e IDs de rota
+ * @param {number}  [idOffset]  — offset para rota_id global (evita colisão entre CDOs)
+ * @returns {Array<{rota_id, nome, tipo, coordinates}>}
+ */
+function _sptPolylines(rootKey, targetMap, prev, dist, label = '', idOffset = 0, graph = null) {
+  const routes   = []
+  let   routeIdx = 1
+  const fallbacks = []
+  const _rotaId  = () => label
+    ? `${label}-R${idOffset + routeIdx++}`
+    : `DIST-${idOffset + routeIdx++}`
+
+  // ── 1. Coletar arestas únicas da SPT ──────────────────────────────────────
+  const sptEdges = new Set()
+  for (const [tk, fb] of targetMap.entries()) {
+    if (!prev.has(tk) && tk !== rootKey) {
+      fallbacks.push(fb)
+      continue
+    }
+    let cur = tk
+    while (prev.has(cur)) {
+      const par = prev.get(cur)
+      sptEdges.add([cur, par].sort().join('__'))
+      cur = par
+    }
+  }
+
+  // ── 2. Árvore pai→filhos (direção por dist[]) ──────────────────────────────
+  const children = new Map([[rootKey, []]])
+  for (const edge of sptEdges) {
+    const [a, b] = edge.split('__')
+    const parent = (dist.get(a) ?? Infinity) <= (dist.get(b) ?? Infinity) ? a : b
+    const child  = parent === a ? b : a
+    if (!children.has(parent)) children.set(parent, [])
+    if (!children.has(child))  children.set(child,  [])
+    if (!children.get(parent).includes(child)) children.get(parent).push(child)
+  }
+
+  // ── 3. DFS iterativo: segmentos contínuos ────────────────────────────────
+  // Usa coordenadas reais do grafo (precisão total) em vez de parsear a chave 5dp
+  function coordOf(key) {
+    const n = graph?.get(key)
+    return n ? [n.lng, n.lat] : key.split(',').map(Number)
+  }
+
+  if (sptEdges.size > 0) {
+    const stack = [{ node: rootKey, path: [coordOf(rootKey)] }]
+    while (stack.length > 0) {
+      const { node, path } = stack.pop()
+      const kids = children.get(node) ?? []
+
+      if (kids.length === 0) {
+        if (path.length >= 2) {
+          routes.push({
+            rota_id:     _rotaId(),
+            nome:        label ? `${label} → cabo ${idOffset + routeIdx - 1}` : `Cabo dist. ${idOffset + routeIdx - 1}`,
+            tipo:        'RAMAL',
+            coordinates: _dedupeCoords(path),
+          })
+        }
+      } else if (kids.length === 1) {
+        stack.push({ node: kids[0], path: [...path, coordOf(kids[0])] })
+      } else {
+        if (path.length >= 2) {
+          routes.push({
+            rota_id:     _rotaId(),
+            nome:        label ? `${label} → cabo ${idOffset + routeIdx - 1}` : `Cabo dist. ${idOffset + routeIdx - 1}`,
+            tipo:        'RAMAL',
+            coordinates: _dedupeCoords(path),
+          })
+        }
+        const jc = coordOf(node)
+        for (const kid of kids) stack.push({ node: kid, path: [jc, coordOf(kid)] })
+      }
+    }
+  }
+
+  // ── 4. Fallback linha reta para CTOs não alcançadas pelo grafo ────────────
+  for (const fb of fallbacks) {
+    routes.push({
+      rota_id:     _rotaId(),
+      nome:        fb.nome ?? 'Cabo dist. (fallback)',
+      tipo:        'RAMAL',
+      coordinates: [[fb.rootLng, fb.rootLat], [fb.ctoLng, fb.ctoLat]],
+    })
+  }
+
+  return routes
+}
+
+// =============================================================================
+// ÁRVORE DE CABO — Modo Camadas (CDO → suas CTOs)
+// =============================================================================
+
+/**
+ * Para cada CDO, roda Dijkstra completo e extrai a árvore de cabo sem
+ * sobreposição. Constrói grafo FRESCO por cluster para evitar que nós
+ * virtuais de um CDO contaminem o roteamento de outros.
+ */
+export function planTreeRoutesByCDO(cdos, ctos, streets) {
+  if (!cdos?.length || !ctos?.length) return []
+
+  const hasStreets = streets?.length > 0
+  const routes     = []
+
+  for (const cdo of cdos) {
+    const myCtos = ctos.filter(c => c.cdo_id === cdo.id)
+    if (!myCtos.length) continue
+
+    if (!hasStreets) {
+      myCtos.forEach(cto => routes.push({
+        rota_id:     `DIST-${routes.length + 1}`,
+        nome:        `${cdo.id} → ${cto.cto_id}`,
+        tipo:        'DISTRIBUICAO',
+        coordinates: [[cdo.lng, cdo.lat], [cto.lng, cto.lat]],
+      }))
+      continue
+    }
+
+    // Grafo fresco por CDO — sem nós virtuais de outros clusters
+    const graph  = buildStreetGraph(streets)
+    if (!graph.size) continue
+
+    // CDO e CTOs sempre snappados a nós reais — sem arestas fora de rua
+    const cdoKey = _snapToGraph(graph, cdo.lng, cdo.lat)
+    if (!cdoKey) continue
+
+    const targetMap = new Map()
+    const usedKeys  = new Set([cdoKey])
+    for (const cto of myCtos) {
+      // excludeSet = usedKeys → nós já ocupados recebem o segundo mais próximo
+      const k = _snapToGraph(graph, cto.lng, cto.lat, usedKeys)
+      if (!k) continue
+      targetMap.set(k, {
+        rootLng: cdo.lng, rootLat: cdo.lat,
+        ctoLng:  cto.lng, ctoLat:  cto.lat,
+        nome:    `${cdo.id} → ${cto.cto_id}`,
+      })
+      usedKeys.add(k)
+    }
+    if (targetMap.size === 0) continue
+
+    const { prev, dist } = _fullDijkstra(graph, cdoKey)
+    routes.push(..._sptPolylines(cdoKey, targetMap, prev, dist, cdo.id, routes.length, graph))
+  }
+
+  return routes
+}
+
+// =============================================================================
+// ÁRVORE DE CABO — Modo Só CTOs (centróide → todas as CTOs)
+// =============================================================================
+
+/**
+ * Árvore de cabo de um ponto raiz até todas as CTOs via SPT.
+ */
+export function planCableTree(root, ctos, streets) {
+  if (!ctos?.length) return []
+
+  const rootPt = root ?? {
+    lat: ctos.reduce((s, c) => s + c.lat, 0) / ctos.length,
+    lng: ctos.reduce((s, c) => s + c.lng, 0) / ctos.length,
+    id:  'centroide',
+  }
+
+  if (!streets?.length) return planOptimalRoutes(ctos, [], {})
+
+  const graph   = buildStreetGraph(streets)
+  if (!graph.size) return planOptimalRoutes(ctos, [], {})
+
+  // Root = nó real mais próximo do centróide — nunca um nó virtual fora de rua
+  const rootKey = _snapToGraph(graph, rootPt.lng, rootPt.lat)
+  if (!rootKey) return planOptimalRoutes(ctos, [], {})
+
+  const targetMap = new Map()
+  const usedKeys  = new Set([rootKey])
+  for (const cto of ctos) {
+    const k = _snapToGraph(graph, cto.lng, cto.lat, usedKeys)
+    if (!k) continue
+    targetMap.set(k, {
+      rootLng: rootPt.lng, rootLat: rootPt.lat,
+      ctoLng:  cto.lng,   ctoLat:  cto.lat,
+      nome:    `Cabo → ${cto.cto_id}`,
+    })
+    usedKeys.add(k)
+  }
+  if (targetMap.size === 0) return []
+
+  const { prev, dist } = _fullDijkstra(graph, rootKey)
+  return _sptPolylines(rootKey, targetMap, prev, dist, rootPt.id ?? 'Rede', 0, graph)
+}
+

@@ -36,6 +36,7 @@ import { defaults as defaultControls } from 'ol/control/defaults'
 import { fromLonLat } from 'ol/proj'
 import XYZ      from 'ol/source/XYZ'
 import Draw     from 'ol/interaction/Draw'
+import DragBox  from 'ol/interaction/DragBox'
 import Polygon  from 'ol/geom/Polygon'
 
 // ─── Singleton do mapa ──────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ function _ctoColor(pct = 0) {
 
 /** Cor de rota por tipo */
 const _rotaColor = { BACKBONE: '#6366f1', RAMAL: '#1e293b', DROP: '#22c55e' }
-const _rotaWidth = { BACKBONE: 10, RAMAL: 6, DROP: 4 }
+const _rotaWidth = { BACKBONE: 4, RAMAL: 4, DROP: 3 }
 
 /**
  * Estilo de nó (CTO) — chamado como função para suportar animação.
@@ -274,7 +275,9 @@ function _linkStyleFn(feature) {
   const tipo  = feature.get('tipo') ?? ''
   const color = _rotaColor[tipo]  ?? '#94a3b8'
   const width = _rotaWidth[tipo]  ?? 2
-  const dash  = tipo === 'DROP' ? [6, 4] : undefined
+  const dash  = tipo === 'BACKBONE' ? [12, 5]
+              : tipo === 'DROP'     ? [6, 4]
+              : undefined
 
   return new Style({
     stroke: new Stroke({ color, width, lineDash: dash }),
@@ -287,17 +290,17 @@ function _linkStyleFn(feature) {
 function _autoRouteStyle(feature) {
   const tipo = feature.get('tipo')
 
-  // Backbone OLT→CDO — laranja espesso sólido
+  // Backbone OLT→CDO — laranja tracejado
   if (tipo === 'BACKBONE') {
     return new Style({
-      stroke: new Stroke({ color: '#D4622B', width: 4 }),
+      stroke: new Stroke({ color: '#D4622B', width: 3, lineDash: [12, 5] }),
       zIndex: 22,
     })
   }
-  // Distribuição CDO→CTO — roxo médio tracejado
-  if (tipo === 'DISTRIBUICAO') {
+  // Distribuição / ramal CDO→CTO — escuro sólido (igual ao saved style)
+  if (tipo === 'DISTRIBUICAO' || tipo === 'RAMAL') {
     return new Style({
-      stroke: new Stroke({ color: '#c084fc', width: 2.5, lineDash: [8, 4] }),
+      stroke: new Stroke({ color: '#1e293b', width: 3 }),
       zIndex: 21,
     })
   }
@@ -964,27 +967,42 @@ export function clearPreview() {
 }
 
 /**
- * Ativa o modo de desenho de polígono no mapa.
- * @param {function} onComplete — chamada com Array<[lng,lat]> ao fechar o polígono
+ * Ativa o modo de seleção de área por arrastar (drag-box → retângulo).
+ * O usuário pressiona e arrasta para definir a área; ao soltar, onComplete é chamado.
+ * @param {function} onComplete — chamada com Array<[lng,lat]> (4 vértices do retângulo)
  */
 export function enablePolygonDraw(onComplete) {
   if (!_map) return
   disablePolygonDraw()
 
-  const tmpSource = new VectorSource({ wrapX: false })
-  _drawInter = new Draw({
-    source: tmpSource,
-    type:   'Polygon',
-    style:  _drawStyle(),
+  _drawInter = new DragBox({
+    // sem condição de tecla — qualquer drag ativa
+    condition: () => true,
+    className: 'ol-dragbox-varinha',
   })
 
-  _drawInter.on('drawend', (e) => {
-    // Obter coordenadas e converter EPSG:3857 → WGS84
-    const ring   = e.feature.getGeometry().getCoordinates()[0]
-    const lngLats = ring.map(c => _toLonLat(c))
-    // Drop last point (OL fecha o anel duplicando o primeiro)
-    const open = lngLats.slice(0, -1)
-    if (typeof onComplete === 'function') onComplete(open)
+  _drawInter.on('boxend', () => {
+    const extent = _drawInter.getGeometry().getExtent()  // [minX, minY, maxX, maxY] 3857
+    // Converter os 4 cantos para WGS84 [lng, lat]
+    const [minX, minY, maxX, maxY] = extent
+    const corners = [
+      _toLonLat([minX, minY]),
+      _toLonLat([maxX, minY]),
+      _toLonLat([maxX, maxY]),
+      _toLonLat([minX, maxY]),
+    ]
+
+    // Exibir retângulo no polyLayer
+    if (_polySource) {
+      _polySource.clear()
+      const ring   = [...corners, corners[0]].map(([lng, lat]) => fromLonLat([lng, lat]))
+      const geom   = new Polygon([ring])
+      const feat   = new Feature({ geometry: geom })
+      feat.setStyle(_polygonStyle)
+      _polySource.addFeature(feat)
+    }
+
+    if (typeof onComplete === 'function') onComplete(corners)
   })
 
   _map.addInteraction(_drawInter)

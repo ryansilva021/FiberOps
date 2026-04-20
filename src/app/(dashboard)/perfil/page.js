@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
-import { getMinhasOS } from '@/actions/service-orders'
 import { useLanguage } from '@/contexts/LanguageContext'
 
 const AVATAR_COLORS = [
@@ -15,160 +14,6 @@ const AVATAR_COLORS = [
 function getAvatarColor(str = '') {
   const idx = (str.charCodeAt(0) + str.charCodeAt(1 % str.length)) % AVATAR_COLORS.length
   return AVATAR_COLORS[idx] ?? AVATAR_COLORS[0]
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const STATUS_BG_COLOR = {
-  aberta:       { bg: '#dbeafe', color: '#1d4ed8' },
-  agendada:     { bg: '#ede9fe', color: '#6d28d9' },
-  em_andamento: { bg: '#fef9c3', color: '#92400e' },
-  concluida:    { bg: '#dcfce7', color: '#15803d' },
-  cancelada:    { bg: '#fee2e2', color: '#b91c1c' },
-}
-const PRIO_COLOR = { urgente: '#ef4444', alta: '#f59e0b', normal: '#94a3b8', baixa: '#6b7280' }
-
-function MinhasOS({ S }) {
-  const { t } = useLanguage()
-  const FILTROS = [
-    { key: 'todas',      label: t('filter.all') },
-    { key: 'hoje',       label: t('filter.today') },
-    { key: 'atrasadas',  label: t('filter.overdue') },
-    { key: 'finalizadas',label: t('filter.done') },
-  ]
-
-  const [filtro, setFiltro]   = useState('todas')
-  const [items, setItems]     = useState([])
-  const [loading, setLoading] = useState(true)
-  const [erro, setErro]       = useState(null)
-
-  const carregar = useCallback(async (f) => {
-    setLoading(true)
-    setErro(null)
-    try {
-      const data = await getMinhasOS({ filtro: f })
-      setItems(data)
-    } catch (e) {
-      setErro(e.message ?? t('common.error'))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { carregar(filtro) }, [filtro, carregar])
-
-  function fmt(iso) {
-    if (!iso) return '—'
-    return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-  }
-
-  function isAtrasada(item) {
-    if (!item.data_agendamento) return false
-    if (['concluida', 'cancelada'].includes(item.status)) return false
-    return new Date(item.data_agendamento) < new Date()
-  }
-
-  return (
-    <div style={S.card}>
-      {/* Cabeçalho */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-        <p style={{ ...S.title, margin: 0 }}>{t('perfil.section.my_os')}</p>
-        <Link href="/admin/os" style={{
-          fontSize: 12, color: '#ea580c', textDecoration: 'none',
-          padding: '4px 10px', borderRadius: 6,
-          background: '#ffedd5', border: '1px solid #f4b07a',
-        }}>
-          {t('perfil.see_all')}
-        </Link>
-      </div>
-
-      {/* Filtros rápidos */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {FILTROS.map(f => (
-          <button key={f.key} onClick={() => setFiltro(f.key)} style={{
-            padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', transition: 'all 0.15s',
-            background: filtro === f.key ? '#ea580c' : 'var(--card-bg-active)',
-            color:      filtro === f.key ? '#fff'    : 'var(--text-muted)',
-            border:     filtro === f.key ? '1px solid #ea580c' : '1px solid var(--border-color)',
-          }}>
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Conteúdo */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-          {t('common.loading')}
-        </div>
-      ) : erro ? (
-        <div style={{ textAlign: 'center', padding: '20px 0', color: '#f85149', fontSize: 13 }}>{erro}</div>
-      ) : items.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-          {t('common.no_os')}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.map(os => {
-            const stColor = STATUS_BG_COLOR[os.status] ?? { bg: '#f1f5f9', color: '#475569' }
-            const atrs = isAtrasada(os)
-            return (
-              <Link key={os._id} href={`/admin/os/${os.os_id}`} style={{ textDecoration: 'none' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 12px', borderRadius: 10,
-                  background: 'var(--card-bg-active)',
-                  border: `1px solid ${atrs ? 'rgba(239,68,68,0.35)' : 'var(--border-color)'}`,
-                  transition: 'opacity 0.15s',
-                }}>
-                  {/* Prioridade dot */}
-                  <span style={{
-                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                    background: PRIO_COLOR[os.prioridade] ?? '#94a3b8',
-                  }} />
-
-                  {/* Info principal */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
-                        #{os.os_id}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {t(`tipo.${os.tipo}`) ?? os.tipo}
-                      </span>
-                      {atrs && (
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: '#fee2e2', borderRadius: 4, padding: '1px 5px' }}>
-                          {t('common.overdue')}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {os.cliente_nome}
-                      {os.tecnico_nome ? ` · ${t('common.tech_abbr')} ${os.tecnico_nome}` : ''}
-                    </div>
-                  </div>
-
-                  {/* Direita: status + data */}
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
-                      background: stColor.bg, color: stColor.color, display: 'block', marginBottom: 3,
-                    }}>
-                      {t(`status.${os.status}`) || os.status}
-                    </span>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                      {fmt(os.data_abertura)}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
 }
 
 export default function PerfilPage() {
@@ -373,11 +218,6 @@ export default function PerfilPage() {
             </button>
           </div>
         </div>
-
-        {/* Minhas Ordens de Serviço — admin, recepcao, noc */}
-        {['admin', 'recepcao', 'noc'].includes(user.role) && (
-          <MinhasOS S={S} />
-        )}
 
         {/* Assinatura — visível apenas para admin */}
         {(user.role === 'admin') && (

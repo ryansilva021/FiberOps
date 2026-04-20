@@ -6,6 +6,7 @@ import { getCaixas }  from '@/actions/caixas'
 import { getOLTs }    from '@/actions/olts'
 import DiagramasClient from '@/components/admin/DiagramasClient'
 import PageHeading from '@/components/shared/PageHeading'
+import TopologiaHealthPanel from '@/components/admin/TopologiaHealthPanel'
 
 export const metadata = { title: 'Topologia | FiberOps' }
 
@@ -35,6 +36,27 @@ export default async function TopologiaPage({ searchParams }) {
     erroCarregamento = e.message
   }
 
+  const ctosOrfas      = ctos.filter(c => !c.cdo_id).length
+  const cdosOrfos      = caixas.filter(c => !c.olt_id && !c.cdo_pai_id).length
+  const capacidadeTotal = ctos.reduce((a, c) => a + (c.capacidade || 0), 0)
+  const clientesAtivos  = ctos.reduce((a, c) => a + (c.ocupacao || 0), 0)
+  const ponTotal        = olts.reduce((a, o) => a + (o.capacidade || 0), 0)
+  const ponUsadas       = caixas.filter(c => c.olt_id).length
+  const pctPonUsado     = ponTotal > 0 ? Math.round((ponUsadas / ponTotal) * 100) : 0
+
+  const stats = {
+    totalOlts: olts.length,
+    totalCdos: caixas.length,
+    totalCtos: ctos.length,
+    ctosOrfas,
+    cdosOrfos,
+    capacidadeTotal,
+    clientesAtivos,
+    pctPonUsado,
+    ponUsadas,
+    ponTotal,
+  }
+
   return (
     <div className="lg:p-6 p-4">
       <div className="hidden lg:flex items-center justify-between mb-6">
@@ -50,6 +72,8 @@ export default async function TopologiaPage({ searchParams }) {
           Erro ao carregar dados: {erroCarregamento}
         </div>
       )}
+
+      <TopologiaHealthPanel stats={stats} />
 
       <DiagramasClient
         ctos={ctos}

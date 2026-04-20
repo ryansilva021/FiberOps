@@ -4,8 +4,10 @@
  * Calcula posições de CTOs.
  *
  * Modo principal: planCTOsAlongStreets
- *   Caminha ao longo das geometrias reais de ruas (OSM) e posiciona
- *   uma CTO a cada `spacingM` metros, priorizando esquinas.
+ *   1. Detecta intersecções reais (nós OSM compartilhados por 2+ vias)
+ *   2. Coloca CTOs nas intersecções prioritariamente
+ *   3. Completa com posições mid-block ao longo de cada rua
+ *   4. Faz snap final de cada CTO ao nó de rua mais próximo (≤ 40m)
  *
  * Modo fallback: planCTOs (grade uniforme)
  *   Usado quando não há dados de ruas disponíveis.
@@ -18,118 +20,151 @@ import { pointInPolygon, getBBox } from './routeGenerator'
 // ===========================================================================
 
 /**
- * Posiciona CTOs ao longo das ruas fornecidas.
- *
- * Algoritmo:
- *   1. Constrói um mapa de nós OSM → quantas ruas passam por ele (intersecções)
- *   2. Caminha cada rua; a cada `spacingM` metros coloca uma CTO
- *   3. Prioriza esquinas (nós compartilhados por 2+ vias)
- *   4. Ignora posições fora do polígono ou muito próximas de CTOs já colocadas
- *
- * @param {Array<[number,number]>} polygon   — polígono de área [lng, lat]
+ * @param {Array<[number,number]>} polygon
  * @param {Array}                  streets   — retorno de fetchStreetsInPolygon
  * @param {object}                 [opts]
- * @param {number}  [opts.spacingM=120]  — distância mínima entre CTOs (metros)
- * @param {number}  [opts.capacidade=16] — portas por CTO
- * @param {string}  [opts.prefix='CTO']  — prefixo do ID
- * @returns {Array<{cto_id, nome, lat, lng, capacidade, status, rua}>}
+ * @param {number}  [opts.spacingM=120]
+ * @param {number}  [opts.capacidade=16]
+ * @param {string}  [opts.prefix='CTO']
  */
 export function planCTOsAlongStreets(polygon, streets, opts = {}) {
   const { spacingM = 120, capacidade = 16, prefix = 'CTO' } = opts
 
   if (!streets?.length) return []
 
-  // Mínima distância em graus para o filtro "muito perto"
-  // 0.7 × spacing para permitir pequena variação nas esquinas
-  const minDistDeg = (spacingM * 0.7) / 111000
+  const minDistM = spacingM * 0.7
 
-  const ctos   = []
-  const placed = []   // [[lng, lat]] das CTOs já colocadas
-  let   idx    = 1
-
-  // ── 1. Mapa de intersecções: nó → número de ruas que passam por ele ───────
-  // Nó = coordenada arredondada para 5 casas decimais (~1m)
+  // ── 1. Coletar todos os nós de todas as ruas ──────────────────────────────
+  // nodeCount: chave → { coord, count }  onde chave é grade de ~1m
   const nodeCount = new Map()
+  const allNodes  = []   // todos os nós para snap posterior
+
   for (const street of streets) {
-    for (let i = 0; i < street.coordinates.length; i++) {
-      const key = _nodeKey(street.coordinates[i])
-      nodeCount.set(key, (nodeCount.get(key) ?? 0) + 1)
+    for (const coord of street.coordinates) {
+      const key = _nodeKey(coord)
+      if (nodeCount.has(key)) {
+        nodeCount.get(key).count++
+      } else {
+        const entry = { coord, count: 1 }
+        nodeCount.set(key, entry)
+        allNodes.push(entry)
+      }
     }
   }
 
-  // ── 2. Primeiro passe: colocar CTOs nas intersecções ─────────────────────
-  for (const [key, count] of nodeCount.entries()) {
-    if (count < 2) continue  // não é intersecção
-    const [lng, lat] = key.split(',').map(Number)
+  // Índice espacial leve para snap rápido (grid de células de ~50m)
+  const snapGrid = _buildSnapGrid(allNodes)
+
+  const ctos   = []
+  const placed = []  // [lng, lat] das CTOs colocadas
+  let   idx    = 1
+
+  // ── 2. Primeiro passe: intersecções ──────────────────────────────────────
+  for (const { coord, count } of nodeCount.values()) {
+    if (count < 2) continue
+    const [lng, lat] = coord
     if (!pointInPolygon([lng, lat], polygon)) continue
-    if (_tooClose(lng, lat, placed, minDistDeg)) continue
+    if (_tooClose(lng, lat, placed, minDistM)) continue
     ctos.push(_makeCTO(prefix, idx++, lat, lng, capacidade, null))
     placed.push([lng, lat])
   }
 
-  // ── 3. Segundo passe: colocar CTOs ao longo das ruas (mid-block) ─────────
+  // ── 3. Segundo passe: posições mid-block ──────────────────────────────────
   for (const street of streets) {
     const pts = street.coordinates
     if (pts.length < 2) continue
 
-    // distância acumulada desde a última CTO posicionada nesta rua
-    // Começa em metade do espaçamento para distribuição uniforme
-    let distFromLast = spacingM / 2
+    // Distância acumulada desde a última CTO colocada
+    let nearestDist = spacingM / 2
+    for (const [plng, plat] of placed) {
+      const d = _segLenM(pts[0][0], pts[0][1], plng, plat)
+      if (d < nearestDist) nearestDist = d
+    }
+    let distFromLast = nearestDist
 
     for (let i = 1; i < pts.length; i++) {
       const [lng1, lat1] = pts[i - 1]
       const [lng2, lat2] = pts[i]
-
       const segLen = _segLenM(lng1, lat1, lng2, lat2)
       if (segLen < 0.1) continue
 
       let consumed = 0
-
-      // Percorre o segmento colocando CTOs a cada `spacingM`
       while (consumed + (spacingM - distFromLast) <= segLen + 0.01) {
         consumed += spacingM - distFromLast
         const t   = Math.min(consumed / segLen, 1)
         const lng = lng1 + (lng2 - lng1) * t
         const lat = lat1 + (lat2 - lat1) * t
 
-        if (pointInPolygon([lng, lat], polygon) && !_tooClose(lng, lat, placed, minDistDeg)) {
+        if (pointInPolygon([lng, lat], polygon) && !_tooClose(lng, lat, placed, minDistM)) {
           ctos.push(_makeCTO(prefix, idx++, lat, lng, capacidade, street.name))
           placed.push([lng, lat])
         }
         distFromLast = 0
       }
-
-      // Distância restante do segmento após a última CTO colocada
       distFromLast += segLen - consumed
     }
   }
 
-  // Reordena em snake scan para numeração sequencial geográfica
-  return snakeOrderCTOs(ctos, prefix, capacidade)
+  // ── 3.5. Cobertura de ruas curtas: ao menos uma CTO por rua ─────────────
+  // Ruas menores que spacingM nunca acionam o while acima; se nenhuma CTO já
+  // cobre o trecho, insere uma no ponto médio da rua.
+  for (const street of streets) {
+    const pts = street.coordinates
+    if (pts.length < 2) continue
+
+    let totalLen = 0
+    for (let i = 1; i < pts.length; i++) {
+      totalLen += _segLenM(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1])
+    }
+    if (totalLen < 5) continue  // segmento degenerado
+
+    // Ponto médio ao longo da polilinha
+    const midDist = totalLen / 2
+    let acc = 0
+    let mid = pts[0]
+    for (let i = 1; i < pts.length; i++) {
+      const seg = _segLenM(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1])
+      if (acc + seg >= midDist) {
+        const t = seg > 0 ? (midDist - acc) / seg : 0
+        mid = [pts[i-1][0] + (pts[i][0] - pts[i-1][0]) * t,
+               pts[i-1][1] + (pts[i][1] - pts[i-1][1]) * t]
+        break
+      }
+      acc += seg
+    }
+
+    const [mlng, mlat] = mid
+    if (!pointInPolygon([mlng, mlat], polygon)) continue
+    if (!_tooClose(mlng, mlat, placed, spacingM * 0.6)) {
+      ctos.push(_makeCTO(prefix, idx++, mlat, mlng, capacidade, street.name))
+      placed.push([mlng, mlat])
+    }
+  }
+
+  // ── 4. Snap final: mover cada CTO para o nó de rua mais próximo (≤ 40m) ──
+  const snapRadiusM = 40
+  for (const cto of ctos) {
+    const nearest = _nearestNode(cto.lng, cto.lat, snapGrid, snapRadiusM)
+    if (nearest) {
+      cto.lat = parseFloat(nearest[1].toFixed(7))
+      cto.lng = parseFloat(nearest[0].toFixed(7))
+    }
+  }
+
+  // Remove duplicatas que o snap pode ter criado
+  const dedupedCtos = _deduplicateCTOs(ctos, minDistM * 0.8)
+
+  return snakeOrderCTOs(dedupedCtos, prefix, capacidade)
 }
 
 // ===========================================================================
-// ORDENAÇÃO ESPACIAL — snake scan (numeração sequencial geográfica)
+// ORDENAÇÃO ESPACIAL — snake scan
 // ===========================================================================
 
-/**
- * Reordena e renumera as CTOs em varredura "snake" (zigue-zague por linhas
- * de latitude), garantindo que números consecutivos fiquem próximos no mapa.
- *
- * Lógica:
- *   - Divide o espaço em faixas horizontais de ~150 m
- *   - Dentro de cada faixa: ordena de W→E nas faixas pares, E→W nas ímpares
- *   - Reaplica o prefix e renumera 1..N em ordem
- *
- * @param {Array} ctos
- * @param {string} prefix
- * @param {number} capacidade
- * @returns {Array}
- */
 export function snakeOrderCTOs(ctos, prefix, capacidade) {
   if (ctos.length === 0) return []
 
-  const BAND_DEG = 150 / 111000   // ~150 m em graus
+  const BAND_DEG = 150 / 111000
 
   const maxLat = Math.max(...ctos.map(c => c.lat))
 
@@ -137,7 +172,6 @@ export function snakeOrderCTOs(ctos, prefix, capacidade) {
     const rowA = Math.floor((maxLat - a.lat) / BAND_DEG)
     const rowB = Math.floor((maxLat - b.lat) / BAND_DEG)
     if (rowA !== rowB) return rowA - rowB
-    // Alterna direção em faixas pares/ímpares
     return rowA % 2 === 0 ? a.lng - b.lng : b.lng - a.lng
   })
 
@@ -153,14 +187,6 @@ export function snakeOrderCTOs(ctos, prefix, capacidade) {
 // MODO FALLBACK — grade uniforme (sem dados de ruas)
 // ===========================================================================
 
-/**
- * Gera CTOs distribuídas em grade dentro do polígono.
- * Usado como fallback quando não há dados OSM.
- *
- * @param {Array<[number,number]>} polygon
- * @param {object} [opts]
- * @returns {Array}
- */
 export function planCTOs(polygon, opts = {}) {
   const { capacidade = 16, prefix = 'CTO' } = opts
 
@@ -187,6 +213,7 @@ export function planCTOs(polygon, opts = {}) {
 // HELPERS INTERNOS
 // ===========================================================================
 
+/** Chave de grade ~1m para detecção de nós compartilhados */
 function _nodeKey([lng, lat]) {
   return `${lng.toFixed(5)},${lat.toFixed(5)}`
 }
@@ -197,10 +224,9 @@ function _segLenM(lng1, lat1, lng2, lat2) {
   return Math.sqrt(dlat * dlat + dlng * dlng)
 }
 
-function _tooClose(lng, lat, placed, minDistDeg) {
+function _tooClose(lng, lat, placed, minDistM) {
   for (const [plng, plat] of placed) {
-    const dx = lng - plng, dy = lat - plat
-    if (Math.sqrt(dx * dx + dy * dy) < minDistDeg) return true
+    if (_segLenM(lng, lat, plng, plat) < minDistM) return true
   }
   return false
 }
@@ -208,13 +234,77 @@ function _tooClose(lng, lat, placed, minDistDeg) {
 function _makeCTO(prefix, idx, lat, lng, capacidade, rua) {
   const pad    = String(idx).padStart(2, '0')
   const cto_id = `${prefix}-${pad}`
+  const splitter_cto = capacidade <= 8 ? '1:8' : capacidade <= 16 ? '1:16' : '1:32'
   return {
     cto_id,
     nome: cto_id,
     lat:  parseFloat(lat.toFixed(7)),
     lng:  parseFloat(lng.toFixed(7)),
     capacidade,
+    splitter_cto,
     status: 'ativo',
     rua:  rua ?? null,
   }
+}
+
+/**
+ * Constrói índice espacial simples: divide o espaço em células de ~50m.
+ * Retorna uma Map: chave_celula → [entry, …]
+ */
+function _buildSnapGrid(allNodes) {
+  const CELL_DEG = 50 / 111000  // ~50m em graus
+  const grid = new Map()
+  for (const entry of allNodes) {
+    const [lng, lat] = entry.coord
+    const cx = Math.floor(lng / CELL_DEG)
+    const cy = Math.floor(lat / CELL_DEG)
+    const key = `${cx},${cy}`
+    if (!grid.has(key)) grid.set(key, [])
+    grid.get(key).push(entry)
+  }
+  return { grid, CELL_DEG }
+}
+
+/**
+ * Encontra o nó de rua mais próximo dentro de radiusM metros.
+ * Verifica as células vizinhas no grid.
+ */
+function _nearestNode(lng, lat, snapGrid, radiusM) {
+  const { grid, CELL_DEG } = snapGrid
+  const radiusDeg = radiusM / 111000
+  const cx0 = Math.floor(lng / CELL_DEG)
+  const cy0 = Math.floor(lat / CELL_DEG)
+  const span = Math.ceil(radiusDeg / CELL_DEG) + 1
+
+  let bestDist = radiusM
+  let bestCoord = null
+
+  for (let dx = -span; dx <= span; dx++) {
+    for (let dy = -span; dy <= span; dy++) {
+      const key = `${cx0 + dx},${cy0 + dy}`
+      const bucket = grid.get(key)
+      if (!bucket) continue
+      for (const { coord } of bucket) {
+        const d = _segLenM(lng, lat, coord[0], coord[1])
+        if (d < bestDist) {
+          bestDist  = d
+          bestCoord = coord
+        }
+      }
+    }
+  }
+  return bestCoord
+}
+
+/** Remove CTOs que o snap aproximou demais umas das outras */
+function _deduplicateCTOs(ctos, minDistM) {
+  const kept = []
+  const keptCoords = []
+  for (const cto of ctos) {
+    if (!_tooClose(cto.lng, cto.lat, keptCoords, minDistM)) {
+      kept.push(cto)
+      keptCoords.push([cto.lng, cto.lat])
+    }
+  }
+  return kept
 }

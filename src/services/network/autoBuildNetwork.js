@@ -23,7 +23,7 @@
 import { fetchStreetsInPolygon }                                from './streetFetcher'
 import { planCTOsAlongStreets, planCTOs }                      from './ctoPlanner'
 import { generateRoutes }                                      from './routeGenerator'
-import { planOptimalRoutes, planBackboneRoutes, planDistributionRoutesByCDO } from './routePlanner'
+import { planOptimalRoutes, planBackboneRoutes, planDistributionRoutesByCDO, planCableTree, planTreeRoutesByCDO } from './routePlanner'
 import { planCDOsForCTOs }                                     from './cdoPlanner'
 
 // =============================================================================
@@ -80,17 +80,17 @@ export async function autoBuildNetwork(polygon, opts = {}) {
     source = 'grid'
   }
 
+  if (streets.length > 0) {
+    source = 'osm'
+  }
+
   // ── 2. Rotas de infraestrutura (vias OSM ou grade geométrica) ─────────────
   let infraRoutes
 
   if (streets.length > 0) {
     onProgress(`${streets.length} ruas encontradas — posicionando CTOs…`)
-    infraRoutes = streets.map((s, i) => ({
-      rota_id:     `OSM-${s.osm_id ?? i}`,
-      nome:        s.name ?? `Rua ${i + 1}`,
-      tipo:        s.tipo,
-      coordinates: s.coordinates,
-    }))
+    // Ruas OSM são usadas apenas para roteamento de cabo — não exibidas como rotas
+    infraRoutes = []
   } else {
     onProgress('Sem ruas encontradas — usando grade automática…')
     infraRoutes = generateRoutes(polygon, opts)
@@ -125,12 +125,8 @@ export async function autoBuildNetwork(polygon, opts = {}) {
     ctos = layerResult.ctos   // CTOs agora têm cdo_id atribuído
 
     if (genDistRoutes && cdos.length >= 1) {
-      onProgress('Calculando rotas de distribuição CDO→CTO…')
-      try {
-        distRoutes = planDistributionRoutesByCDO(cdos, ctos, streets)
-      } catch (err) {
-        console.warn('[autoBuildNetwork] Distribuição falhou:', err.message)
-      }
+      onProgress('Calculando árvore de distribuição CDO→CTO…')
+      distRoutes = planTreeRoutesByCDO(cdos, ctos, streets)
 
       // Backbone OLT→CDO (somente se coordenadas da OLT fornecidas)
       if (oltLat != null && oltLng != null) {
@@ -147,14 +143,17 @@ export async function autoBuildNetwork(polygon, opts = {}) {
       }
     }
 
-  // ── 4b. MODO PLANO: MST CTO↔CTO ──────────────────────────────────────────
+  // ── 4b. MODO PLANO: árvore de cabo a partir do centróide ────────────────
   } else if (genDistRoutes && ctos.length >= 2) {
-    onProgress('Calculando rotas de distribuição…')
-    try {
-      distRoutes = planOptimalRoutes(ctos, streets.length > 0 ? streets : [], {})
-    } catch (err) {
-      console.warn('[autoBuildNetwork] Falha nas rotas de distribuição:', err.message)
+    onProgress('Calculando árvore de cabo…')
+    const centroid = {
+      lat: ctos.reduce((s, c) => s + c.lat, 0) / ctos.length,
+      lng: ctos.reduce((s, c) => s + c.lng, 0) / ctos.length,
+      id:  'centroide',
     }
+    distRoutes = streets.length > 0
+      ? planCableTree(centroid, ctos, streets)
+      : planOptimalRoutes(ctos, [], {})
   }
 
   // ── 5. Métricas ───────────────────────────────────────────────────────────
@@ -171,7 +170,7 @@ export async function autoBuildNetwork(polygon, opts = {}) {
     polygon,
     source,
     metrics: {
-      totalRoutes:   infraRoutes.length,
+      totalRoutes:   distRoutes.length + infraRoutes.length,
       distRoutes:    distRoutes.length,
       backboneRoutes: backboneRoutes.length,
       totalCTOs:     ctos.length,

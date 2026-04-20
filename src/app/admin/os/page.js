@@ -3,9 +3,11 @@ import { redirect } from 'next/navigation'
 import { listOS, getOSStats } from '@/actions/service-orders'
 import { getOLTs } from '@/actions/olts'
 import { getUsuarios } from '@/actions/usuarios'
+import { getSystemConfig } from '@/actions/config'
 import ServiceOrdersClient from '@/components/admin/ServiceOrdersClient'
 import PageHeading from '@/components/shared/PageHeading'
 import OsBadge from '@/components/shared/OsBadge'
+import OsSettingsPanel from '@/components/admin/os/OsSettingsPanel'
 
 export const metadata = { title: 'Ordens de Serviço | FiberOps' }
 
@@ -23,19 +25,23 @@ export default async function OSPage() {
   let erro = null
 
   const isTecnico = role === 'tecnico'
+  const canConfig = ['superadmin', 'admin'].includes(role)
 
+  let slaHoras = 48
   try {
     const promises = [
       listOS({ limit: 100 }),
       getOSStats(),
       getOLTs(session?.user?.projeto_id),
       isTecnico ? Promise.resolve([]) : getUsuarios(session?.user?.projeto_id),
+      canConfig ? getSystemConfig() : Promise.resolve(null),
     ]
-    const [data, s, o, u] = await Promise.all(promises)
+    const [data, s, o, u, cfg] = await Promise.all(promises)
     initialData = data
     stats = s
     olts = o
     usuarios = u.filter(u => u.is_active !== false)
+    if (cfg) slaHoras = cfg.os_prazo_horas ?? 48
   } catch (e) {
     erro = e.message
   }
@@ -48,6 +54,11 @@ export default async function OSPage() {
           subtitle={`${session?.user?.projeto_nome ?? session?.user?.projeto_id ?? ''}`}
         />
         <OsBadge />
+        {canConfig && (
+          <div style={{ marginLeft: 'auto' }}>
+            <OsSettingsPanel initialSlaHoras={slaHoras} />
+          </div>
+        )}
       </div>
 
       {erro && (

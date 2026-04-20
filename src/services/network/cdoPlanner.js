@@ -73,16 +73,18 @@ export function planCDOsForCTOs(ctos, streets, opts = {}) {
   }
 
   // ── 3. Montar objetos CDO ─────────────────────────────────────────────────
+  const splitter_cdo = ctosPerCdo <= 4 ? '1:4' : ctosPerCdo <= 8 ? '1:8' : ctosPerCdo <= 16 ? '1:16' : '1:32'
   const cdos = centers.map((pos, i) => {
     const pad = String(i + 1).padStart(2, '0')
     const id  = `${cdoPrefix}-${pad}`
     return {
       id,
-      nome:   id,
-      lat:    parseFloat(pos.lat.toFixed(7)),
-      lng:    parseFloat(pos.lng.toFixed(7)),
-      tipo:   'CDO',
-      olt_id: oltId ?? null,
+      nome:        id,
+      lat:         parseFloat(pos.lat.toFixed(7)),
+      lng:         parseFloat(pos.lng.toFixed(7)),
+      tipo:        'CDO',
+      olt_id:      oltId ?? null,
+      splitter_cdo,
     }
   })
 
@@ -124,7 +126,7 @@ export function planCDOsForCTOs(ctos, streets, opts = {}) {
  * @param {number} [maxIter]  — iterações máximas
  * @returns {Array<{lat, lng}>}
  */
-function _kMeansOnStreets(ctos, candidates, k, maxIter = 6) {
+function _kMeansOnStreets(ctos, candidates, k, maxIter = 20) {
   if (k <= 0 || !ctos.length || !candidates.length) return []
 
   const kEff = Math.min(k, candidates.length)
@@ -219,7 +221,37 @@ function _kMeansOnStreets(ctos, candidates, k, maxIter = 6) {
     }
 
     currentCenters = newCenters
-    if (!changed) break   // convergiu
+    if (!changed) break
+  }
+
+  const MAX_CLUSTER = Math.ceil(ctos.length / kEff * 1.3)
+  const finalClusters = Array.from({ length: currentCenters.length }, () => [])
+  for (let j = 0; j < ctos.length; j++) {
+    let bestI = 0, bestD = Infinity
+    for (let i = 0; i < currentCenters.length; i++) {
+      const d = _distM(ctos[j].lat, ctos[j].lng, currentCenters[i].lat, currentCenters[i].lng)
+      if (d < bestD) { bestD = d; bestI = i }
+    }
+    finalClusters[bestI].push(j)
+  }
+  for (let i = 0; i < finalClusters.length; i++) {
+    while (finalClusters[i].length > MAX_CLUSTER) {
+      let targetI = -1, targetDist = Infinity
+      for (let t = 0; t < finalClusters.length; t++) {
+        if (t === i || finalClusters[t].length >= MAX_CLUSTER) continue
+        const d = _distM(currentCenters[i].lat, currentCenters[i].lng, currentCenters[t].lat, currentCenters[t].lng)
+        if (d < targetDist) { targetDist = d; targetI = t }
+      }
+      if (targetI < 0) break
+      let moveJ = -1, moveDist = Infinity
+      for (const j of finalClusters[i]) {
+        const d = _distM(ctos[j].lat, ctos[j].lng, currentCenters[targetI].lat, currentCenters[targetI].lng)
+        if (d < moveDist) { moveDist = d; moveJ = j }
+      }
+      if (moveJ < 0) break
+      finalClusters[i] = finalClusters[i].filter(x => x !== moveJ)
+      finalClusters[targetI].push(moveJ)
+    }
   }
 
   return currentCenters

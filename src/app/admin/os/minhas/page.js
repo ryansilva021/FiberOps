@@ -4,7 +4,7 @@ import { listOS } from '@/actions/service-orders'
 import MinhasOSClient from '@/components/admin/os/MinhasOSClient'
 import { OS_ADMIN_ROLES } from '@/lib/os-config'
 
-export const metadata = { title: 'Minhas OS · FiberOps' }
+export const metadata = { title: 'Ordens de Serviço · FiberOps' }
 
 export default async function MinhasOSPage() {
   const session = await auth()
@@ -32,7 +32,7 @@ export default async function MinhasOSPage() {
       initialItems={items}
       userRole={role}
       userId={username}
-      pageTitle="Todas as OS"
+      pageTitle="Ordens de Serviço"
       erro={erro}
     />
   )
