@@ -5,7 +5,7 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const TILE_URL =
-  'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+  'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'
 
 /**
  * Mini-mapa para selecionar uma coordenada clicando.

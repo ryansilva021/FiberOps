@@ -1,11 +1,11 @@
 /**
- * FiberOps Service Worker v2
+ * FiberOps Service Worker v3
  * - Push notifications (funciona com app minimizado / fechado)
+ * - Verifica se app está em foco antes de exibir push (evita duplicar com SSE in-app)
  * - Cache de shell para fallback offline
- * - Background sync para retry de notificações
  */
 
-const CACHE_NAME  = 'fiberops-shell-v2'
+const CACHE_NAME  = 'fiberops-shell-v3'
 const SHELL_URLS  = ['/', '/manifest.json', '/short-logo.svg', '/long-logo.svg']
 const APP_NAME    = 'FiberOps'
 
@@ -23,11 +23,9 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     Promise.all([
-      // Remove caches antigos
       caches.keys().then(keys =>
         Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
       ),
-      // Assume controle imediato de todas as abas
       clients.claim(),
     ])
   )
@@ -68,7 +66,27 @@ self.addEventListener('push', (e) => {
     ],
   }
 
-  e.waitUntil(self.registration.showNotification(title, options))
+  e.waitUntil(
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((wins) => {
+        // Se alguma aba do app está focada, o toast in-app (via SSE) já está visível.
+        // Exibir o push notification causaria duplicação — pula o sistema notification.
+        // Envia mensagem para a aba ativa tocar o som de notificação.
+        const focusedWin = wins.find(
+          w => w.url.includes(self.location.origin) && w.focused
+        )
+
+        if (focusedWin) {
+          // App em foco: sinaliza para tocar o som sem mostrar notificação do sistema
+          try { focusedWin.postMessage({ type: 'PUSH_RECEIVED', data }) } catch (_) {}
+          return
+        }
+
+        // App fechado ou em background: exibe notificação do sistema
+        return self.registration.showNotification(title, options)
+      })
+  )
 })
 
 // ── Clique na notificação ─────────────────────────────────────────────────────
@@ -80,7 +98,6 @@ self.addEventListener('notificationclick', (e) => {
 
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
-      // Foca aba já aberta do app e navega para a URL
       for (const w of wins) {
         if (w.url.includes(self.location.origin) && 'focus' in w) {
           w.focus()

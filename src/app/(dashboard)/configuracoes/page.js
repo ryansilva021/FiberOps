@@ -77,17 +77,20 @@ function SectionTitle({ children }) {
 function SettingRow({ label, description, children, last }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: 16, padding: '14px 0',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+      flexWrap: 'wrap',   // quebra linha em telas estreitas sem truncar conteúdo
+      gap: 12, padding: '14px 0',
       borderBottom: last ? 'none' : '1px solid var(--border-color)',
     }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--foreground)' }}>{label}</p>
+      <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--foreground)',
+          wordBreak: 'break-word', overflowWrap: 'break-word' }}>{label}</p>
         {description && (
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{description}</p>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)',
+            wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.5 }}>{description}</p>
         )}
       </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
+      <div style={{ flexShrink: 0, maxWidth: '100%' }}>{children}</div>
     </div>
   )
 }
@@ -344,27 +347,32 @@ export default function ConfiguracoesPage() {
               pushStatus === 'unsupported'
                 ? t('config.push_desc.unsupported')
                 : pushStatus === 'denied'
-                  ? t('config.push_desc.denied')
+                  ? null   // descrição customizada abaixo
                   : pushStatus === 'subscribed'
                     ? t('config.push_desc.subscribed')
                     : t('config.push_desc.default')
             }
-            last
+            last={pushStatus !== 'denied'}
           >
-            {pushStatus === 'unsupported' || pushStatus === 'denied' ? (
+            {pushStatus === 'unsupported' ? (
               <span style={{
                 fontSize: 12, color: 'var(--text-muted)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 8, padding: '6px 12px',
+                whiteSpace: 'nowrap',
               }}>
-                {pushStatus === 'denied' ? t('config.push_blocked') : '—'}
+                —
               </span>
             ) : pushStatus === 'loading' ? (
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>...</span>
+            ) : pushStatus === 'denied' ? (
+              // Permissão bloqueada — NÃO tenta pedir novamente (browser ignora)
+              // Exibe instrução direta para o usuário reativar manualmente
+              null
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                 {pushTestMsg && (
-                  <span style={{ fontSize: 12, color: pushTestMsg.startsWith('Erro') || pushTestMsg.startsWith('Error') ? '#f85149' : '#3fb950' }}>
+                  <span style={{ fontSize: 12, color: pushTestMsg.startsWith('Erro') || pushTestMsg.startsWith('Error') ? '#f85149' : '#3fb950', whiteSpace: 'nowrap' }}>
                     {pushTestMsg}
                   </span>
                 )}
@@ -376,7 +384,7 @@ export default function ConfiguracoesPage() {
                       padding: '7px 12px', borderRadius: 8, cursor: pushTesting ? 'not-allowed' : 'pointer',
                       fontSize: 13, border: '1px solid var(--border-color)',
                       background: 'var(--card-bg-active)', color: 'var(--text-muted)',
-                      opacity: pushTesting ? 0.6 : 1,
+                      opacity: pushTesting ? 0.6 : 1, whiteSpace: 'nowrap',
                     }}
                   >
                     {pushTesting ? '...' : t('config.push_test')}
@@ -386,7 +394,7 @@ export default function ConfiguracoesPage() {
                   onClick={pushStatus === 'subscribed' ? pushUnsubscribe : pushSubscribe}
                   style={{
                     padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
-                    fontSize: 13, fontWeight: 600,
+                    fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
                     border: `1px solid ${pushStatus === 'subscribed' ? 'var(--accent)' : 'var(--border-color)'}`,
                     background: pushStatus === 'subscribed' ? 'rgba(212,98,43,0.10)' : 'var(--card-bg-active)',
                     color: pushStatus === 'subscribed' ? 'var(--accent)' : 'var(--foreground)',
@@ -398,6 +406,44 @@ export default function ConfiguracoesPage() {
               </div>
             )}
           </SettingRow>
+
+          {/* Instrução de reativação — só aparece quando permissão está bloqueada */}
+          {pushStatus === 'denied' && (
+            <div style={{
+              margin: '4px 0 8px',
+              padding: '14px 16px',
+              borderRadius: 10,
+              background: 'rgba(248,81,73,0.07)',
+              border: '1px solid rgba(248,81,73,0.2)',
+            }}>
+              <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, color: '#f85149' }}>
+                🔕 Notificações bloqueadas pelo navegador
+              </p>
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6,
+                wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                O navegador bloqueou as notificações. Para reativar, siga os passos:
+              </p>
+              <ol style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12,
+                color: 'var(--text-muted)', lineHeight: 2.0 }}>
+                <li>Clique no ícone <strong>🔒</strong> na barra de endereço</li>
+                <li>Clique em <strong>Configurações do site</strong> ou <strong>Notificações</strong></li>
+                <li>Altere para <strong style={{ color: '#3fb950' }}>Permitir</strong></li>
+                <li>Recarregue a página e ative novamente aqui</li>
+              </ol>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600,
+                  border: '1px solid rgba(248,81,73,0.3)',
+                  background: 'rgba(248,81,73,0.10)',
+                  color: '#f85149',
+                }}
+              >
+                🔄 Recarregar página
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Fibras Ópticas ── */}

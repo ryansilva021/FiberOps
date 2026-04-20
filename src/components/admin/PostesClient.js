@@ -7,8 +7,8 @@ import { upsertPoste, deletePoste } from '@/actions/postes'
 const LocationPicker = dynamic(() => import('@/components/map/LocationPicker'), {
   ssr: false,
   loading: () => (
-    <div style={{ height: 220, backgroundColor: '#060d1a', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Carregando mapa...</span>
+    <div style={{ height: 220, backgroundColor: '#e8e8e8', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ color: '#888', fontSize: 13 }}>Carregando mapa...</span>
     </div>
   ),
 })
@@ -89,6 +89,7 @@ export default function PostesClient({ postesIniciais, projetoId, userRole, idIn
     setErro(null)
     setMostrarMapa(false)
     setModalAberto(true)
+    usarGPS()
   }
 
   function abrirEditar(poste) {

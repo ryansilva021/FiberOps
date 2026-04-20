@@ -94,11 +94,23 @@ export default function SidebarLayout({ session, children }) {
 
   const itensVisiveis = NAV_ITEMS.filter(item => isItemVisible(item, role))
 
-  // ── Registro do service worker (garante SW ativo para notificações nativas) ─
+  // ── Registro do service worker + listener para push recebido com app em foco ─
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {})
+    if (!('serviceWorker' in navigator)) return
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {})
+
+    // O SW envia PUSH_RECEIVED quando o app está em foco (para evitar notificação
+    // duplicada: o SW não exibe a notificação do sistema, mas sinaliza aqui para
+    // tocar o som — o toast in-app já está sendo exibido via SSE.
+    function onSwMessage(e) {
+      if (e.data?.type !== 'PUSH_RECEIVED') return
+      try {
+        const soundOn = localStorage.getItem('pref_notif_sound')
+        if (soundOn !== 'false') playNotifSound()
+      } catch (_) {}
     }
+    navigator.serviceWorker.addEventListener('message', onSwMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onSwMessage)
   }, [])
 
   // ── Online / Offline ─────────────────────────────────────────────────────
@@ -122,12 +134,10 @@ export default function SidebarLayout({ session, children }) {
       const soundOn = localStorage.getItem('pref_notif_sound')
       if (soundOn !== 'false') playNotifSound()
     } catch (_) {}
-    showNativeNotif({
-      title: 'Nova OS · FiberOps',
-      body:  `${TIPO_LABEL[event.tipo] ?? event.tipo ?? 'OS'} — ${event.cliente_nome ?? ''}`.trim(),
-      tag:   'fiberops-os',
-      url:   `/admin/os/${event.os_id}`,
-    })
+    // NÃO chama showNativeNotif aqui — o push do backend já entrega a notificação
+    // do sistema via SW. Chamar aqui causaria duplicação (push SW + reg.showNotification).
+    // Se o app está em foco, o toast in-app acima é suficiente.
+    // Se o app está em background/fechado, o SW push event cobre o caso.
   }, [])
 
   const removeToast = useCallback((id) => {
@@ -192,6 +202,56 @@ export default function SidebarLayout({ session, children }) {
   const removePontoToast = useCallback((id) => {
     setPontoToasts(prev => prev.filter(t => t.id !== id))
   }, [])
+
+  // ── Despertadores pessoais (ponto_alarms) — funciona em qualquer aba ────────
+  useEffect(() => {
+    if (!pontoAtivo) return
+    const ALARM_LABELS = { entrada: 'Entrada', almoco_inicio: 'Almoço início', almoco_fim: 'Almoço fim', saida: 'Saída' }
+
+    function checkPontoAlarms() {
+      let alarms
+      try { alarms = JSON.parse(localStorage.getItem('ponto_alarms') ?? 'null') }
+      catch (_) { return }
+      if (!alarms) return
+
+      const d        = new Date()
+      const today    = d.toISOString().split('T')[0]
+      const storeKey = `ponto_alarm_fired_${today}`
+      let fired
+      try { fired = new Set(JSON.parse(localStorage.getItem(storeKey) ?? '[]')) }
+      catch (_) { fired = new Set() }
+
+      const hhmm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+      let changed = false
+      for (const [key, cfg] of Object.entries(alarms)) {
+        if (!cfg?.enabled)   continue
+        if (cfg.time !== hhmm) continue
+        if (fired.has(key))  continue
+        fired.add(key)
+        changed = true
+        const label = ALARM_LABELS[key] ?? key
+        const id    = `alarm-${key}-${Math.random()}`
+        setPontoToasts(prev => [...prev.slice(-3), { id, msg: `⏰ Despertador: ${label} — hora de bater ponto!`, time: hhmm }])
+        showNativeNotif({
+          title: '⏰ Despertador FiberOps',
+          body:  `${label} — hora de bater ponto!`,
+          tag:   `fiberops-alarm-${key}`,
+          url:   '/ponto',
+        })
+        try {
+          const soundOn = localStorage.getItem('pref_notif_sound')
+          if (soundOn !== 'false') playNotifSound()
+        } catch (_) {}
+      }
+      if (changed) {
+        try { localStorage.setItem(storeKey, JSON.stringify([...fired])) } catch (_) {}
+      }
+    }
+
+    checkPontoAlarms()
+    const id = setInterval(checkPontoAlarms, 30_000)
+    return () => clearInterval(id)
+  }, [pontoAtivo])
 
   const sidebarStyle = {
     backgroundColor: "var(--sidebar-bg)",

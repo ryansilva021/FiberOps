@@ -1,20 +1,21 @@
 'use client'
 /**
  * nativeNotif.js
- * Exibe notificação nativa via Service Worker (funciona com app minimizado).
- * Fallback: new Notification() quando SW não está disponível.
+ * Exibe notificação nativa via Service Worker.
  *
- * Usa reg.showNotification() — único método que dispara em background.
+ * REGRA: se SW está registrado, usa EXCLUSIVAMENTE reg.showNotification().
+ * NUNCA faz fallback para new Notification() quando SW existe — isso causaria
+ * duplicação com o push do backend que também dispara via SW.
+ *
+ * Fallback para new Notification() SOMENTE quando SW genuinamente indisponível.
  */
 
 let _swReg = null
 
-/** Obtém o registro do SW, com cache em memória para evitar re-chamadas. */
 async function getSwReg() {
   if (_swReg) return _swReg
   if (!('serviceWorker' in navigator)) return null
   try {
-    // Aguarda até 3s pelo SW ativo — suficiente em qualquer dispositivo
     _swReg = await Promise.race([
       navigator.serviceWorker.ready,
       new Promise((_, rej) => setTimeout(() => rej(new Error('sw_timeout')), 3000)),
@@ -26,17 +27,14 @@ async function getSwReg() {
 }
 
 /**
- * Exibe uma notificação nativa.
+ * Exibe notificação nativa.
+ * Quando SW existe, NUNCA usa new Notification() como fallback.
+ *
  * @param {{ title: string, body: string, tag?: string, url?: string, icon?: string }} opts
  */
 export async function showNativeNotif({ title, body, tag, url, icon } = {}) {
   if (typeof window === 'undefined') return
   if (!('Notification' in window)) return
-
-  // Solicita permissão se ainda não foi decidida
-  if (Notification.permission === 'default') {
-    await Notification.requestPermission()
-  }
   if (Notification.permission !== 'granted') return
 
   const options = {
@@ -49,24 +47,22 @@ export async function showNativeNotif({ title, body, tag, url, icon } = {}) {
     data:     { url: url ?? '/' },
   }
 
-  // Preferência: SW → notificação funciona em background / minimizado
   const reg = await getSwReg()
+
   if (reg) {
-    try {
-      await reg.showNotification(title ?? 'FiberOps', options)
-      return
-    } catch (_) {}
+    // SW disponível: usa APENAS reg.showNotification().
+    // Mesmo se falhar, NÃO cai para new Notification() — evita notificação azul
+    // padrão do browser em paralelo com o push do backend.
+    try { await reg.showNotification(title ?? 'FiberOps', options) } catch (_) {}
+    return  // ← return incondicional quando SW existe
   }
 
-  // Fallback: apenas funciona com app em primeiro plano
-  try {
-    new Notification(title ?? 'FiberOps', options)
-  } catch (_) {}
+  // SW indisponível: fallback para Notification API (só funciona em foreground)
+  try { new Notification(title ?? 'FiberOps', options) } catch (_) {}
 }
 
 /**
- * Solicita permissão para notificações e registra o SW se necessário.
- * Chamar uma vez na inicialização do app (layout ou componente raiz).
+ * Solicita permissão de notificação.
  */
 export async function requestNotifPermission() {
   if (typeof window === 'undefined') return 'unavailable'
