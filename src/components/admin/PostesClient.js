@@ -67,8 +67,12 @@ const cardStyle = {
   border: '1px solid var(--border-color)',
 }
 
-export default function PostesClient({ postesIniciais, projetoId, userRole, idInicial }) {
+export default function PostesClient({ postesIniciais, projetoId, userRole, idInicial, busca = '' }) {
   const [postes, setPostes] = useState(postesIniciais)
+  const q = busca.trim().toLowerCase()
+  const postesVisiveis = q
+    ? postes.filter(p => [p.poste_id, p.nome, p.rua, p.bairro, p.tipo].some(v => String(v ?? '').toLowerCase().includes(q)))
+    : postes
   const [modalAberto, setModalAberto] = useState(false)
   const [posteEditando, setPosteEditando] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -222,11 +226,11 @@ export default function PostesClient({ postesIniciais, projetoId, userRole, idIn
               </tr>
             </thead>
             <tbody>
-              {postes.length === 0 && (
+              {postesVisiveis.length === 0 && (
                 <tr><td colSpan={8} className="text-center text-slate-500 py-12 text-sm">Nenhum poste cadastrado ainda.</td></tr>
               )}
-              {postes.map((poste, i) => (
-                <tr key={poste._id} style={{ borderBottom: i < postes.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
+              {postesVisiveis.map((poste, i) => (
+                <tr key={poste._id} style={{ borderBottom: i < postesVisiveis.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs" style={{ color: '#D4622B' }}>{poste.poste_id}</td>
                   <td className="px-4 py-3 text-slate-300 capitalize">{poste.tipo ?? '—'}</td>
                   <td className="px-4 py-3 text-xs capitalize">

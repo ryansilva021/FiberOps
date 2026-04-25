@@ -144,6 +144,19 @@ function pct(value, total) {
   return Math.min(100, Math.round((value / total) * 100))
 }
 
+/** SLA status: returns badge config or null if OK */
+function slaBadge(dataAbertura, slaHoras, status) {
+  if (!slaHoras || !dataAbertura) return null
+  if (status === 'concluida' || status === 'cancelada') return null
+  const prazoMs = new Date(dataAbertura).getTime() + slaHoras * 3_600_000
+  const restMs  = prazoMs - Date.now()
+  if (restMs <= 0) return { label: 'SLA Vencido', color: '#ef4444', bg: '#450a0a22' }
+  const h = Math.ceil(restMs / 3_600_000)
+  if (h <= 4)  return { label: `SLA ${h}h`, color: '#f59e0b', bg: '#451a0322' }
+  if (h <= 24) return { label: `SLA ${h}h`, color: '#a78bfa', bg: '#2e1b4e22' }
+  return null
+}
+
 // ─── Shared style tokens ───────────────────────────────────────────────────────
 
 const INP = {
@@ -966,7 +979,7 @@ function DadosTab({ os, canWrite, canStatus, canDelete, isPending, nextStatuses,
 
 // ─── OS Drawer ─────────────────────────────────────────────────────────────────
 
-function OSDrawer({ os: initialOs, olts, usuarios = [], userRole, userId, onClose, onUpdated, onDeleted }) {
+function OSDrawer({ os: initialOs, olts, usuarios = [], userRole, userId, onClose, onUpdated, onDeleted, slaHoras }) {
   const [os, setOs]                 = useState(initialOs)
   const [activeTab, setActiveTab]   = useState('dados')
   const [isPending, startTransition] = useTransition()
@@ -1204,7 +1217,7 @@ function OSDrawer({ os: initialOs, olts, usuarios = [], userRole, userId, onClos
       <div onClick={onClose} style={{ flex: 1, background: 'rgba(0,0,0,0.55)' }} />
 
       <div style={{
-        width: 520, maxWidth: '100vw',
+        width: 440, maxWidth: '100vw',
         background: 'var(--card-bg)', borderLeft: '1px solid var(--border-color)',
         display: 'flex', flexDirection: 'column',
         animation: 'fadeIn 0.2s ease',
@@ -1232,6 +1245,16 @@ function OSDrawer({ os: initialOs, olts, usuarios = [], userRole, userId, onClos
                 {os.tecnico_nome && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>🔧 {os.tecnico_nome}</span>}
                 {os.data_agendamento && <span style={{ fontSize: 11, color: '#a78bfa' }}>📅 {fmtDate(os.data_agendamento)}</span>}
                 {os.cliente_contato && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>📞 {os.cliente_contato}</span>}
+                {(() => {
+                  const sla = slaBadge(os.data_abertura, slaHoras, os.status)
+                  return sla ? (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: sla.color,
+                      background: sla.bg, border: `1px solid ${sla.color}44`,
+                      borderRadius: 4, padding: '2px 7px',
+                    }}>⏱ {sla.label}</span>
+                  ) : null
+                })()}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -1702,6 +1725,7 @@ export default function ServiceOrdersClient({ initialItems, initialTotal, stats,
   const [view, setView]                 = useState('list')   // 'list' | 'kanban'
   const [loading, startTransition]      = useTransition()
 
+  const slaHoras = 48
   const canCreate = CAN_CREATE.includes(userRole)
 
   // ── Derived filtered list ──
@@ -1830,150 +1854,126 @@ export default function ServiceOrdersClient({ initialItems, initialTotal, stats,
         </div>
       )}
 
-      {/* ── SGP Stats Strip — desktop only ── */}
-      {stats && (
-        <div className="os-desktop-only" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-          {STATS_STRIP.map(({ key, status, label, color }) => (
-            <button
-              key={key}
-              onClick={() => toggleStatus(status)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '7px 14px', borderRadius: 7, cursor: 'pointer',
-                border: `1px solid ${filterStatus === status ? color : 'var(--border-color)'}`,
-                background: filterStatus === status ? `${color}22` : 'var(--card-bg)',
-                transition: 'all 0.12s',
-                outline: 'none',
-              }}
-            >
-              <span style={{
-                fontSize: 18, fontWeight: 800, color,
-                lineHeight: 1, fontVariantNumeric: 'tabular-nums',
-              }}>
-                {stats[key] ?? 0}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
-                {label}
-              </span>
-            </button>
-          ))}
+      {/* ── Page Header ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 20, flexWrap: 'wrap', gap: 12,
+      }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--foreground)', letterSpacing: '-0.01em' }}>
+            Ordens de Serviço
+          </h1>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+            {stats?.total ?? total} total
+            {stats?.abertas   > 0 && <span style={{ color: '#3b82f6', marginLeft: 8 }}>· {stats.abertas} abertas</span>}
+            {stats?.em_andamento > 0 && <span style={{ color: '#f59e0b', marginLeft: 8 }}>· {stats.em_andamento} em andamento</span>}
+          </p>
         </div>
-      )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={reload} disabled={loading} title="Recarregar" style={{
+            padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border-color)',
+            background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 15,
+          }}>
+            <span style={{ display: 'inline-block', animation: loading ? 'spin 0.8s linear infinite' : 'none' }}>↻</span>
+          </button>
+          {canCreate && (
+            <button onClick={() => setShowCreate(true)} style={{
+              padding: '8px 20px', borderRadius: 8, border: 'none',
+              background: '#3b82f6', color: '#fff', cursor: 'pointer',
+              fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+            }}>+ Nova OS</button>
+          )}
+        </div>
+      </div>
 
-      {/* ── SGP Status Tabs ── */}
+      {/* ── Status Tabs with counts ── */}
       <div className="os-status-tabs" style={{
-        display: 'flex', gap: 4, flexWrap: 'wrap',
-        marginBottom: 16,
+        display: 'flex', gap: 2, flexWrap: 'wrap',
+        marginBottom: 14,
         borderBottom: '1px solid var(--border-color)',
-        paddingBottom: 0,
       }}>
         {STATUS_TABS.map(({ key, label, color }) => {
           const isActive = filterStatus === key
+          const countMap = { '': stats?.total, aberta: stats?.abertas, agendada: stats?.agendadas, em_andamento: stats?.em_andamento, concluida: stats?.concluidas, cancelada: stats?.canceladas }
+          const count = countMap[key]
           return (
             <button
               key={key}
               onClick={() => setFilterStatus(key)}
               style={{
-                padding: '7px 16px', borderRadius: '6px 6px 0 0',
+                padding: '7px 14px', borderRadius: '6px 6px 0 0',
                 fontSize: 12, fontWeight: isActive ? 700 : 500,
                 cursor: 'pointer', outline: 'none',
                 border: `1px solid ${isActive ? color : 'var(--border-color)'}`,
                 borderBottom: isActive ? `2px solid ${color}` : '1px solid var(--border-color)',
-                background: isActive ? `${color}22` : 'transparent',
+                background: isActive ? `${color}18` : 'transparent',
                 color: isActive ? color : 'var(--text-muted)',
                 marginBottom: -1,
                 transition: 'all 0.12s',
+                display: 'flex', alignItems: 'center', gap: 6,
+                whiteSpace: 'nowrap',
               }}
             >
               {label}
+              {count > 0 && (
+                <span style={{
+                  fontSize: 10, fontWeight: 800,
+                  background: isActive ? `${color}33` : '#ffffff11',
+                  color: isActive ? color : 'var(--text-muted)',
+                  borderRadius: 99, padding: '1px 6px', lineHeight: '15px',
+                }}>{count}</span>
+              )}
             </button>
           )
         })}
       </div>
 
-      {/* ── Toolbar mobile (busca + nova OS) ── */}
-      <div className="os-mobile-toolbar" style={{ display: 'none', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+      {/* ── Search + Tipo + View toggle ── */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
         <input
-          placeholder="Buscar cliente ou OS..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            flex: 1, minWidth: 0,
-            background: 'var(--inp-bg)', border: '1px solid var(--border-color)',
-            borderRadius: 8, padding: '9px 12px', color: 'var(--foreground)', fontSize: 14,
-          }}
-        />
-        {canCreate && (
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{
-              padding: '9px 16px', borderRadius: 8, border: 'none',
-              background: '#3b82f6', color: '#fff', cursor: 'pointer',
-              fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
-            }}
-          >+ Nova</button>
-        )}
-      </div>
-
-      {/* ── Toolbar desktop ── */}
-      <div className="os-desktop-only" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
-        <input
-          placeholder="Buscar OS, cliente, tecnico, serial..."
+          placeholder="Buscar OS, cliente, técnico, serial..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
             flex: '1 1 220px', minWidth: 0,
             background: 'var(--inp-bg)', border: '1px solid var(--border-color)',
-            borderRadius: 7, padding: '7px 12px', color: 'var(--foreground)', fontSize: 13,
+            borderRadius: 7, padding: '8px 12px', color: 'var(--foreground)', fontSize: 13,
           }}
         />
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {Object.entries(TIPO_META).map(([k, v]) => (
             <button key={k} onClick={() => toggleTipo(k)} style={{
-              padding: '5px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+              padding: '6px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
               border: `1px solid ${filterTipo === k ? v.color : 'var(--border-color)'}`,
-              background: filterTipo === k ? `${v.color}22` : 'transparent',
+              background: filterTipo === k ? `${v.color}18` : 'transparent',
               color: filterTipo === k ? v.color : 'var(--text-muted)',
               fontWeight: filterTipo === k ? 700 : 400, transition: 'all 0.12s',
+              whiteSpace: 'nowrap',
             }}>{v.icon} {v.label}</button>
           ))}
         </div>
-        <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 7, overflow: 'hidden', flexShrink: 0 }}>
-          {[['list', '≡ Lista'], ['kanban', '⬛ Kanban']].map(([v, label]) => (
+        <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 7, overflow: 'hidden', marginLeft: 'auto' }}>
+          {[['list', '≡ Lista'], ['kanban', '⬛ Kanban']].map(([v, lbl]) => (
             <button key={v} onClick={() => setView(v)} style={{
-              padding: '6px 13px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+              padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
               background: view === v ? '#3b82f6' : 'transparent',
               color: view === v ? '#fff' : 'var(--text-muted)', transition: 'all 0.12s',
-            }}>{label}</button>
+            }}>{lbl}</button>
           ))}
         </div>
-        <button onClick={reload} disabled={loading} title="Recarregar" style={{
-          padding: '6px 11px', borderRadius: 7, border: '1px solid var(--border-color)',
-          background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 15, flexShrink: 0,
-        }}>
-          <span style={{ display: 'inline-block', animation: loading ? 'spin 0.8s linear infinite' : 'none' }}>↻</span>
-        </button>
-        {canCreate && (
-          <button onClick={() => setShowCreate(true)} style={{
-            padding: '7px 18px', borderRadius: 7, border: 'none',
-            background: '#3b82f6', color: '#fff', cursor: 'pointer',
-            fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
-          }}>+ Nova OS</button>
-        )}
-      </div>
-
-      {/* ── Result count — desktop only ── */}
-      <div className="os-desktop-only" style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span>
-          {filtered.length} {filtered.length === 1 ? 'ordem de servico' : 'ordens de servico'}
-          {filtered.length !== total && ` (de ${total} carregadas)`}
-        </span>
         {hasFilters && (
           <button onClick={() => { setFilterStatus(''); setFilterTipo(''); setSearch('') }} style={{
             fontSize: 11, color: '#3b82f6', background: 'none',
-            border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0,
-          }}>Limpar filtros</button>
+            border: '1px solid #3b82f633', borderRadius: 6,
+            cursor: 'pointer', padding: '5px 10px', whiteSpace: 'nowrap',
+          }}>✕ Limpar filtros</button>
         )}
+      </div>
+
+      {/* Result count */}
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+        {filtered.length} {filtered.length === 1 ? 'ordem de serviço' : 'ordens de serviço'}
+        {filtered.length !== total && ` (de ${total} carregadas)`}
       </div>
 
       {/* ── KANBAN VIEW ── */}
@@ -2002,6 +2002,7 @@ export default function ServiceOrdersClient({ initialItems, initialTotal, stats,
                     { label: 'Cliente',      style: { minWidth: 160 } },
                     { label: 'Tecnico',      style: { minWidth: 110 } },
                     { label: 'Agendamento',  style: { minWidth: 100 } },
+                    { label: 'Prioridade',   style: { minWidth: 80 } },
                     { label: 'Status',       style: { minWidth: 110 } },
                     { label: 'Acoes',        style: { width: 56, textAlign: 'center' } },
                   ].map(({ label, style }) => (
@@ -2018,7 +2019,7 @@ export default function ServiceOrdersClient({ initialItems, initialTotal, stats,
               <tbody>
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <td colSpan={10} style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
                       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Nenhuma OS encontrada</div>
                       {hasFilters && (
@@ -2119,9 +2120,26 @@ export default function ServiceOrdersClient({ initialItems, initialTotal, stats,
                         }
                       </td>
 
+                      {/* Prioridade */}
+                      <td style={{ padding: '11px 12px', whiteSpace: 'nowrap' }}>
+                        <PrioBadge prioridade={os.prioridade} />
+                      </td>
+
                       {/* Status badge */}
                       <td style={{ padding: '11px 12px', whiteSpace: 'nowrap' }}>
-                        <StatusBadge status={os.status} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <StatusBadge status={os.status} />
+                          {(() => {
+                            const sla = slaBadge(os.data_abertura, slaHoras, os.status)
+                            return sla ? (
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, color: sla.color,
+                                background: sla.bg, border: `1px solid ${sla.color}44`,
+                                borderRadius: 4, padding: '1px 5px', display: 'inline-block',
+                              }}>{sla.label}</span>
+                            ) : null
+                          })()}
+                        </div>
                       </td>
 
                       {/* Acoes — eye icon opens drawer */}
@@ -2194,6 +2212,7 @@ export default function ServiceOrdersClient({ initialItems, initialTotal, stats,
           onClose={() => setSelectedOS(null)}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
+          slaHoras={slaHoras ?? 48}
         />
       )}
     </div>

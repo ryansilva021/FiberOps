@@ -67,8 +67,8 @@ const MARCACOES = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function BaterPontoTab({ record, setRecord, showToast }) {
-  const [now,      setNow]     = useState(Date.now())
-  const [pending,  startTrans] = useTransition()
+  const [now,     setNow]    = useState(Date.now())
+  const [pending, startTrans] = useTransition()
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000)
@@ -113,7 +113,7 @@ export default function BaterPontoTab({ record, setRecord, showToast }) {
   }
 
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 480, margin: '0 auto' }}>
+    <div style={{ padding: '24px 16px', maxWidth: 600, margin: '0 auto', width: '100%' }}>
       {/* Status badge */}
       <div style={{
         display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -189,6 +189,7 @@ export default function BaterPontoTab({ record, setRecord, showToast }) {
           </div>
         )}
       </div>
+
 
     </div>
   )

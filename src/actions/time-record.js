@@ -8,6 +8,7 @@
 import { connectDB } from '@/lib/db'
 import { requireActiveEmpresa } from '@/lib/tenant-guard'
 import { TimeRecord } from '@/models/TimeRecord'
+import { User } from '@/models/User'
 
 const PONTO_ROLES = ['admin', 'tecnico', 'noc', 'recepcao']
 
@@ -62,6 +63,57 @@ export async function getHistoricoPonto({ limit = 30 } = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Mutações
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Admin: retorna histórico de ponto de todos os usuários do projeto.
+ * Filtros opcionais: ano, mes (1-12), dia (1-31), userId.
+ */
+export async function getHistoricoPontoAdmin({ ano, mes, dia, userId } = {}) {
+  const session = await requireActiveEmpresa(['admin', 'superadmin'])
+  const { projeto_id } = session.user
+  await connectDB()
+
+  const query = { projeto_id }
+
+  if (userId) query.userId = userId
+
+  // Monta prefixo de data para filtro via string 'YYYY-MM-DD'
+  if (ano) {
+    const y = String(ano).padStart(4, '0')
+    if (mes) {
+      const m = String(mes).padStart(2, '0')
+      if (dia) {
+        const d = String(dia).padStart(2, '0')
+        query.date = `${y}-${m}-${d}`
+      } else {
+        query.date = { $regex: `^${y}-${m}-` }
+      }
+    } else {
+      query.date = { $regex: `^${y}-` }
+    }
+  }
+
+  const records = await TimeRecord.find(query)
+    .sort({ date: -1, entrada: -1 })
+    .limit(500)
+    .lean()
+
+  // Busca nomes dos usuários
+  const userIds = [...new Set(records.map((r) => r.userId))]
+  const users = await User.find(
+    { username: { $in: userIds }, projeto_id },
+    'username nome_completo role'
+  ).lean()
+  const userMap = Object.fromEntries(users.map((u) => [u.username, u]))
+
+  const enriched = records.map((r) => ({
+    ...r,
+    nomeCompleto: userMap[r.userId]?.nome_completo || r.userId,
+    roleUsuario:  userMap[r.userId]?.role || '',
+  }))
+
+  return JSON.parse(JSON.stringify(enriched))
+}
 
 /** Registra a entrada (início de jornada). Impede duplicata no mesmo dia. */
 export async function registrarEntrada({ location } = {}) {

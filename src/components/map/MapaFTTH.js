@@ -31,8 +31,6 @@ import BuscaMapa          from '@/components/map/BuscaMapa'
 import WeatherWidget      from '@/components/map/WeatherWidget'
 import RegistroPotencia   from '@/components/map/RegistroPotencia'
 import VarinhaNetworkTool from '@/components/map/VarinhaNetworkTool'
-import StreetViewModal    from '@/components/map/StreetViewModal'
-import StreetViewControl  from '@/components/map/StreetViewControl'
 
 import { getCTOs, upsertCTO }   from '@/actions/ctos'
 import { getCaixas, upsertCaixa, addCaboToItem } from '@/actions/caixas'
@@ -77,6 +75,9 @@ export default function MapaFTTH({
   initialRotas  = null,
   initialPostes = [],
   initialOLTs   = [],
+  plano         = 'trial',
+  limiteCTOs    = null,
+  limiteOLTs    = null,
 }) {
   const containerRef = useRef(null)
   const router = useRouter()
@@ -107,6 +108,9 @@ export default function MapaFTTH({
   const [olts,   setOLTs]   = useState(initialOLTs)
   const [loadingData, setLoadingData] = useState(false)
 
+  // ---- Limites do plano ----
+  const ctosLimiteAtingido = limiteCTOs !== null && ctos.length >= limiteCTOs
+
   // ---- Estado de UI ----
   const [selectedElement, setSelectedElement] = useState(null)
   const [layerToggles, setLayerToggles]       = useState(() => {
@@ -127,10 +131,6 @@ export default function MapaFTTH({
   const [gpsExpanded, setGpsExpanded]   = useState(false) // GPS widget: minimizado = só ícone
   const [addSaving, setAddSaving]       = useState(false)
   const [addErro, setAddErro]           = useState(null)
-
-  // ---- Street View ----
-  const [svCoords,  setSvCoords]  = useState(null) // { lat, lng } | null = modal fechado
-  const [svMenu,    setSvMenu]    = useState(null) // { lat, lng, x, y } | null = menu contextual fechado
 
   // ---- Edição de rota existente (drag de pontos) ----
   const [editingRota, setEditingRota]   = useState(null) // { rota_id, coordinates: [[lng,lat],...] }
@@ -190,9 +190,6 @@ export default function MapaFTTH({
 
   const simModeRef = useRef(simMode)
   simModeRef.current = simMode
-
-  const svMenuRef = useRef(svMenu)
-  svMenuRef.current = svMenu
 
   const TIPO_ICONE = { cto: '📦', caixa: '🔌', rota: '〰', poste: '🏗', olt: '🖥' }
   const TIPO_COR   = { cto: '#0284c7', caixa: '#7c3aed', rota: '#059669', poste: '#d97706', olt: '#0891b2' }
@@ -648,40 +645,13 @@ export default function MapaFTTH({
     return () => window.removeEventListener('fiberops:fly-to', handleFlyTo)
   }, [map])
 
-  // ---- Street View: escuta right-click do mapa ----
-  useEffect(() => {
-    function handleContextMenu(e) {
-      const { lngLat, pixel } = e.detail ?? {}
-      if (!lngLat) return
-      setSvMenu({ lat: lngLat.lat, lng: lngLat.lng, x: pixel[0], y: pixel[1] })
-    }
-    window.addEventListener('olmap:contextmenu', handleContextMenu)
-    return () => window.removeEventListener('olmap:contextmenu', handleContextMenu)
-  }, [])
-
-  // ---- Street View: captura clique direto no OL map quando pickMode ativo ----
-  // Usa map.on('click') para interceptar QUALQUER clique (rua, tile, feature, cluster)
-  // antes de qualquer lógica de feature-detection do sistema.
-  useEffect(() => {
-    if (!map || !mapLoaded || !svMenu?.pickMode) return
-
-    function capture(e) {
-      const ll = toLonLat(e.coordinate)
-      setSvCoords({ lng: ll[0], lat: ll[1] })
-      setSvMenu(null)
-    }
-
-    map.on('click', capture)
-    return () => map.un('click', capture)
-  }, [map, mapLoaded, svMenu?.pickMode])
-
   // ---- Cursor crosshair durante add mode, reposicionamento ou simulação ----
   useEffect(() => {
     // OL renderiza num viewport interno; o containerRef é o wrapper
     const viewport = map?.getViewport?.() ?? containerRef.current
     if (!viewport) return
-    viewport.style.cursor = (addMode || reposicionandoEl || simMode || svMenu?.pickMode) ? 'crosshair' : ''
-  }, [addMode, reposicionandoEl, simMode, svMenu, map])
+    viewport.style.cursor = (addMode || reposicionandoEl || simMode) ? 'crosshair' : ''
+  }, [addMode, reposicionandoEl, simMode, map])
 
   // ---- Preview de rota em tempo real (OpenLayers) ----
   const drawPreviewRef = useRef({ layer: null, source: null })
@@ -1110,25 +1080,43 @@ export default function MapaFTTH({
                 {/* Varinha de rede automática */}
                 <div style={{ height: 1, background: '#8e7254', margin: '4px 0' }} />
                 <button
-                  onClick={enterVarinhaMode}
+                  onClick={ctosLimiteAtingido ? undefined : enterVarinhaMode}
+                  disabled={ctosLimiteAtingido}
+                  title={ctosLimiteAtingido
+                    ? `Limite de ${limiteCTOs} CTOs atingido no plano ${plano}. Faça upgrade para usar esta ferramenta.`
+                    : undefined}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '10px 12px', borderRadius: 10,
-                    background: varinhaMode ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.08)',
-                    border: varinhaMode ? '1.5px solid #00e5ff' : '1px solid rgba(0,229,255,0.35)',
-                    color: '#0f0701',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', textAlign: 'left',
+                    background: ctosLimiteAtingido
+                      ? 'rgba(220,38,38,0.08)'
+                      : varinhaMode ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.08)',
+                    border: ctosLimiteAtingido
+                      ? '1px solid rgba(220,38,38,0.35)'
+                      : varinhaMode ? '1.5px solid #00e5ff' : '1px solid rgba(0,229,255,0.35)',
+                    color: ctosLimiteAtingido ? '#dc2626' : '#0f0701',
+                    fontSize: 12, fontWeight: 700,
+                    cursor: ctosLimiteAtingido ? 'not-allowed' : 'pointer',
+                    width: '100%', textAlign: 'left',
                     transition: 'all 0.18s',
+                    opacity: ctosLimiteAtingido ? 0.7 : 1,
                   }}
                 >
-                  <span style={{ fontSize: 15 }}>🪄</span>
-                  Gerar Rede Automática
-                  {varinhaMode && (
+                  <span style={{ fontSize: 15 }}>{ctosLimiteAtingido ? '🚫' : '🪄'}</span>
+                  {ctosLimiteAtingido ? 'Limite atingido' : 'Gerar Rede Automática'}
+                  {varinhaMode && !ctosLimiteAtingido && (
                     <span style={{
                       marginLeft: 'auto', fontSize: 9, fontWeight: 800,
                       background: 'rgba(0,229,255,0.2)', color: '#00e5ff',
                       padding: '2px 5px', borderRadius: 4,
                     }}>ATIVO</span>
+                  )}
+                  {ctosLimiteAtingido && (
+                    <span style={{
+                      marginLeft: 'auto', fontSize: 9, fontWeight: 800,
+                      background: 'rgba(220,38,38,0.15)', color: '#dc2626',
+                      padding: '2px 5px', borderRadius: 4,
+                    }}>UPGRADE</span>
                   )}
                 </button>
               </>
@@ -1177,6 +1165,8 @@ export default function MapaFTTH({
             reloadData()
           }}
           onClose={cancelVarinhaMode}
+          limiteCTOs={limiteCTOs}
+          ctosAtuais={ctos.length}
         />
       )}
 
@@ -1486,16 +1476,6 @@ export default function MapaFTTH({
             </div>
           )}
         </div>
-      )}
-
-      {/* ── Street View Control (Pegman) ────────────────────────────────────── */}
-      {!addMode && !buscaAberta && (
-        <StreetViewControl
-          isActive={!!svMenu?.pickMode}
-          onActivate={() => setSvMenu({ pickMode: true })}
-          onDeactivate={() => setSvMenu(null)}
-          isDark={isDark}
-        />
       )}
 
       {/* Banner de instrução durante add mode */}
@@ -2034,62 +2014,6 @@ function SimResultCard({
             >Tentar outro ponto</button>
           </div>
         )}
-      {/* ── Street View: menu contextual (right-click, só com coordenadas reais) */}
-      {svMenu && !svMenu.pickMode && (
-        <>
-          {/* overlay transparente para fechar ao clicar fora */}
-          <div
-            style={{ position: 'fixed', inset: 0, zIndex: 8998 }}
-            onClick={() => setSvMenu(null)}
-          />
-          <div
-            role="menu"
-            style={{
-              position: 'fixed',
-              left: Math.min(svMenu.x, window.innerWidth - 200),
-              top:  Math.min(svMenu.y, window.innerHeight - 60),
-              zIndex: 8999,
-              borderRadius: 10,
-              overflow: 'hidden',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.28)',
-              border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0',
-              background: isDark ? 'rgba(15,23,42,0.98)' : '#fff',
-              minWidth: 190,
-            }}
-          >
-            <button
-              role="menuitem"
-              onClick={() => { setSvCoords({ lat: svMenu.lat, lng: svMenu.lng }); setSvMenu(null) }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                width: '100%', padding: '11px 16px',
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: isDark ? '#e2e8f0' : '#0f172a',
-                fontSize: 13, fontWeight: 600, textAlign: 'left',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(2,132,199,0.15)' : 'rgba(2,132,199,0.08)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                <path d="M2 12h20"/>
-              </svg>
-              Ver Street View
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ── Street View: modal com iframe ─────────────────────────────────── */}
-      {svCoords && (
-        <StreetViewModal
-          lat={svCoords.lat}
-          lng={svCoords.lng}
-          onClose={() => setSvCoords(null)}
-        />
-      )}
-
       </div>
     </div>
   )

@@ -5,7 +5,9 @@ import { getRotas }  from '@/actions/rotas'
 import { getPostes } from '@/actions/postes'
 import { getOLTs }   from '@/actions/olts'
 import CampoClient   from '@/components/admin/CampoClient'
-import PageHeading from '@/components/shared/PageHeading'
+import PageHeading   from '@/components/shared/PageHeading'
+import { connectDB } from '@/lib/db'
+import { PLAN_LIMITS } from '@/lib/plan-config'
 
 export const metadata = {
   title: 'Campo | FiberOps',
@@ -29,6 +31,17 @@ export default async function CampoPage({ searchParams }) {
 
   const rotas = rotasFC?.features ?? []
 
+  // Buscar plano da empresa para exibir limites na UI
+  let planoEmpresa = 'trial'
+  try {
+    await connectDB()
+    const { Empresa } = await import('@/models/Empresa')
+    const empresa = await Empresa.findOne({ projetos: projetoId }, 'plano').lean()
+    if (empresa?.plano) planoEmpresa = empresa.plano
+  } catch { /* usa trial como fallback */ }
+
+  const limites = PLAN_LIMITS[planoEmpresa] ?? PLAN_LIMITS.trial
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -45,6 +58,8 @@ export default async function CampoPage({ searchParams }) {
         userRole={userRole}
         tabInicial={tabInicial}
         idInicial={idInicial}
+        plano={planoEmpresa}
+        limites={limites}
       />
     </div>
   )

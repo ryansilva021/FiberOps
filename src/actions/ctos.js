@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 import { connectDB } from "@/lib/db";
 import { WRITE_ROLES, ALL_ROLES } from "@/lib/auth";
 import { requireActiveEmpresa } from "@/lib/tenant-guard";
+import { PLAN_LIMITS } from "@/lib/plan-config";
 import { CTO } from "@/models/CTO";
 import { CaixaEmendaCDO } from "@/models/CaixaEmendaCDO";
 import { Movimentacao } from "@/models/Movimentacao";
@@ -113,6 +114,24 @@ export async function upsertCTO(data) {
   if (!targetProjeto) throw new Error("projeto_id é obrigatório");
 
   await connectDB();
+
+  // Verificar limite de CTOs do plano (só ao criar, não ao editar)
+  const isNew = !(await CTO.exists({ projeto_id: targetProjeto, cto_id: cto_id.trim() }))
+  if (isNew && role !== 'superadmin') {
+    const { Empresa } = await import('@/models/Empresa')
+    const empresa = await Empresa.findOne(
+      { projetos: targetProjeto },
+      'plano'
+    ).lean()
+    const plano = empresa?.plano ?? 'trial'
+    const limite = PLAN_LIMITS[plano]?.ctos ?? null
+    if (limite !== null) {
+      const atual = await CTO.countDocuments({ projeto_id: targetProjeto })
+      if (atual >= limite) {
+        throw new Error(`Limite de ${limite} CTOs atingido no plano ${plano}. Faça upgrade para adicionar mais.`)
+      }
+    }
+  }
 
   const update = {
     lat: Number(lat),

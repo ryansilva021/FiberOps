@@ -540,6 +540,45 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
 
+        {/* ── Assinatura ── */}
+        <Link
+          href="/admin/assinatura"
+          style={{
+            display: 'block', textDecoration: 'none',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 16, padding: '20px 20px',
+            marginBottom: 16,
+            transition: 'border-color .15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = '#C45A2C'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <p style={{
+                fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.1em', color: 'var(--text-muted)',
+                marginBottom: 8, marginTop: 0,
+              }}>
+                PLANO E ASSINATURA
+              </p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--foreground)' }}>
+                Gerenciar assinatura
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Visualize seu plano atual, limites, histórico de pagamentos e opções de upgrade.
+              </p>
+            </div>
+            <span style={{
+              flexShrink: 0, fontSize: 18, color: '#C45A2C',
+              display: 'flex', alignItems: 'center',
+            }}>
+              →
+            </span>
+          </div>
+        </Link>
+
         {/* ── Sistema ── */}
         <div style={card}>
           <SectionTitle>{t('config.section.system')}</SectionTitle>

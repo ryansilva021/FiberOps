@@ -80,7 +80,8 @@ export async function assinarPlano(data) {
   const session = await requireAdmin()
   const { plano, billing_type, cpf_cnpj } = data
 
-  if (!['basico', 'pro', 'enterprise'].includes(plano)) {
+  const PLANOS_PAGOS = ['starter', 'pro', 'business', 'enterprise', 'carrier', 'basico']
+  if (!PLANOS_PAGOS.includes(plano)) {
     return { success: false, message: 'Plano inválido' }
   }
   if (!['PIX', 'BOLETO', 'CREDIT_CARD'].includes(billing_type)) {

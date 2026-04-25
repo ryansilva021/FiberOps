@@ -15,6 +15,7 @@ import {
   Settings,
   ShieldCheck,
   Radio,
+  Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -199,6 +200,14 @@ export default function Sidebar({ isOpen, onClose, session, layerToggles = {}, o
                     >
                       <Settings className="size-4" />
                       Usuários
+                    </Link>
+                    <Link
+                      href="/admin/ponto"
+                      onClick={onClose}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                    >
+                      <Clock className="size-4" />
+                      Histórico de Ponto
                     </Link>
                   </nav>
                 </div>

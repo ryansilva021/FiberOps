@@ -13,6 +13,7 @@ import DespertadoresTab       from './tabs/DespertadoresTab'
 import JustificarAusenciaTab  from './tabs/JustificarAusenciaTab'
 import MinhasSolicitacoesTab  from './tabs/MinhasSolicitacoesTab'
 import DadosCadastraisTab     from './tabs/DadosCadastraisTab'
+import HistoricoTab           from './tabs/HistoricoTab'
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'despertadores', labelKey: 'ponto.tab.despertadores', icon: '⏰' },
   { id: 'ausencia',      labelKey: 'ponto.tab.ausencia',      icon: '📋' },
   { id: 'solicitacoes',  labelKey: 'ponto.tab.solicitacoes',  icon: '📩' },
+  { id: 'historico',     labelKey: 'ponto.tab.historico',     icon: '📅' },
   { id: 'dados',         labelKey: 'ponto.tab.dados',         icon: '👤' },
 ]
 
@@ -67,6 +69,32 @@ export default function PontoClient({ initialRecord, initialRequests, userName, 
   const [requests,   setRequests]   = useState(initialRequests ?? [])
   const [toast,      setToast]      = useState(null)
   const [today,      setToday]      = useState('')
+
+  // Tab bar scroll arrows
+  const tabsRef = useRef(null)
+  const [canScrollLeft,  setCanScrollLeft]  = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  function updateArrows() {
+    const el = tabsRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }
+
+  useEffect(() => {
+    const el = tabsRef.current
+    if (!el) return
+    updateArrows()
+    el.addEventListener('scroll', updateArrows)
+    const ro = new ResizeObserver(updateArrows)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', updateArrows); ro.disconnect() }
+  }, [])
+
+  function scrollTabs(dir) {
+    tabsRef.current?.scrollBy({ left: dir * 120, behavior: 'smooth' })
+  }
 
   useEffect(() => {
     setToday(new Date().toLocaleDateString('pt-BR', {
@@ -231,12 +259,17 @@ export default function PontoClient({ initialRecord, initialRequests, userName, 
   }, [])
 
   return (
-    <div style={{ minHeight: '100dvh', background: T.canvas, fontFamily: T.ff, color: T.text, display: 'flex', flexDirection: 'column' }}>
+    <div style={{
+      height: '100%', minHeight: '100dvh',
+      background: T.canvas, fontFamily: T.ff, color: T.text,
+      display: 'flex', flexDirection: 'column',
+    }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{
         background: T.card, borderBottom: `1px solid ${T.border}`,
         padding: '16px 16px 0', flexShrink: 0,
+        position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div style={{ maxWidth: 640, margin: '0 auto' }}>
 
@@ -273,52 +306,93 @@ export default function PontoClient({ initialRecord, initialRequests, userName, 
             )}
           </div>
 
-          {/* Tab bar — scroll horizontal em telas pequenas */}
-          <div className="ponto-tabs" style={{
-            display: 'flex', gap: 0,
-            overflowX: 'auto', flexWrap: 'nowrap',
-            msOverflowStyle: 'none', scrollbarWidth: 'none',
-          }}>
-            {TABS.map(tab => {
-              const active = activeTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  style={{
-                    flexShrink: 0,
-                    padding: '8px 14px',
-                    background: 'none', border: 'none',
-                    borderBottom: `2px solid ${active ? T.accent : 'transparent'}`,
-                    color: active ? T.accent : T.dim,
-                    fontSize: 12, fontWeight: active ? 700 : 500,
-                    fontFamily: T.ff, cursor: 'pointer',
-                    transition: 'all .15s',
-                    whiteSpace: 'nowrap',
-                    display: 'flex', alignItems: 'center', gap: 5,
-                  }}
-                >
-                  <span style={{ fontSize: 14 }}>{tab.icon}</span>
-                  {t(tab.labelKey)}
-                  {/* Badge de contagem em Solicitações */}
-                  {tab.id === 'solicitacoes' && requests.filter(r => r.status === 'pendente').length > 0 && (
-                    <span style={{
-                      background: T.warning, color: '#000', borderRadius: 99,
-                      fontSize: 9, fontWeight: 800, padding: '1px 5px', lineHeight: 1.4,
-                    }}>
-                      {requests.filter(r => r.status === 'pendente').length}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-            <style>{`.ponto-tabs::-webkit-scrollbar{display:none}`}</style>
+          {/* Tab bar com setas de navegação */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+            {/* Seta esquerda */}
+            <button
+              onClick={() => scrollTabs(-1)}
+              aria-label="Rolar para esquerda"
+              style={{
+                flexShrink: 0, width: 28, height: 36,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: canScrollLeft ? T.muted : 'transparent',
+                transition: 'color .15s', padding: 0,
+                pointerEvents: canScrollLeft ? 'auto' : 'none',
+              }}
+            >
+              ‹
+            </button>
+
+            {/* Tabs */}
+            <div
+              ref={tabsRef}
+              className="ponto-tabs"
+              style={{
+                display: 'flex', gap: 0, flex: 1,
+                overflowX: 'auto', flexWrap: 'nowrap',
+                msOverflowStyle: 'none', scrollbarWidth: 'none',
+              }}
+            >
+              {TABS.map(tab => {
+                const active = activeTab === tab.id
+                const label = tab.id === 'historico' ? 'Histórico'
+                            : tab.id === 'solicitacoes' ? 'Solicitações'
+                            : t(tab.labelKey)
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      flexShrink: 0,
+                      padding: '8px 14px',
+                      background: 'none', border: 'none',
+                      borderBottom: `2px solid ${active ? T.accent : 'transparent'}`,
+                      color: active ? T.accent : T.dim,
+                      fontSize: 12, fontWeight: active ? 700 : 500,
+                      fontFamily: T.ff, cursor: 'pointer',
+                      transition: 'all .15s',
+                      whiteSpace: 'nowrap',
+                      display: 'flex', alignItems: 'center', gap: 5,
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>{tab.icon}</span>
+                    {label}
+                    {tab.id === 'solicitacoes' && requests.filter(r => r.status === 'pendente').length > 0 && (
+                      <span style={{
+                        background: T.warning, color: '#000', borderRadius: 99,
+                        fontSize: 9, fontWeight: 800, padding: '1px 5px', lineHeight: 1.4,
+                      }}>
+                        {requests.filter(r => r.status === 'pendente').length}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+              <style>{`.ponto-tabs::-webkit-scrollbar{display:none}`}</style>
+            </div>
+
+            {/* Seta direita */}
+            <button
+              onClick={() => scrollTabs(1)}
+              aria-label="Rolar para direita"
+              style={{
+                flexShrink: 0, width: 28, height: 36,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: canScrollRight ? T.muted : 'transparent',
+                transition: 'color .15s', padding: 0,
+                pointerEvents: canScrollRight ? 'auto' : 'none',
+              }}
+            >
+              ›
+            </button>
           </div>
         </div>
       </div>
 
       {/* ── Tab Content ───────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
         {activeTab === 'bater' && (
           <BaterPontoTab
             record={record}
@@ -349,6 +423,9 @@ export default function PontoClient({ initialRecord, initialRequests, userName, 
         )}
         {activeTab === 'solicitacoes' && (
           <MinhasSolicitacoesTab requests={requests} />
+        )}
+        {activeTab === 'historico' && (
+          <HistoricoTab />
         )}
         {activeTab === 'dados' && (
           <DadosCadastraisTab userProfile={userProfile} />

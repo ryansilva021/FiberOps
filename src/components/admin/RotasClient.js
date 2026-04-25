@@ -59,8 +59,15 @@ const TIPO_CORES_TABLE = {
   DROP: 'text-emerald-300',
 }
 
-export default function RotasClient({ rotasIniciais, projetoId, userRole, idInicial }) {
+export default function RotasClient({ rotasIniciais, projetoId, userRole, idInicial, busca = '' }) {
   const [rotas, setRotas] = useState(rotasIniciais)
+  const q = busca.trim().toLowerCase()
+  const rotasVisiveis = q
+    ? rotas.filter(r => {
+        const p = r.properties ?? r
+        return [p.rota_id, p.nome, p.tipo].some(v => String(v ?? '').toLowerCase().includes(q))
+      })
+    : rotas
   const [modalAberto, setModalAberto] = useState(false)
   const [rotaEditando, setRotaEditando] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -219,14 +226,14 @@ export default function RotasClient({ rotasIniciais, projetoId, userRole, idInic
               </tr>
             </thead>
             <tbody>
-              {rotas.length === 0 && (
+              {rotasVisiveis.length === 0 && (
                 <tr><td colSpan={5} className="text-center text-slate-500 py-12 text-sm">Nenhuma rota cadastrada ainda.</td></tr>
               )}
-              {rotas.map((rota, i) => {
+              {rotasVisiveis.map((rota, i) => {
                 const tipo = getRotaTipo(rota)
                 const cfg = TIPO_CONFIG[tipo]
                 return (
-                  <tr key={(rota.properties ?? rota)._id ?? i} style={{ borderBottom: i < rotas.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={(rota.properties ?? rota)._id ?? i} style={{ borderBottom: i < rotasVisiveis.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: '#D4622B' }}>{getRotaId(rota)}</td>
                     <td className="px-4 py-3 text-slate-200">{getRotaNome(rota)}</td>
                     <td className="px-4 py-3">

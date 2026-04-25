@@ -16,6 +16,7 @@ import { revalidatePath } from 'next/cache'
 import { connectDB } from '@/lib/db'
 import { WRITE_ROLES, ALL_ROLES } from '@/lib/auth'
 import { requireActiveEmpresa } from '@/lib/tenant-guard'
+import { PLAN_LIMITS } from '@/lib/plan-config'
 import { OLT } from '@/models/OLT'
 import { ONU } from '@/models/ONU'
 import { Topologia } from '@/models/Topologia'
@@ -76,6 +77,21 @@ export async function upsertOLT(data) {
   if (!targetProjeto) throw new Error('projeto_id é obrigatório')
 
   await connectDB()
+
+  // Verificar limite de OLTs do plano (só ao criar)
+  const isNew = !(await OLT.exists({ projeto_id: targetProjeto, olt_id: olt_id.trim() }))
+  if (isNew && role !== 'superadmin') {
+    const { Empresa } = await import('@/models/Empresa')
+    const empresa = await Empresa.findOne({ projetos: targetProjeto }, 'plano').lean()
+    const plano = empresa?.plano ?? 'trial'
+    const limite = PLAN_LIMITS[plano]?.olts ?? null
+    if (limite !== null) {
+      const atual = await OLT.countDocuments({ projeto_id: targetProjeto })
+      if (atual >= limite) {
+        throw new Error(`Limite de ${limite} OLT${limite === 1 ? '' : 's'} atingido no plano ${plano}. Faça upgrade para adicionar mais.`)
+      }
+    }
+  }
 
   const update = {
     nome:       nome.trim(),

@@ -91,8 +91,8 @@ const EmpresaSchema = new Schema(
     // Plano contratado
     plano: {
       type:    String,
-      enum:    ['basico', 'pro', 'enterprise'],
-      default: 'basico',
+      enum:    ['free', 'starter', 'pro', 'business', 'enterprise', 'carrier', 'trial', 'basico'],
+      default: 'trial',
     },
 
     // Dados de contato

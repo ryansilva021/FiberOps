@@ -658,22 +658,6 @@ export function initMap(container, opts = {}) {
     }
   })
 
-  // ── Context menu (right-click): Street View ─────────────────────────────
-  _map.getViewport().addEventListener('contextmenu', (e) => {
-    e.preventDefault()
-    const pixel  = _map.getEventPixel(e)
-    const coord  = _map.getCoordinateFromPixel(pixel)
-    const lonLat = _toLonLat(coord)
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('olmap:contextmenu', {
-        detail: {
-          lngLat: { lng: lonLat[0], lat: lonLat[1] },
-          pixel:  [e.clientX, e.clientY],
-        },
-      }))
-    }
-  })
-
   // ── Animação: CTOs cheias piscam a cada 500ms ────────────────────────────
   _animTimer = setInterval(() => {
     _animBright = !_animBright

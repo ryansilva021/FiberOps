@@ -62,8 +62,12 @@ const cardStyle = {
   border: '1px solid var(--border-color)',
 }
 
-export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicial }) {
+export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicial, busca = '', limiteAtingido = false }) {
   const [ctos, setCTOs] = useState(ctosIniciais)
+  const q = busca.trim().toLowerCase()
+  const ctosVisiveis = q
+    ? ctos.filter(c => [c.cto_id, c.nome, c.rua, c.bairro].some(v => String(v ?? '').toLowerCase().includes(q)))
+    : ctos
   const [modalAberto, setModalAberto] = useState(false)
   const [ctoEditando, setCTOEditando] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -194,11 +198,19 @@ export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicia
         {sucesso && <p className="text-sm text-green-400">{sucesso}</p>}
         {!sucesso && <div />}
         <button
-          onClick={abrirNovo}
-          style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#052e16', fontWeight: 700 }}
+          onClick={limiteAtingido ? undefined : abrirNovo}
+          disabled={limiteAtingido}
+          title={limiteAtingido ? 'Limite do plano atingido. Faça upgrade para adicionar mais CTOs.' : undefined}
+          style={{
+            background: limiteAtingido ? 'rgba(100,100,100,0.2)' : 'linear-gradient(135deg,#22c55e,#16a34a)',
+            color: limiteAtingido ? '#6b7280' : '#052e16',
+            fontWeight: 700,
+            cursor: limiteAtingido ? 'not-allowed' : 'pointer',
+            border: limiteAtingido ? '1px solid rgba(100,100,100,0.3)' : 'none',
+          }}
           className="text-sm px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
         >
-          + Nova CTO
+          {limiteAtingido ? '🚫 Limite atingido' : '+ Nova CTO'}
         </button>
       </div>
 
@@ -214,13 +226,13 @@ export default function CTOsClient({ ctosIniciais, projetoId, userRole, idInicia
               </tr>
             </thead>
             <tbody>
-              {ctos.length === 0 && (
-                <tr><td colSpan={7} className="text-center text-slate-500 py-12 text-sm">Nenhuma CTO cadastrada ainda.</td></tr>
+              {ctosVisiveis.length === 0 && (
+                <tr><td colSpan={7} className="text-center text-slate-500 py-12 text-sm">{q ? 'Nenhum resultado para a pesquisa.' : 'Nenhuma CTO cadastrada ainda.'}</td></tr>
               )}
-              {ctos.map((cto, i) => {
+              {ctosVisiveis.map((cto, i) => {
                 const pct = ocupacaoPct(cto)
                 return (
-                  <tr key={cto._id} style={{ borderBottom: i < ctos.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={cto._id} style={{ borderBottom: i < ctosVisiveis.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: '#D4622B' }}>{cto.cto_id}</td>
                     <td className="px-4 py-3 text-slate-200">{cto.nome ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs">{[cto.rua, cto.bairro].filter(Boolean).join(', ') || '—'}</td>

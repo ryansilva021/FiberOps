@@ -63,8 +63,12 @@ const TIPO_CHIP = {
   CE:  { bg: 'rgba(99,102,241,0.18)', border: 'rgba(99,102,241,0.5)', color: '#4338ca' },
 }
 
-export default function CaixasClient({ caixasIniciais, projetoId, userRole, idInicial }) {
+export default function CaixasClient({ caixasIniciais, projetoId, userRole, idInicial, busca = '' }) {
   const [caixas, setCaixas] = useState(caixasIniciais)
+  const q = busca.trim().toLowerCase()
+  const caixasVisiveis = q
+    ? caixas.filter(c => [c.ce_id, c.id, c.nome, c.rua, c.bairro, c.tipo].some(v => String(v ?? '').toLowerCase().includes(q)))
+    : caixas
   const [modalAberto, setModalAberto] = useState(false)
   const [caixaEditando, setCaixaEditando] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -235,13 +239,13 @@ export default function CaixasClient({ caixasIniciais, projetoId, userRole, idIn
               </tr>
             </thead>
             <tbody>
-              {caixas.length === 0 && (
+              {caixasVisiveis.length === 0 && (
                 <tr><td colSpan={7} className="text-center text-slate-500 py-12 text-sm">Nenhuma caixa cadastrada ainda.</td></tr>
               )}
-              {caixas.map((caixa, i) => {
+              {caixasVisiveis.map((caixa, i) => {
                 const chip = TIPO_CHIP[caixa.tipo] ?? TIPO_CHIP.CDO
                 return (
-                  <tr key={caixa._id} style={{ borderBottom: i < caixas.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={caixa._id} style={{ borderBottom: i < caixasVisiveis.length - 1 ? '1px solid var(--border-color)' : 'none' }} className="hover:bg-slate-800/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: '#D4622B' }}>{getCaixaId(caixa)}</td>
                     <td className="px-4 py-3 text-slate-200">{caixa.nome ?? '—'}</td>
                     <td className="px-4 py-3">

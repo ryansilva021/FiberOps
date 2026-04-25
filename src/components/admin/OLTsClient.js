@@ -68,8 +68,12 @@ const FORM_VAZIO = {
   rest_url: '',
 }
 
-export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
+export default function OLTsClient({ oltsIniciais, projetoId, userRole, busca = '', limiteAtingido = false }) {
   const [olts, setOlts]               = useState(oltsIniciais)
+  const q = busca.trim().toLowerCase()
+  const oltsVisiveis = q
+    ? olts.filter(o => [o.olt_id, o.id, o.nome, o.modelo, o.ip].some(v => String(v ?? '').toLowerCase().includes(q)))
+    : olts
   const [modalAberto, setModalAberto] = useState(false)
   const [oltEditando, setOltEditando] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -196,11 +200,19 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
         {erro && !modalAberto && <p className="text-sm text-red-400">{erro}</p>}
         {!sucesso && !erro && <div />}
         <button
-          onClick={abrirNovo}
-          style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#052e16', fontWeight: 700 }}
+          onClick={limiteAtingido ? undefined : abrirNovo}
+          disabled={limiteAtingido}
+          title={limiteAtingido ? 'Limite do plano atingido. Faça upgrade para adicionar mais OLTs.' : undefined}
+          style={{
+            background: limiteAtingido ? 'rgba(100,100,100,0.2)' : 'linear-gradient(135deg,#22c55e,#16a34a)',
+            color: limiteAtingido ? '#6b7280' : '#052e16',
+            fontWeight: 700,
+            cursor: limiteAtingido ? 'not-allowed' : 'pointer',
+            border: limiteAtingido ? '1px solid rgba(100,100,100,0.3)' : 'none',
+          }}
           className="text-sm px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
         >
-          + Nova OLT
+          {limiteAtingido ? '🚫 Limite atingido' : '+ Nova OLT'}
         </button>
       </div>
 
@@ -225,18 +237,18 @@ export default function OLTsClient({ oltsIniciais, projetoId, userRole }) {
               </tr>
             </thead>
             <tbody>
-              {olts.length === 0 && (
+              {oltsVisiveis.length === 0 && (
                 <tr>
                   <td colSpan={8} className="text-center text-slate-500 py-12 text-sm">
                     Nenhuma OLT cadastrada ainda.
                   </td>
                 </tr>
               )}
-              {olts.map((olt, i) => {
+              {oltsVisiveis.map((olt, i) => {
                 const st = STATUS_CONFIG[olt.status] ?? { label: olt.status ?? '—', color: 'var(--text-secondary)' }
                 const temCoordenadas = olt.lat != null && olt.lng != null
                 return (
-                  <tr key={olt._id} style={{ borderBottom: i < olts.length - 1 ? '1px solid var(--border-color)' : 'none' }}
+                  <tr key={olt._id} style={{ borderBottom: i < oltsVisiveis.length - 1 ? '1px solid var(--border-color)' : 'none' }}
                     className="hover:bg-slate-800/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: '#D4622B' }}>{olt.id ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-200 font-medium">{olt.nome ?? '—'}</td>

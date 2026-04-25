@@ -48,7 +48,7 @@ const STEPS = {
   SAVING:     'saving',
 }
 
-export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
+export default function VarinhaNetworkTool({ projetoId, onSaved, onClose, limiteCTOs = null, ctosAtuais = 0 }) {
   const [step,          setStep]         = useState(STEPS.IDLE)
   const [network,       setNetwork]      = useState(null)
   const [error,         setError]        = useState(null)
@@ -483,8 +483,12 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
         )}
 
         {/* ── PREVIEW / SAVING ── */}
-        {(step === STEPS.PREVIEW || step === STEPS.SAVING) && network && (
-          <>
+        {(step === STEPS.PREVIEW || step === STEPS.SAVING) && network && (() => {
+          const totalNovos  = network.metrics.totalCTOs ?? 0
+          const totalFinal  = ctosAtuais + totalNovos
+          const excede      = limiteCTOs !== null && totalFinal > limiteCTOs
+          const disponiveis = limiteCTOs !== null ? Math.max(limiteCTOs - ctosAtuais, 0) : null
+          return (<>
             {/* Badge fonte */}
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
@@ -528,6 +532,36 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
               </div>
             )}
 
+            {/* Banner de limite de plano */}
+            {excede && (
+              <div style={{
+                background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.4)',
+                borderRadius: 9, padding: '10px 13px',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#fca5a5' }}>
+                  🚫 Limite do plano excedido
+                </div>
+                <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>
+                  Esta geração criaria <strong style={{ color: '#fca5a5' }}>{totalNovos} CTOs</strong>, mas seu plano permite apenas mais <strong style={{ color: '#fca5a5' }}>{disponiveis}</strong> (você já tem {ctosAtuais}/{limiteCTOs}).
+                </div>
+                <div style={{ fontSize: 11, color: T.muted }}>
+                  Reduza a área de geração ou faça upgrade do plano.
+                </div>
+                <a
+                  href="/admin/assinatura"
+                  style={{
+                    alignSelf: 'flex-start', fontSize: 11, fontWeight: 700,
+                    padding: '5px 12px', borderRadius: 6,
+                    background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)',
+                    color: '#fca5a5', textDecoration: 'none',
+                  }}
+                >
+                  Fazer upgrade →
+                </a>
+              </div>
+            )}
+
             {/* Legenda */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
               {network.metrics.backboneRoutes > 0 && (
@@ -548,11 +582,19 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
 
             {/* Ações */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button onClick={handleConfirm} disabled={step === STEPS.SAVING} style={{
-                ...primaryBtnSt,
-                opacity: step === STEPS.SAVING ? 0.65 : 1,
-                cursor:  step === STEPS.SAVING ? 'not-allowed' : 'pointer',
-              }}>
+              <button
+                onClick={excede ? undefined : handleConfirm}
+                disabled={step === STEPS.SAVING || excede}
+                title={excede ? `Limite de ${limiteCTOs} CTOs atingido. Reduza a área ou faça upgrade.` : undefined}
+                style={{
+                  ...primaryBtnSt,
+                  opacity: (step === STEPS.SAVING || excede) ? 0.5 : 1,
+                  cursor:  (step === STEPS.SAVING || excede) ? 'not-allowed' : 'pointer',
+                  background: excede ? 'rgba(220,38,38,0.1)' : primaryBtnSt.background,
+                  border:     excede ? '1.5px solid rgba(220,38,38,0.4)' : primaryBtnSt.border,
+                  color:      excede ? '#fca5a5' : primaryBtnSt.color,
+                }}
+              >
                 {step === STEPS.SAVING ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{
@@ -562,7 +604,7 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
                     }} />
                     Salvando…
                   </span>
-                ) : '💾 Confirmar e Salvar'}
+                ) : excede ? '🚫 Limite excedido — não é possível salvar' : '💾 Confirmar e Salvar'}
               </button>
               <button
                 onClick={() => { clearPreview(); handleStartDraw() }}
@@ -583,8 +625,8 @@ export default function VarinhaNetworkTool({ projetoId, onSaved, onClose }) {
                 🗑 Descartar
               </button>
             </div>
-          </>
-        )}
+          </>)
+        })()}
       </div>}
     </div>
   )
