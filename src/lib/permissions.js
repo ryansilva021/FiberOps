@@ -160,4 +160,5 @@ export const ROUTE_PERMISSIONS = {
   '/admin/importar':    PERM.VIEW_IMPORT,
   '/admin/logs':        PERM.VIEW_LOGS,
   '/admin/olts':        PERM.VIEW_OLT,
+  '/admin/noc':         PERM.ACCESS_NOC,
 }

@@ -62,7 +62,8 @@ const NAV_ITEMS = [
   { href: '/visao-geral',      labelKey: 'nav.overview', icon: '◈', section: 'PAINEL',         group: GROUPS.public  },
   { href: '/mapa',             labelKey: 'nav.map',      icon: '◉',                             group: GROUPS.public  },
 
-  { href: '/admin/topologia',      labelKey: 'nav.topology',     icon: '⬡', section: 'OPERAÇÃO', perm: PERM.VIEW_TOPOLOGY,     group: GROUPS.staff },
+  { href: '/admin/noc',             labelKey: 'nav.noc',          icon: '◎', section: 'OPERAÇÃO', perm: PERM.ACCESS_NOC,         group: GROUPS.staff },
+  { href: '/admin/topologia',      labelKey: 'nav.topology',     icon: '⬡', perm: PERM.VIEW_TOPOLOGY,     group: GROUPS.staff },
   { href: '/admin/campo',          labelKey: 'nav.field',        icon: '◎', perm: PERM.VIEW_FIELD,        group: GROUPS.staff },
   { href: '/admin/calculos',       labelKey: 'nav.calculations', icon: '◈', perm: PERM.VIEW_CALCULATIONS, group: GROUPS.staff },
   { href: '/admin/os',             labelKey: 'nav.all_os',       icon: '▣', perm: PERM.VIEW_SERVICE_ORDERS, group: GROUPS.staff },

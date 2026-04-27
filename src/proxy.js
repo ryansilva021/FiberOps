@@ -59,7 +59,7 @@ function rateLimit(key, maxReqs, windowMs) {
 // Hierarquia de roles
 // ---------------------------------------------------------------------------
 
-const ROLE_RANK = { superadmin: 4, admin: 3, tecnico: 2, user: 1 }
+const ROLE_RANK = { superadmin: 4, admin: 3, tecnico: 2, noc: 2, recepcao: 1, user: 1 }
 
 function hasMinRole(role, minimum) {
   return (ROLE_RANK[role] ?? 0) >= (ROLE_RANK[minimum] ?? 99)

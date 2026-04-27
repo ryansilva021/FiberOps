@@ -12,6 +12,7 @@ const translations = {
     // ── Sidebar nav ──────────────────────────────────────────────────────────
     'nav.overview':     'Visão geral',
     'nav.map':          'Mapa',
+    'nav.noc':          'NOC',
     'nav.topology':     'Topologia',
     'nav.field':        'Campo',
     'nav.calculations': 'Cálc. Potência',
@@ -149,6 +150,7 @@ const translations = {
   en: {
     'nav.overview':     'Overview',
     'nav.map':          'Map',
+    'nav.noc':          'NOC',
     'nav.topology':     'Topology',
     'nav.field':        'Field',
     'nav.calculations': 'Power Calc.',
@@ -280,6 +282,7 @@ const translations = {
   zh: {
     'nav.overview':     '概览',
     'nav.map':          '地图',
+    'nav.noc':          'NOC',
     'nav.topology':     '拓扑',
     'nav.field':        '现场',
     'nav.calculations': '功率计算',
@@ -411,6 +414,7 @@ const translations = {
   hi: {
     'nav.overview':     'अवलोकन',
     'nav.map':          'मानचित्र',
+    'nav.noc':          'NOC',
     'nav.topology':     'टोपोलॉजी',
     'nav.field':        'फील्ड',
     'nav.calculations': 'पावर कैलक.',
@@ -542,6 +546,7 @@ const translations = {
   es: {
     'nav.overview':     'Vista general',
     'nav.map':          'Mapa',
+    'nav.noc':          'NOC',
     'nav.topology':     'Topología',
     'nav.field':        'Campo',
     'nav.calculations': 'Cálc. Potencia',
@@ -673,6 +678,7 @@ const translations = {
   fr: {
     'nav.overview':     'Aperçu',
     'nav.map':          'Carte',
+    'nav.noc':          'NOC',
     'nav.topology':     'Topologie',
     'nav.field':        'Terrain',
     'nav.calculations': 'Calc. Puissance',
