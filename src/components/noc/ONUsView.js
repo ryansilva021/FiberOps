@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useONUs, useOLTs } from '@/hooks/useNetworkLab'
+import { useNOCSocket } from '@/hooks/useNOCSocket'
 
 const FO = {
   bg: '#EDE3D2', card: '#F7F0E2', espresso: '#1A120D', orange: '#C45A2C',
@@ -108,7 +109,11 @@ export default function ONUsView() {
   const [actionLog, setActionLog] = useState([])
   const PER_PAGE = 50
 
-  const { data: onuData, loading, error, refresh } = useONUs({ olt_id: oltId || undefined, page, limit: PER_PAGE }, 30_000)
+  const { data: onuData, loading, error, refresh } = useONUs({ olt_id: oltId || undefined, page, limit: PER_PAGE }, 15_000)
+  const handleWsEvent = useCallback((e) => {
+    if (['ONU_OFFLINE', 'ONU_ONLINE', 'LOW_POWER', 'HIGH_POWER'].includes(e.type)) refresh()
+  }, [refresh])
+  useNOCSocket({ onEvent: handleWsEvent })
   const { data: oltData } = useOLTs()
 
   const onuList = onuData?.data ?? onuData ?? []

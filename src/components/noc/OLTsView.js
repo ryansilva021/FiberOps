@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useOLTs } from '@/hooks/useNetworkLab'
+import { useNOCSocket } from '@/hooks/useNOCSocket'
+import OLTIntegrationModal from '@/components/noc/OLTIntegrationModal'
 
 const FO = {
   bg: '#EDE3D2', card: '#F7F0E2', espresso: '#1A120D', orange: '#C45A2C',
@@ -201,10 +203,15 @@ function OLTDrawer({ olt, onClose }) {
 }
 
 export default function OLTsView() {
-  const [filter, setFilter]    = useState('all')
-  const [search, setSearch]    = useState('')
-  const [selected, setSelected] = useState(null)
-  const { data, loading, error, refresh } = useOLTs({}, 30_000)
+  const [filter,     setFilter]     = useState('all')
+  const [search,     setSearch]     = useState('')
+  const [selected,   setSelected]   = useState(null)
+  const [showModal,  setShowModal]  = useState(false)
+  const { data, loading, error, refresh } = useOLTs({}, 15_000)
+  const handleWsEvent = useCallback((e) => {
+    if (['OLT_OVERLOAD', 'LOS', 'PON_DOWN', 'ONU_OFFLINE'].includes(e.type)) refresh()
+  }, [refresh])
+  useNOCSocket({ onEvent: handleWsEvent })
 
   const oltList = data?.data ?? data ?? []
   const filtered = oltList.filter(olt => {
@@ -252,6 +259,12 @@ export default function OLTsView() {
             </button>
           ))}
           <button onClick={refresh} style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', border: `1px solid ${FO.border}`, borderRadius: 8, backgroundColor: FO.card, color: FO.muted }}>↻</button>
+          <button
+            onClick={() => setShowModal(true)}
+            style={{ padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', borderRadius: 8, backgroundColor: FO.orange, color: '#fff' }}
+          >
+            + Integrar OLT
+          </button>
         </div>
       </div>
 
@@ -272,6 +285,13 @@ export default function OLTsView() {
       )}
 
       <OLTDrawer olt={selected} onClose={() => setSelected(null)} />
+
+      {showModal && (
+        <OLTIntegrationModal
+          onClose={() => setShowModal(false)}
+          onSaved={() => { setShowModal(false); setTimeout(refresh, 800) }}
+        />
+      )}
     </div>
   )
 }

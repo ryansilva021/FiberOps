@@ -194,8 +194,8 @@ function AlertRow({ alert }) {
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 export default function NOCDashboardClient() {
-  const { data: summary, loading: loadingSummary, refresh } = useDashboardSummary(15_000)
-  const { data: alertsData, loading: loadingAlerts } = useAlerts({ limit: 20, status: 'active' }, 10_000)
+  const { data: summary, loading: loadingSummary, refresh } = useDashboardSummary(10_000)
+  const { data: alertsData, loading: loadingAlerts, refresh: refreshAlerts } = useAlerts({ limit: 20, status: 'active' }, 10_000)
 
   const [toasts,     setToasts]     = useState([])
   const [autoOSEvent, setAutoOSEvent] = useState(null)
@@ -205,7 +205,13 @@ export default function NOCDashboardClient() {
     if (event.type === 'PON_DOWN' || event.type === 'OLT_OVERLOAD') {
       setAutoOSEvent(event)
     }
-  }, [])
+    // Força re-fetch imediato dos dados ao receber qualquer evento crítico
+    const shouldRefresh = ['ONU_OFFLINE', 'ONU_ONLINE', 'PON_DOWN', 'OLT_OVERLOAD', 'LOS']
+    if (shouldRefresh.includes(event.type)) {
+      refresh()
+      refreshAlerts()
+    }
+  }, [refresh, refreshAlerts])
 
   const { connected } = useNOCSocket({ enabled: true, onEvent: handleEvent })
 

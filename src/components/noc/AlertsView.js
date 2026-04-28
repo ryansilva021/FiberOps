@@ -125,7 +125,8 @@ export default function AlertsView() {
     10_000
   )
 
-  const { events: realtimeEvents, connected, clearEvents, acknowledgeEvent } = useNOCSocket()
+  const handleWsEvent = useCallback(() => { refresh() }, [refresh])
+  const { events: realtimeEvents, connected, clearEvents, acknowledgeEvent } = useNOCSocket({ onEvent: handleWsEvent })
 
   const alertList = alertsData?.data ?? alertsData ?? []
 

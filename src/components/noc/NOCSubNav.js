@@ -9,11 +9,12 @@ const FO = {
 }
 
 const NAV = [
-  { href: '/admin/noc',          label: 'Dashboard', icon: '◈', exact: true },
-  { href: '/admin/noc/olts',     label: 'OLTs',      icon: '🖥️' },
-  { href: '/admin/noc/pons',     label: 'PONs',      icon: '⬡' },
-  { href: '/admin/noc/onus',     label: 'ONUs',      icon: '◎' },
-  { href: '/admin/noc/alertas',  label: 'Alertas',   icon: '⚠️' },
+  { href: '/admin/noc',                label: 'Dashboard',  icon: '◈', exact: true },
+  { href: '/admin/noc/olts',           label: 'OLTs',       icon: '🖥️' },
+  { href: '/admin/noc/pons',           label: 'PONs',       icon: '⬡' },
+  { href: '/admin/noc/onus',           label: 'ONUs',       icon: '◎' },
+  { href: '/admin/noc/alertas',        label: 'Alertas',    icon: '⚠️' },
+  { href: '/admin/noc/integracoes',    label: 'Integrações', icon: '⚡' },
 ]
 
 export default function NOCSubNav() {

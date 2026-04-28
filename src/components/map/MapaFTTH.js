@@ -31,6 +31,7 @@ import BuscaMapa          from '@/components/map/BuscaMapa'
 import WeatherWidget      from '@/components/map/WeatherWidget'
 import RegistroPotencia   from '@/components/map/RegistroPotencia'
 import VarinhaNetworkTool from '@/components/map/VarinhaNetworkTool'
+import NOCMapLayer        from '@/components/map/NOCMapLayer'
 
 import { getCTOs, upsertCTO }   from '@/actions/ctos'
 import { getCaixas, upsertCaixa, addCaboToItem } from '@/actions/caixas'
@@ -48,8 +49,11 @@ const DEFAULT_LAYER_TOGGLES = {
   rotas:     true,
   postes:    true,
   olts:      true,
+  noc:       false,
   satellite: false,
 }
+
+const NOC_LAB_URL = process.env.NEXT_PUBLIC_NETWORK_LAB_URL
 
 // ---------------------------------------------------------------------------
 // Componente principal
@@ -842,6 +846,15 @@ export default function MapaFTTH({
       {/* Container do mapa */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" aria-label="Mapa FTTH" role="application" />
 
+      {/* Camada NOC — dados em tempo real do network-lab */}
+      {NOC_LAB_URL && mapLoaded && (
+        <NOCMapLayer
+          map={map}
+          visible={layerToggles.noc ?? false}
+          onOLTClick={(olt) => handleElementClick({ type: 'olt', data: olt })}
+        />
+      )}
+
       {/* Widget de clima — canto superior esquerdo */}
       <WeatherWidget />
 
@@ -959,6 +972,7 @@ export default function MapaFTTH({
               { key: 'rotas',  label: 'Rotas',   icon: '〰️', color: '#D4622B' },
               { key: 'postes', label: 'Postes',  icon: '🪝', color: '#eab308' },
               { key: 'olts',   label: 'OLTs',    icon: '🖥️', color: '#0891b2' },
+              ...(NOC_LAB_URL ? [{ key: 'noc', label: 'NOC Live', icon: '◎', color: '#dc2626' }] : []),
             ].map(({ key, label, icon, color }) => {
               const ativo = layerToggles[key] ?? true
               return (

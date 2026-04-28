@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { usePONs } from '@/hooks/useNetworkLab'
+import { useNOCSocket } from '@/hooks/useNOCSocket'
 
 const FO = {
   bg: '#EDE3D2', card: '#F7F0E2', espresso: '#1A120D', orange: '#C45A2C',
@@ -82,7 +83,11 @@ function PONRow({ pon }) {
 export default function PONsView() {
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const { data, loading, error, refresh } = usePONs({}, 20_000)
+  const { data, loading, error, refresh } = usePONs({}, 10_000)
+  const handleWsEvent = useCallback((e) => {
+    if (['PON_DOWN', 'ONU_OFFLINE', 'LOS'].includes(e.type)) refresh()
+  }, [refresh])
+  useNOCSocket({ onEvent: handleWsEvent })
 
   const ponList = data?.data ?? data ?? []
   const downPONs = ponList.filter(p => p.status === 'down' || p.status === 'offline')
